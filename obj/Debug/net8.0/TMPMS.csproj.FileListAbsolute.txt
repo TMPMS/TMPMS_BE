@@ -138,3 +138,11 @@ E:\Coding\.NET\CAPSTONE\TMPMS\bin\Debug\net8.0\runtimes\win\lib\net6.0\System.Dr
 E:\Coding\.NET\CAPSTONE\TMPMS\bin\Debug\net8.0\runtimes\win\lib\net6.0\System.Runtime.Caching.dll
 E:\Coding\.NET\CAPSTONE\TMPMS\bin\Debug\net8.0\runtimes\win\lib\net6.0\System.Security.Cryptography.ProtectedData.dll
 E:\Coding\.NET\CAPSTONE\TMPMS\bin\Debug\net8.0\runtimes\win\lib\net6.0\System.Windows.Extensions.dll
+E:\Coding\.NET\CAPSTONE\TMPMS\obj\Debug\net8.0\TMPMS.sourcelink.json
+E:\Coding\.NET\CAPSTONE\TMPMS\bin\Debug\net8.0\Microsoft.AspNetCore.Authentication.Google.dll
+E:\Coding\.NET\CAPSTONE\TMPMS\bin\Debug\net8.0\Microsoft.AspNetCore.Cryptography.Internal.dll
+E:\Coding\.NET\CAPSTONE\TMPMS\bin\Debug\net8.0\Microsoft.AspNetCore.Cryptography.KeyDerivation.dll
+E:\Coding\.NET\CAPSTONE\TMPMS\bin\Debug\net8.0\Microsoft.AspNetCore.Identity.EntityFrameworkCore.dll
+E:\Coding\.NET\CAPSTONE\TMPMS\bin\Debug\net8.0\Microsoft.Extensions.Identity.Core.dll
+E:\Coding\.NET\CAPSTONE\TMPMS\bin\Debug\net8.0\Microsoft.Extensions.Identity.Stores.dll
+E:\Coding\.NET\CAPSTONE\TMPMS\bin\Debug\net8.0\Microsoft.Extensions.Options.dll
