@@ -70,9 +70,9 @@ namespace TMPMS.Services
                 Patient = new PatientDto
                 {
                     Id = patient.Id,
-                    Username = patient.UserName,
-                    Email = patient.Email,
-                    PhoneNumber = patient.PhoneNumber,
+                    Username = patient.UserName ?? "",
+                    Email = patient.Email ?? "",
+                    PhoneNumber = patient.PhoneNumber ?? "",
                     IsActive = patient.IsActive,
                     CreatedAt = patient.CreatedAt
                 },
@@ -83,40 +83,47 @@ namespace TMPMS.Services
             };
         }
 
-        public async Task<List<DiagnosisDto>> GetDiagnosisHistoryAsync(int patientId)
+        public async Task<List<DiagnosisDTOs>> GetDiagnosisHistoryAsync(int patientId)
         {
             return await _diagnosisRepository.GetDiagnosisHistoryAsync(patientId);
         }
 
-        public async Task<List<PrescriptionDTO>> GetPrescriptionHistoryAsync(int patientId)
+        public async Task<List<PrescriptionResponseDTO>> GetPrescriptionHistoryAsync(int patientId)
         {
-            // 1. Lấy danh sách đơn thuốc của bệnh nhân
+            // Lấy danh sách đơn thuốc của bệnh nhân
             var prescriptions = await _prescriptionRepository.GetPrescriptionsByPatientIdAsync(patientId);
-            var resultList = new List<PrescriptionDTO>();
+
+            var resultList = new List<PrescriptionResponseDTO>();
 
             foreach (var p in prescriptions)
             {
-                // 2. Mapping sang PrescriptionDTO
-                var dto = new PrescriptionDTO
+                var dto = new PrescriptionResponseDTO
                 {
-                    PrescriptionId = p.Id,
+                    Id = p.Id,
+                    UserId = p.UserId,
+                    UserName = p.User?.UserName ?? "",          // hoặc UserName tùy entity
+                    DiagnosisId = p.DiagnosisId ,
+                    DoctorId = p.DoctorId,
+                    DoctorName = p.DoctorName  ,
+                    Hospital = p.Hospital,
                     PrescriptionDate = p.PrescriptionDate,
-                    DoctorName = p.DoctorName, // Ăn khớp hoàn toàn với thuộc tính Entity mới của bạn
+                    ImageUrl = p.ImageUrl,
                     Status = p.Status,
-                    Items = new List<PrescriptionItemDTO>()
+                    Items = new List<PrescriptionItemResponseDTO>()
                 };
 
-                // 3. Lấy chi tiết các thuốc trong đơn từ PrescriptionItemRepository
-                var items = await _prescriptionItemRepository.GetPrescriptionItemsByPrescriptionIdAsync(p.Id);
+                var items = await _prescriptionItemRepository
+                    .GetPrescriptionItemsByPrescriptionIdAsync(p.Id);
+
                 foreach (var item in items)
                 {
-                    dto.Items.Add(new PrescriptionItemDTO
+                    dto.Items.Add(new PrescriptionItemResponseDTO
                     {
-                        PrescriptionItemId = item.Id,
-                        PrescriptionId = item.PrescriptionId,
+                        Id = item.Id,
                         MedicineId = item.MedicineId,
-                        MedicineName = item.Medicine?.Name, // Bảo ngọc lấy từ quan hệ Navigation Property
-                        Quantity = item.Quantity
+                        MedicineName = item.Medicine?.Name ?? "",
+                        Quantity = item.Quantity,
+                        RequiresPrescription = item.Medicine?.RequiresPrescription ?? false
                     });
                 }
 

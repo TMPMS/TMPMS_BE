@@ -74,5 +74,18 @@ namespace TMPMS.Repositories
         {
             return await _context.Medicines.FindAsync(medicineId);
         }
+
+        public async Task<List<Prescription>> GetPrescriptionsByPatientIdAsync(int userId)
+        {
+            return await _context.Prescriptions
+                .Include(p => p.User)
+                .Include(p => p.Doctor)
+                .Include(p => p.Diagnosis)
+                .Include(p => p.PrescriptionItems)
+                    .ThenInclude(pi => pi.Medicine)
+                .Where(p => p.UserId == userId)
+                .OrderByDescending(p => p.PrescriptionDate)
+                .ToListAsync();
+        }
     }
 }

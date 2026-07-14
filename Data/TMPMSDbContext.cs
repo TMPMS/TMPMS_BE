@@ -45,6 +45,7 @@ namespace TMPMS.Data
         public DbSet<HerbalMedicineInfo> HerbalMedicineInfos { get; set; }
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
+        public DbSet<Appointment> Appointments { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
