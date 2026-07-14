@@ -1,4 +1,5 @@
 using BusinessObjects;
+using TMPMS.DTOs;
 
 namespace Repositories.Interfaces
 {
@@ -11,5 +12,8 @@ namespace Repositories.Interfaces
         Task<List<Diagnosis>> GetAll();
         Task<Diagnosis> Update(Diagnosis diagnosis);
         Task<bool> Delete(int id);
+        Task<List<Diagnosis>> GetByPatientIdAsync(int patientId);
+        Task<List<DiagnosisDTOs>> GetDiagnosisHistoryAsync(int patientId);
     }
 }
+

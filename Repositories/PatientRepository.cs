@@ -30,7 +30,7 @@ namespace TMPMS.Repositories
             {
                 var roles = await _userManager.GetRolesAsync(user);
 
-                if (roles.Contains("Customer"))
+                if (roles.Contains("Patient"))
                 {
                     patients.Add(new PatientDto
                     {

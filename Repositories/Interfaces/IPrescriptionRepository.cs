@@ -12,5 +12,6 @@ namespace Repositories.Interfaces
         Task<Prescription> Update(Prescription prescription);
         Task<bool> Delete(int id);
         Task<Medicine> GetMedicineById(int medicineId);
+        Task<List<Prescription>> GetPrescriptionsByPatientIdAsync(int userId);
     }
 }

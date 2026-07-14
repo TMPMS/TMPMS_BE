@@ -1,7 +1,8 @@
-using BusinessObjects;
+﻿using BusinessObjects;
 using Microsoft.EntityFrameworkCore;
 using Repositories.Interfaces;
 using TMPMS.Data;
+using TMPMS.DTOs;
 
 namespace TMPMS.Repositories
 {
@@ -70,6 +71,35 @@ namespace TMPMS.Repositories
             _context.Diagnoses.Remove(entity);
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        public async Task<List<Diagnosis>> GetByPatientIdAsync(int patientId)
+        {
+            return await _context.Diagnoses
+                .Where(d => d.PatientId == patientId)
+                .ToListAsync();
+        }
+
+        public async Task<List<DiagnosisDTOs>> GetDiagnosisHistoryAsync(int patientId)
+        {
+            return await _context.Diagnoses
+                .Where(d => d.PatientId == patientId)
+                .Select(d => new DiagnosisDTOs
+                {
+                    Id = d.Id,
+                    PatientId = d.PatientId,
+                    PatientName = d.Patient.UserName ?? "",      // đổi theo entity của bạn
+                    DoctorId = d.DoctorId,
+                    DoctorName = d.Doctor.UserName ?? "",        // đổi theo entity của bạn
+                    Symptoms = d.Symptoms,
+                    ClinicalExamination = d.ClinicalExamination,
+                    DiagnosisResult = d.DiagnosisResult,
+                    Note = d.Note,
+                    DiagnosisDate = d.DiagnosisDate,
+                    CreatedAt = d.CreatedAt,
+                    PrescriptionCount = d.Prescriptions.Count()
+                })
+                .ToListAsync();
         }
     }
 }

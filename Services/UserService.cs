@@ -11,12 +11,12 @@ namespace TMPMS.Services
     {
         private readonly IUserRepository _userRepository;
         private readonly UserManager<User> _userManager;
-        private readonly RoleManager<IdentityRole<int>> _roleManager;
+        private readonly RoleManager<Role> _roleManager;
 
         public UserService(
             IUserRepository userRepository,
             UserManager<User> userManager,
-            RoleManager<IdentityRole<int>> roleManager)
+            RoleManager<Role> roleManager)
         {
             _userRepository = userRepository;
             _userManager = userManager;
@@ -53,7 +53,11 @@ namespace TMPMS.Services
 
             if (!await _roleManager.RoleExistsAsync(dto.RoleName))
             {
-                await _roleManager.CreateAsync(new IdentityRole<int>(dto.RoleName));
+                await _roleManager.CreateAsync(new Role
+                {
+                    Name = dto.RoleName,
+                    NormalizedName = dto.RoleName.ToUpper()
+                });
             }
 
             await _userManager.AddToRoleAsync(newUser, dto.RoleName);
