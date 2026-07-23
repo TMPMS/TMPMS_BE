@@ -3,6 +3,38 @@
   "WorkspaceRootPath": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|e:\\coding\\.net\\capstone\\tmpms\\services\\appointmentservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:services\\appointmentservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|e:\\coding\\.net\\capstone\\tmpms\\repositories\\interfaces\\iaddressrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:repositories\\interfaces\\iaddressrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|e:\\coding\\.net\\capstone\\tmpms\\repositories\\interfaces\\iauthrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:repositories\\interfaces\\iauthrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|e:\\coding\\.net\\capstone\\tmpms\\models\\appointment.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:models\\appointment.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|e:\\coding\\.net\\capstone\\tmpms\\models\\cart.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:models\\cart.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|e:\\coding\\.net\\capstone\\tmpms\\models\\cartitem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:models\\cartitem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|e:\\coding\\.net\\capstone\\tmpms\\models\\medicineimage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:models\\medicineimage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|e:\\coding\\.net\\capstone\\tmpms\\models\\medicine.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:models\\medicine.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|e:\\coding\\.net\\capstone\\tmpms\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
       "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
     },
@@ -99,10 +131,6 @@
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\Downloads\\TMPMS\\Repositories\\AuthRepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|e:\\coding\\.net\\capstone\\tmpms\\repositories\\interfaces\\iauthrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:repositories\\interfaces\\iauthrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|e:\\coding\\.net\\capstone\\tmpms\\dtos\\authdtos.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:dtos\\authdtos.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
@@ -111,10 +139,6 @@
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\Downloads\\TMPMS\\BusinessObjects\\RefreshToken.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|e:\\coding\\.net\\capstone\\tmpms\\models\\cartitem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:models\\cartitem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\Downloads\\TMPMS\\BusinessObjects\\Role.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
@@ -150,14 +174,6 @@
       "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:models\\order.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|e:\\coding\\.net\\capstone\\tmpms\\models\\medicineimage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:models\\medicineimage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|e:\\coding\\.net\\capstone\\tmpms\\models\\medicine.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:models\\medicine.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|e:\\coding\\.net\\capstone\\tmpms\\models\\inventorystock.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{5DAAA407-B777-4B42-8D59-3CC70C6ABF3F}|TMPMS.csproj|solutionrelative:models\\inventorystock.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
@@ -177,7 +193,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 24,
+          "SelectedChildIndex": 18,
           "Children": [
             {
               "$type": "Bookmark",
@@ -253,45 +269,59 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "PatientAddressController.cs",
-              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Controllers\\PatientAddressController.cs",
-              "RelativeDocumentMoniker": "Controllers\\PatientAddressController.cs",
-              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Controllers\\PatientAddressController.cs",
-              "RelativeToolTip": "Controllers\\PatientAddressController.cs",
+              "DocumentIndex": 0,
+              "Title": "AppointmentService.cs",
+              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Services\\AppointmentService.cs",
+              "RelativeDocumentMoniker": "Services\\AppointmentService.cs",
+              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Services\\AppointmentService.cs*",
+              "RelativeToolTip": "Services\\AppointmentService.cs*",
+              "ViewState": "AgIAAC4AAAAAAAAAAAAYwDUAAAAXAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-23T18:22:32.053Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "IAddressRepository.cs",
+              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Repositories\\Interfaces\\IAddressRepository.cs",
+              "RelativeDocumentMoniker": "Repositories\\Interfaces\\IAddressRepository.cs",
+              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Repositories\\Interfaces\\IAddressRepository.cs",
+              "RelativeToolTip": "Repositories\\Interfaces\\IAddressRepository.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-07-23T18:08:51.968Z",
+              "WhenOpened": "2026-07-23T18:20:12.075Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "Cart.cs",
+              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\Cart.cs",
+              "RelativeDocumentMoniker": "Models\\Cart.cs",
+              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\Cart.cs",
+              "RelativeToolTip": "Models\\Cart.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-23T18:19:36.59Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
               "DocumentIndex": 3,
-              "Title": "AppointmentController.cs",
-              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Controllers\\AppointmentController.cs",
-              "RelativeDocumentMoniker": "Controllers\\AppointmentController.cs",
-              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Controllers\\AppointmentController.cs",
-              "RelativeToolTip": "Controllers\\AppointmentController.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Title": "Appointment.cs",
+              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\Appointment.cs",
+              "RelativeDocumentMoniker": "Models\\Appointment.cs",
+              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\Appointment.cs",
+              "RelativeToolTip": "Models\\Appointment.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAAXAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-07-23T18:08:47.988Z",
+              "WhenOpened": "2026-07-23T18:19:21.113Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
-              "Title": "20260705205931_AddIdentity.cs",
-              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Migrations\\20260705205931_AddIdentity.cs",
-              "RelativeDocumentMoniker": "Migrations\\20260705205931_AddIdentity.cs",
-              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Migrations\\20260705205931_AddIdentity.cs",
-              "RelativeToolTip": "Migrations\\20260705205931_AddIdentity.cs",
-              "ViewState": "AgIAAA8BAAAAAAAAAAAQwCwBAAAlAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-07-05T20:59:31.877Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 14,
               "Title": "RefreshToken.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\RefreshToken.cs",
               "RelativeDocumentMoniker": "Models\\RefreshToken.cs",
@@ -303,7 +333,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 9,
+              "DocumentIndex": 17,
               "Title": "Role.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\Role.cs",
               "RelativeDocumentMoniker": "Models\\Role.cs",
@@ -315,7 +345,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 9,
               "Title": "Program.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Program.cs",
               "RelativeDocumentMoniker": "Program.cs",
@@ -323,12 +353,11 @@
               "RelativeToolTip": "Program.cs",
               "ViewState": "AgIAAK0AAAAAAAAAAAAuwO8AAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-22T16:12:48.62Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-22T16:12:48.62Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 8,
               "Title": "appsettings.json",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\appsettings.json",
               "RelativeDocumentMoniker": "appsettings.json",
@@ -340,12 +369,96 @@
               "EditorCaption": ""
             },
             {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "IAuthRepository.cs",
+              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Repositories\\Interfaces\\IAuthRepository.cs",
+              "RelativeDocumentMoniker": "Repositories\\Interfaces\\IAuthRepository.cs",
+              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Repositories\\Interfaces\\IAuthRepository.cs",
+              "RelativeToolTip": "Repositories\\Interfaces\\IAuthRepository.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABEAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-23T07:00:33.704Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 16,
+              "DocumentIndex": 13,
+              "Title": "20260705205931_AddIdentity.cs",
+              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Migrations\\20260705205931_AddIdentity.cs",
+              "RelativeDocumentMoniker": "Migrations\\20260705205931_AddIdentity.cs",
+              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Migrations\\20260705205931_AddIdentity.cs",
+              "RelativeToolTip": "Migrations\\20260705205931_AddIdentity.cs",
+              "ViewState": "AgIAAA8BAAAAAAAAAAAQwCwBAAAlAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-05T20:59:31.877Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "CartItem.cs",
+              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\CartItem.cs",
+              "RelativeDocumentMoniker": "Models\\CartItem.cs",
+              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\CartItem.cs",
+              "RelativeToolTip": "Models\\CartItem.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABMAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-05T08:51:57.406Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "AppointmentController.cs",
+              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Controllers\\AppointmentController.cs",
+              "RelativeDocumentMoniker": "Controllers\\AppointmentController.cs",
+              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Controllers\\AppointmentController.cs",
+              "RelativeToolTip": "Controllers\\AppointmentController.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-23T18:08:47.988Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "Medicine.cs",
+              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\Medicine.cs",
+              "RelativeDocumentMoniker": "Models\\Medicine.cs",
+              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\Medicine.cs",
+              "RelativeToolTip": "Models\\Medicine.cs",
+              "ViewState": "AgIAACEAAAAAAAAAAAAiwDEAAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-05T08:52:20.415Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "MedicineImage.cs",
+              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\MedicineImage.cs",
+              "RelativeDocumentMoniker": "Models\\MedicineImage.cs",
+              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\MedicineImage.cs",
+              "RelativeToolTip": "Models\\MedicineImage.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABEAAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-05T08:52:28.908Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "PatientAddressController.cs",
+              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Controllers\\PatientAddressController.cs",
+              "RelativeDocumentMoniker": "Controllers\\PatientAddressController.cs",
+              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Controllers\\PatientAddressController.cs",
+              "RelativeToolTip": "Controllers\\PatientAddressController.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-23T18:08:51.968Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 24,
               "Title": "PrescriptionService.cs",
               "DocumentMoniker": "E:\\Downloads\\TMPMS\\Services\\PrescriptionService.cs",
               "RelativeDocumentMoniker": "..\\..\\..\\..\\Downloads\\TMPMS\\Services\\PrescriptionService.cs",
@@ -357,7 +470,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 12,
               "Title": "AuthController.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Controllers\\AuthController.cs",
               "RelativeDocumentMoniker": "Controllers\\AuthController.cs",
@@ -365,16 +478,11 @@
               "RelativeToolTip": "Controllers\\AuthController.cs",
               "ViewState": "AgIAACMAAAAAAAAAAAAgwGUAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-22T16:54:40.549Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{56df62a4-05a3-4e5b-aa1a-99371ccfb997}"
+              "WhenOpened": "2026-06-22T16:54:40.549Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 8,
+              "DocumentIndex": 16,
               "Title": "DiagnosisController.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Controllers\\DiagnosisController.cs",
               "RelativeDocumentMoniker": "Controllers\\DiagnosisController.cs",
@@ -386,7 +494,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
+              "DocumentIndex": 15,
               "Title": "TMPMSDbContext.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Data\\TMPMSDbContext.cs",
               "RelativeDocumentMoniker": "Data\\TMPMSDbContext.cs",
@@ -398,7 +506,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 14,
+              "DocumentIndex": 22,
               "Title": "DiagnosisService.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Services\\DiagnosisService.cs",
               "RelativeDocumentMoniker": "Services\\DiagnosisService.cs",
@@ -410,7 +518,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 13,
+              "DocumentIndex": 21,
               "Title": "InvoiceService.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Services\\InvoiceService.cs",
               "RelativeDocumentMoniker": "Services\\InvoiceService.cs",
@@ -422,7 +530,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 11,
+              "DocumentIndex": 19,
               "Title": "ReportRepository.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Repositories\\ReportRepository.cs",
               "RelativeDocumentMoniker": "Repositories\\ReportRepository.cs",
@@ -434,7 +542,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 12,
+              "DocumentIndex": 20,
               "Title": "IReportRepository.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Repositories\\Interfaces\\IReportRepository.cs",
               "RelativeDocumentMoniker": "Repositories\\Interfaces\\IReportRepository.cs",
@@ -446,7 +554,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 10,
+              "DocumentIndex": 18,
               "Title": "ReportService.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Services\\ReportService.cs",
               "RelativeDocumentMoniker": "Services\\ReportService.cs",
@@ -458,7 +566,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 15,
+              "DocumentIndex": 23,
               "Title": "PrescriptionService.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Services\\PrescriptionService.cs",
               "RelativeDocumentMoniker": "Services\\PrescriptionService.cs",
@@ -470,7 +578,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 20,
+              "DocumentIndex": 28,
               "Title": "AuthRepository.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Repositories\\AuthRepository.cs",
               "RelativeDocumentMoniker": "Repositories\\AuthRepository.cs",
@@ -482,7 +590,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 19,
+              "DocumentIndex": 27,
               "Title": "AuthService.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Services\\AuthService.cs",
               "RelativeDocumentMoniker": "Services\\AuthService.cs",
@@ -494,7 +602,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 18,
+              "DocumentIndex": 26,
               "Title": "TMPMS.csproj",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\TMPMS.csproj",
               "RelativeDocumentMoniker": "TMPMS.csproj",
@@ -506,7 +614,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 17,
+              "DocumentIndex": 25,
               "Title": "User.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\User.cs",
               "RelativeDocumentMoniker": "Models\\User.cs",
@@ -518,7 +626,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 21,
+              "DocumentIndex": 29,
               "Title": "AuthService.cs",
               "DocumentMoniker": "E:\\Downloads\\TMPMS\\Services\\AuthService.cs",
               "RelativeDocumentMoniker": "..\\..\\..\\..\\Downloads\\TMPMS\\Services\\AuthService.cs",
@@ -530,7 +638,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 23,
+              "DocumentIndex": 31,
               "Title": "IAuthService.cs",
               "DocumentMoniker": "E:\\Downloads\\TMPMS\\Services\\Interfaces\\IAuthService.cs",
               "RelativeDocumentMoniker": "..\\..\\..\\..\\Downloads\\TMPMS\\Services\\Interfaces\\IAuthService.cs",
@@ -542,7 +650,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 24,
+              "DocumentIndex": 32,
               "Title": "AuthRepository.cs",
               "DocumentMoniker": "E:\\Downloads\\TMPMS\\Repositories\\AuthRepository.cs",
               "RelativeDocumentMoniker": "..\\..\\..\\..\\Downloads\\TMPMS\\Repositories\\AuthRepository.cs",
@@ -554,19 +662,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 25,
-              "Title": "IAuthRepository.cs",
-              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Repositories\\Interfaces\\IAuthRepository.cs",
-              "RelativeDocumentMoniker": "Repositories\\Interfaces\\IAuthRepository.cs",
-              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Repositories\\Interfaces\\IAuthRepository.cs",
-              "RelativeToolTip": "Repositories\\Interfaces\\IAuthRepository.cs",
-              "ViewState": "AgIAAAMAAAAAAAAAAAAuwBEAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-23T07:00:33.704Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 26,
+              "DocumentIndex": 33,
               "Title": "AuthDtos.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\DTOs\\AuthDtos.cs",
               "RelativeDocumentMoniker": "DTOs\\AuthDtos.cs",
@@ -578,7 +674,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 27,
+              "DocumentIndex": 34,
               "Title": "AuthDTOs.cs",
               "DocumentMoniker": "E:\\Downloads\\TMPMS\\DTOs\\AuthDTOs.cs",
               "RelativeDocumentMoniker": "..\\..\\..\\..\\Downloads\\TMPMS\\DTOs\\AuthDTOs.cs",
@@ -590,7 +686,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 22,
+              "DocumentIndex": 30,
               "Title": "IAuthService.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Services\\Interfaces\\IAuthService.cs",
               "RelativeDocumentMoniker": "Services\\Interfaces\\IAuthService.cs",
@@ -602,7 +698,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 28,
+              "DocumentIndex": 35,
               "Title": "RefreshToken.cs",
               "DocumentMoniker": "E:\\Downloads\\TMPMS\\BusinessObjects\\RefreshToken.cs",
               "RelativeDocumentMoniker": "..\\..\\..\\..\\Downloads\\TMPMS\\BusinessObjects\\RefreshToken.cs",
@@ -614,7 +710,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 30,
+              "DocumentIndex": 36,
               "Title": "Role.cs",
               "DocumentMoniker": "E:\\Downloads\\TMPMS\\BusinessObjects\\Role.cs",
               "RelativeDocumentMoniker": "..\\..\\..\\..\\Downloads\\TMPMS\\BusinessObjects\\Role.cs",
@@ -626,7 +722,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 31,
+              "DocumentIndex": 37,
               "Title": "User.cs",
               "DocumentMoniker": "E:\\Downloads\\TMPMS\\BusinessObjects\\User.cs",
               "RelativeDocumentMoniker": "..\\..\\..\\..\\Downloads\\TMPMS\\BusinessObjects\\User.cs",
@@ -638,7 +734,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 32,
+              "DocumentIndex": 38,
               "Title": "HerbalMedicineController.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Controllers\\HerbalMedicineController.cs",
               "RelativeDocumentMoniker": "Controllers\\HerbalMedicineController.cs",
@@ -650,19 +746,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 29,
-              "Title": "CartItem.cs",
-              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\CartItem.cs",
-              "RelativeDocumentMoniker": "Models\\CartItem.cs",
-              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\CartItem.cs",
-              "RelativeToolTip": "Models\\CartItem.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABMAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-07-05T08:51:57.406Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 33,
+              "DocumentIndex": 39,
               "Title": "Prescription.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\Prescription.cs",
               "RelativeDocumentMoniker": "Models\\Prescription.cs",
@@ -674,7 +758,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 34,
+              "DocumentIndex": 40,
               "Title": "Prescription.cs",
               "DocumentMoniker": "E:\\Downloads\\TMPMS\\BusinessObjects\\Prescription.cs",
               "RelativeDocumentMoniker": "..\\..\\..\\..\\Downloads\\TMPMS\\BusinessObjects\\Prescription.cs",
@@ -686,7 +770,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 35,
+              "DocumentIndex": 41,
               "Title": "InventoryTransaction.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\InventoryTransaction.cs",
               "RelativeDocumentMoniker": "Models\\InventoryTransaction.cs",
@@ -698,7 +782,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 36,
+              "DocumentIndex": 42,
               "Title": "TMPMS.http",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\TMPMS.http",
               "RelativeDocumentMoniker": "TMPMS.http",
@@ -710,7 +794,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 37,
+              "DocumentIndex": 43,
               "Title": "OrderItem.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\OrderItem.cs",
               "RelativeDocumentMoniker": "Models\\OrderItem.cs",
@@ -722,7 +806,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 38,
+              "DocumentIndex": 44,
               "Title": "Order.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\Order.cs",
               "RelativeDocumentMoniker": "Models\\Order.cs",
@@ -734,31 +818,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 39,
-              "Title": "MedicineImage.cs",
-              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\MedicineImage.cs",
-              "RelativeDocumentMoniker": "Models\\MedicineImage.cs",
-              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\MedicineImage.cs",
-              "RelativeToolTip": "Models\\MedicineImage.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABEAAAAFAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-07-05T08:52:28.908Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 40,
-              "Title": "Medicine.cs",
-              "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\Medicine.cs",
-              "RelativeDocumentMoniker": "Models\\Medicine.cs",
-              "ToolTip": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\Medicine.cs",
-              "RelativeToolTip": "Models\\Medicine.cs",
-              "ViewState": "AgIAACEAAAAAAAAAAAAiwDEAAAAFAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-07-05T08:52:20.415Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 41,
+              "DocumentIndex": 45,
               "Title": "InventoryStock.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\InventoryStock.cs",
               "RelativeDocumentMoniker": "Models\\InventoryStock.cs",
@@ -770,7 +830,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 42,
+              "DocumentIndex": 46,
               "Title": "Category.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Models\\Category.cs",
               "RelativeDocumentMoniker": "Models\\Category.cs",
@@ -782,7 +842,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 43,
+              "DocumentIndex": 47,
               "Title": "20260623121524_SeedIntitial.cs",
               "DocumentMoniker": "E:\\Coding\\.NET\\CAPSTONE\\TMPMS\\Migrations\\20260623121524_SeedIntitial.cs",
               "RelativeDocumentMoniker": "Migrations\\20260623121524_SeedIntitial.cs",
@@ -790,6 +850,14 @@
               "RelativeToolTip": "Migrations\\20260623121524_SeedIntitial.cs",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-06-23T12:15:24.452Z"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{56df62a4-05a3-4e5b-aa1a-99371ccfb997}"
             }
           ]
         },
