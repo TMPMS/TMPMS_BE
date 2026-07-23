@@ -1,6 +1,4 @@
-﻿using BusinessObjects;
-
-namespace TMPMS.Models
+﻿namespace BusinessObjects
 {
     public class Appointment
     {
