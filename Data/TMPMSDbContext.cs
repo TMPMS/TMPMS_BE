@@ -1,15 +1,22 @@
 ﻿using BusinessObjects;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Linq;
 using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
+using TMPMS.Models;
 
 namespace TMPMS.Data
 {
-    public class TMPMSDbContext : DbContext
+    public class TMPMSDbContext : IdentityDbContext<User, Role, int,
+        IdentityUserClaim<int>, IdentityUserRole<int>, IdentityUserLogin<int>,
+        IdentityRoleClaim<int>, IdentityUserToken<int>>
+
     {
         public TMPMSDbContext()
         {
@@ -17,8 +24,6 @@ namespace TMPMS.Data
 
         public TMPMSDbContext(DbContextOptions<TMPMSDbContext> options) : base(options) { }
 
-        public DbSet<User> Users { get; set; }
-        public DbSet<Role> Roles { get; set; }
         public DbSet<Cart> Carts { get; set; }
         public DbSet<CartItem> CartItems { get; set; }
         public DbSet<Category> Categories { get; set; }
@@ -36,16 +41,21 @@ namespace TMPMS.Data
         public DbSet<Warehouse> Warehouses { get; set; }
         public DbSet<InventoryStock> InventoryStocks { get; set; }
         public DbSet<InventoryTransaction> InventoryTransactions { get; set; }
+        public DbSet<Diagnosis> Diagnoses { get; set; }
+        public DbSet<HerbalMedicineInfo> HerbalMedicineInfos { get; set; }
+        public DbSet<Invoice> Invoices { get; set; }
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
+        public DbSet<Appointment> Appointments { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-            // User - Role
-            modelBuilder.Entity<User>()
-                .HasOne(u => u.Role)
-                .WithMany(r => r.Users)
-                .HasForeignKey(u => u.RoleId);
+            modelBuilder.Entity<RefreshToken>()
+                .HasOne(rt => rt.User)
+                .WithMany(u => u.RefreshTokens)
+                .HasForeignKey(rt => rt.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // Cart - User
             modelBuilder.Entity<Cart>()
@@ -108,7 +118,37 @@ namespace TMPMS.Data
             modelBuilder.Entity<Prescription>()
                 .HasOne(p => p.User)
                 .WithMany(u => u.Prescriptions)
-                .HasForeignKey(p => p.UserId);
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Prescription>()
+                .HasOne(p => p.Doctor)
+                .WithMany()
+                .HasForeignKey(p => p.DoctorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Prescription>()
+                .HasOne(p => p.Diagnosis)
+                .WithMany(d => d.Prescriptions)
+                .HasForeignKey(p => p.DiagnosisId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Diagnosis>()
+                .HasOne(d => d.Patient)
+                .WithMany()
+                .HasForeignKey(d => d.PatientId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Diagnosis>()
+                .HasOne(d => d.Doctor)
+                .WithMany()
+                .HasForeignKey(d => d.DoctorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<HerbalMedicineInfo>()
+                .HasOne(h => h.Medicine)
+                .WithOne()
+                .HasForeignKey<HerbalMedicineInfo>(h => h.MedicineId);
 
             // PrescriptionItem
             modelBuilder.Entity<PrescriptionItem>()
@@ -141,6 +181,11 @@ namespace TMPMS.Data
             // InventoryStock
             modelBuilder.Entity<InventoryStock>()
                 .HasKey(i => new { i.MedicineId, i.WarehouseId });
+
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.Order)
+                .WithMany()
+                .HasForeignKey(i => i.OrderId);
 
             // SupplierMedicine
             modelBuilder.Entity<SupplierMedicine>()
