@@ -17,3 +17,7 @@ obj/
 
 # Logs
 *.log
+
+launchSettings.json
+appsettings.json
+appsettings.Development.json
