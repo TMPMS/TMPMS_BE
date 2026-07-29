@@ -1,23 +1,44 @@
-# Visual Studio
-.vs/
+# ==============================================================================
+# CẢNH BÁO: KHÔNG SAO CHÉP THỦ CÔNG CÁC THƯ MỤC backend/ HOẶC database/ QUA LẠI 
+# GIỮA CÁC DỰ ÁN FE VÀ BE NỮA! HỆ THỐNG ĐÃ ĐƯỢC CHUẨN HÓA VỚI backend .NET RIÊNG.
+# ==============================================================================
 
-# Build
-bin/
-obj/
+# Node / Frontend Build & Dependencies
+node_modules/
+dist/
+dist-ssr/
+*.local
+.env
 
-# User-specific files
+# .NET / Backend Build & Outputs
+[Bb]in/
+[Oo]bj/
+*.exe
+*.dll
+*.pdb
+*.winmd
 *.user
 *.suo
+.vs/
 
-# Rider
+# JetBrains / VS Code
 .idea/
-
-# VS Code
-.vscode/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
 
 # Logs
+logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-launchSettings.json
+# Sensitive Configuration Files
 appsettings.json
 appsettings.Development.json
+appsettings.Production.json
+appsettings.local.json
+launchSettings.json
