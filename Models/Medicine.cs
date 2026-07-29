@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -29,6 +29,16 @@ namespace BusinessObjects
         public bool RequiresPrescription { get; set; }
 
         public string ImageUrl { get; set; }
+
+        public string? Unit { get; set; }
+
+        public string? Origin { get; set; }
+
+        public string? Packaging { get; set; }
+
+        public decimal? OldPrice { get; set; }
+
+        public int? Discount { get; set; }
 
         public DateTime CreatedAt { get; set; }
 

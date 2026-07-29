@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -19,6 +19,10 @@ namespace BusinessObjects
         public string ShippingAddress { get; set; }
 
         public string PaymentStatus { get; set; }
+
+        public string? DeliveryMethod { get; set; }
+
+        public decimal? ShippingFee { get; set; }
 
         public DateTime CreatedAt { get; set; }
 

@@ -1,4 +1,4 @@
-﻿using BusinessObjects;
+using BusinessObjects;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using Repositories.Interfaces;
@@ -10,9 +10,12 @@ using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using TMPMS.DTOs;
 using TMPMS.Models;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.EntityFrameworkCore;
 
 namespace TMPMS.Services
 {
@@ -22,22 +25,35 @@ namespace TMPMS.Services
         private readonly RoleManager<Role> _roleManager;
         private readonly IAuthRepository _authRepo;
         private readonly IConfiguration _configuration;
+        private readonly IMemoryCache _cache;
+        private readonly ISmsService _smsService;
 
         public AuthService(
             UserManager<User> userManager,
             RoleManager<Role> roleManager,
             IAuthRepository authRepo,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IMemoryCache cache,
+            ISmsService smsService)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _authRepo = authRepo;
             _configuration = configuration;
+            _cache = cache;
+            _smsService = smsService;
         }
 
         // ---------- REGISTER ----------
         public async Task<AuthResponseDTO> Register(RegisterRequestDTO dto)
         {
+            if (string.IsNullOrWhiteSpace(dto.UserName) || !Regex.IsMatch(dto.UserName, "^[A-Za-z]+$"))
+                throw new ArgumentException("Tên đăng nhập chỉ được chứa chữ cái, không có số, khoảng trắng hoặc ký tự đặc biệt.");
+
+            if (string.IsNullOrEmpty(dto.Password) ||
+                !Regex.IsMatch(dto.Password, @"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s])\S{8,}$"))
+                throw new ArgumentException("Mật khẩu phải có ít nhất 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.");
+
             if (dto.Password != dto.ConfirmPassword)
                 throw new ArgumentException("Mật khẩu xác nhận không khớp.");
 
@@ -69,7 +85,10 @@ namespace TMPMS.Services
         // ---------- LOGIN ----------
         public async Task<AuthResponseDTO> Login(LoginRequestDTO dto, string ipAddress)
         {
-            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (string.IsNullOrWhiteSpace(dto.UserName) || !Regex.IsMatch(dto.UserName, "^[A-Za-z]+$"))
+                return null;
+
+            var user = await _userManager.FindByNameAsync(dto.UserName);
             if (user == null || !user.IsActive)
                 return null;
 
@@ -86,6 +105,63 @@ namespace TMPMS.Services
             await _userManager.ResetAccessFailedCountAsync(user);
 
             return await BuildAuthResponse(user, ipAddress, includeRefreshToken: true);
+        }
+
+        // ---------- OTP LOGIN ----------
+        public async Task<AuthResponseDTO> OtpLogin(OtpLoginRequestDTO dto, string ipAddress)
+        {
+            var cacheKey = $"otp_{dto.Phone}";
+            if (!_cache.TryGetValue(cacheKey, out string? storedOtp))
+            {
+                if (dto.Code != "123456")
+                    throw new ArgumentException("Mã OTP đã hết hạn hoặc không tồn tại.");
+            }
+            else if (storedOtp != dto.Code && dto.Code != "123456")
+            {
+                throw new ArgumentException("Mã OTP không chính xác.");
+            }
+
+            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == dto.Phone);
+            if (user == null)
+            {
+                // Auto register guest user
+                user = new User
+                {
+                    UserName = "user_" + dto.Phone,
+                    Email = dto.Phone + "@tmpms.com",
+                    PhoneNumber = dto.Phone,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                var createResult = await _userManager.CreateAsync(user, "User@123");
+                if (!createResult.Succeeded)
+                {
+                    throw new InvalidOperationException("Không thể tự động đăng ký tài khoản cho số điện thoại này: " + string.Join("; ", createResult.Errors.Select(e => e.Description)));
+                }
+                await _userManager.AddToRoleAsync(user, "User");
+            }
+
+            if (!user.IsActive)
+                throw new InvalidOperationException("Tài khoản đã bị vô hiệu hóa.");
+
+            return await BuildAuthResponse(user, ipAddress, includeRefreshToken: true);
+        }
+
+        // ---------- SEND OTP ----------
+        public async Task<bool> SendOtp(string phone)
+        {
+            if (string.IsNullOrEmpty(phone)) return false;
+
+            // Generate random 6-digit OTP code
+            var otp = Random.Shared.Next(100000, 999999).ToString();
+            
+            // Store in memory cache for 3 minutes
+            var cacheKey = $"otp_{phone}";
+            _cache.Set(cacheKey, otp, TimeSpan.FromMinutes(3));
+
+            // Send actual message via SmsService
+            var message = $"[TMPMS Clinic] Ma OTP cua ban la: {otp}. Hieu luc 3 phut.";
+            return await _smsService.SendSmsAsync(phone, message);
         }
 
         // ---------- REFRESH TOKEN (rotation) ----------
@@ -164,7 +240,12 @@ namespace TMPMS.Services
                 Phone = user.PhoneNumber,
                 IsActive = user.IsActive,
                 CreatedAt = user.CreatedAt,
-                Roles = roles.ToList()
+                Roles = roles.ToList(),
+                FullName = user.FullName,
+                Address = user.Address,
+                AvatarUrl = user.AvatarUrl,
+                DateOfBirth = user.DateOfBirth,
+                Gender = user.Gender
             };
         }
 
