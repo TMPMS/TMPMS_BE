@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -13,6 +13,12 @@ namespace BusinessObjects
     {
         public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+        public string? FullName { get; set; }
+        public string? Address { get; set; }
+        public string? AvatarUrl { get; set; }
+        public DateTime? DateOfBirth { get; set; }
+        public string? Gender { get; set; }
 
         public ICollection<Order> Orders { get; set; }
         public ICollection<Cart> Carts { get; set; }

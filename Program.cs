@@ -13,6 +13,7 @@ using TMPMS.Repositories;
 using TMPMS.Repositories.Interfaces;
 using TMPMS.Services;
 using TMPMS.Services.Interfaces;
+using TMPMS.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,6 +46,12 @@ builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<IAddressService, AddressService>();
 
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<ISmsService, TwilioSmsService>();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<TrackingSimulationService>();
+builder.Services.AddHostedService(provider => provider.GetRequiredService<TrackingSimulationService>());
+
 
 
 
@@ -66,9 +73,9 @@ builder.Services.AddIdentity<User, Role>(options =>
 .AddEntityFrameworkStores<TMPMSDbContext>()
 .AddDefaultTokenProviders();
 
-// JWT Authentication
-var jwtKey = builder.Configuration["JWT:SecretKey"];
-builder.Services.AddAuthentication(options =>
+// JWT & Authentication
+var jwtKey = builder.Configuration["JWT:SecretKey"] ?? "TMPMS_SecretKey_For_JWT_Authentication_Secret_123456789";
+var authBuilder = builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -81,11 +88,22 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = builder.Configuration["JWT:Issuer"],
-        ValidAudience = builder.Configuration["JWT:Audience"],
+        ValidIssuer = builder.Configuration["JWT:Issuer"] ?? "TMPMS_BE",
+        ValidAudience = builder.Configuration["JWT:Audience"] ?? "TMPMS_FE",
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
     };
 });
+
+var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
+var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
+if (!string.IsNullOrEmpty(googleClientId) && !string.IsNullOrEmpty(googleClientSecret))
+{
+    authBuilder.AddGoogle(options =>
+    {
+        options.ClientId = googleClientId;
+        options.ClientSecret = googleClientSecret;
+    });
+}
 
 // Add services to the container
 builder.Services.AddControllers()
@@ -153,13 +171,6 @@ builder.Services.AddSwaggerGen(c =>
     c.AddSecurityRequirement(securityRequirement);
 });
 
-builder.Services.AddAuthentication()
-    .AddGoogle(options =>
-    {
-        options.ClientId = builder.Configuration["Authentication:Google:ClientId"];
-        options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
-    });
-
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("Admin",
@@ -170,6 +181,15 @@ builder.Services.AddAuthorization(options =>
 
     options.AddPolicy("User",
         policy => policy.RequireRole("User"));
+});
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend",
+        policy => policy.WithOrigins("http://localhost:5173", "https://tmpms.vercel.app", "http://127.0.0.1:5173")
+                        .AllowAnyMethod()
+                        .AllowAnyHeader()
+                        .AllowCredentials());
 });
 
 var app = builder.Build();
@@ -183,6 +203,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseCors("AllowFrontend");
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -190,6 +212,7 @@ using (var scope = app.Services.CreateScope())
 {
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+    var context = scope.ServiceProvider.GetRequiredService<TMPMSDbContext>();
 
     // Roles
     var roles = new List<Role>
@@ -251,7 +274,61 @@ using (var scope = app.Services.CreateScope())
         await userManager.CreateAsync(user, "User@123");
         await userManager.AddToRoleAsync(user, "User");
     }
+
+    // Vouchers
+    if (!context.Vouchers.Any())
+    {
+        context.Vouchers.AddRange(
+            new Voucher
+            {
+                Code = "HEALTH10",
+                Name = "Giảm 10% đơn hàng sức khỏe",
+                DiscountType = "percent",
+                DiscountValue = 10,
+                MinOrderValue = 100000,
+                MaxDiscount = 50000,
+                StartDate = DateTime.UtcNow,
+                EndDate = DateTime.UtcNow.AddMonths(3),
+                UsageLimit = 100,
+                UsedCount = 0,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            },
+            new Voucher
+            {
+                Code = "FREESHIP",
+                Name = "Giảm giá vận chuyển 20K",
+                DiscountType = "flat",
+                DiscountValue = 20000,
+                MinOrderValue = 150000,
+                MaxDiscount = 20000,
+                StartDate = DateTime.UtcNow,
+                EndDate = DateTime.UtcNow.AddMonths(3),
+                UsageLimit = 100,
+                UsedCount = 0,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            },
+            new Voucher
+            {
+                Code = "DISCOUNT50",
+                Name = "Giảm giá trực tiếp 50K",
+                DiscountType = "flat",
+                DiscountValue = 50000,
+                MinOrderValue = 500000,
+                MaxDiscount = 50000,
+                StartDate = DateTime.UtcNow,
+                EndDate = DateTime.UtcNow.AddMonths(3),
+                UsageLimit = 50,
+                UsedCount = 0,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            }
+        );
+        await context.SaveChangesAsync();
+    }
 }
+app.MapHub<TrackingHub>("/trackingHub");
 app.MapControllers();
 
 app.Run();

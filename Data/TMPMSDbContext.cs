@@ -1,4 +1,4 @@
-﻿using BusinessObjects;
+using BusinessObjects;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -46,6 +46,7 @@ namespace TMPMS.Data
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<Appointment> Appointments { get; set; }
+        public DbSet<Voucher> Vouchers { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
