@@ -14,7 +14,7 @@ namespace TMPMS.Controllers
         public DiagnosisController(IDiagnosisService service) => _service = service;
 
         [HttpPost]
-        [Authorize(Roles = "Doctor,Admin")]
+        [Authorize]
         public async Task<ActionResult> Create([FromBody] DiagnosisCreateDTO dto)
         {
             try
