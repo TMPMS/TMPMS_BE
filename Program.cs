@@ -31,6 +31,7 @@ builder.Services.AddScoped<IPatientRepository, PatientRepository>();
 builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
 builder.Services.AddScoped<IAddressRepository, AddressRepository>();
 builder.Services.AddScoped<IPrescriptionItemRepository, PrescriptionItemRepository>();
+builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IDiagnosisService, DiagnosisService>();
@@ -45,6 +46,7 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<IAddressService, AddressService>();
+builder.Services.AddScoped<ISupplierService, SupplierService>();
 
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ISmsService, TwilioSmsService>();
@@ -323,6 +325,44 @@ using (var scope = app.Services.CreateScope())
                 UsedCount = 0,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
+            }
+        );
+        await context.SaveChangesAsync();
+    }
+
+    // Suppliers
+    if (!context.Suppliers.Any())
+    {
+        context.Suppliers.AddRange(
+            new Supplier
+            {
+                CompanyName = "Công ty Dược Liệu Trung Ương 1",
+                ContactPerson = "Nguyễn Văn Hùng",
+                Email = "lh@duoclieutw1.vn",
+                Phone = "02438254123",
+                Address = "Số 138 Giảng Võ, Ba Đình, Hà Nội",
+                TaxCode = "0100108921",
+                Status = "Active"
+            },
+            new Supplier
+            {
+                CompanyName = "Tập đoàn Y Dược Bảo Long",
+                ContactPerson = "Trần Thị Mai",
+                Email = "contact@baolongpharm.com",
+                Phone = "02839201199",
+                Address = "KCN Tân Bình, Tân Phú, TP.HCM",
+                TaxCode = "0302198421",
+                Status = "Active"
+            },
+            new Supplier
+            {
+                CompanyName = "Viện Dược Liệu Đông Y Việt Nam",
+                ContactPerson = "Lê Hoàng Nam",
+                Email = "info@vienduoclieu.org.vn",
+                Phone = "02439342111",
+                Address = "3B Quang Trung, Hoàn Kiếm, Hà Nội",
+                TaxCode = "0100239102",
+                Status = "Active"
             }
         );
         await context.SaveChangesAsync();
