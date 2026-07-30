@@ -7,7 +7,7 @@ namespace TMPMS.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "Admin,Warehouse")]
+    [Authorize(Roles = "Admin,Staff,Pharmacy")]
     public class WarehouseController : ControllerBase
     {
         private readonly IWarehouseService _service;
