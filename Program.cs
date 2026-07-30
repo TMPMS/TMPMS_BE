@@ -367,6 +367,8 @@ using (var scope = app.Services.CreateScope())
         );
         await context.SaveChangesAsync();
     }
+
+    await DiagnosisSeeder.SeedAsync(context);
 }
 app.MapHub<TrackingHub>("/trackingHub");
 app.MapControllers();

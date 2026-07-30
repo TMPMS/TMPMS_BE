@@ -1,25 +1,7 @@
-# Quy Trình Khởi Tạo Cơ Sở Dữ Liệu (Database Initialization Guide)
+# HƯỚNG DẪN DATABASE DỰ ÁN TMPMS
 
-Hệ thống backend chính của `TMPMS` sử dụng **Microsoft SQL Server** thông qua Entity Framework Core. Tất cả cấu trúc bảng được kiểm soát bằng EF Migrations.
+## Bộ Dữ Liệu Seed Tự Chẩn Đoán Đông Y
+Bảng `SyndromeTypes`, `SymptomQuestions`, `AnswerOptions`, và `AnswerScoreMappings` được khởi tạo tự động trong hệ thống thông qua file `seed_diagnosis_questions.sql`.
 
-Hãy làm theo các bước sau để thiết lập cơ sở dữ liệu từ đầu:
-
-### Bước 1: Tạo Schema (Tạo Cấu Trúc Bảng)
-Khởi chạy lệnh sau tại thư mục dự án `TMPMS_BE` để tự động tạo toàn bộ bảng và mối quan hệ trong cơ sở dữ liệu SQL Server:
-```bash
-dotnet ef database update
-```
-
-### Bước 2: Chèn Dữ Liệu Mẫu (Seed Data)
-Sau khi schema được thiết lập thành công, hãy chạy tệp dữ liệu hạt giống để điền các danh mục, nhà cung cấp, sản phẩm thuốc đông y & thảo dược, cũng như các mã giảm giá mặc định vào SQL Server:
-```bash
-# Chạy tệp tin seed.sql
-# Bạn có thể thực hiện chạy tệp này thông qua SQL Server Management Studio (SSMS), Azure Data Studio, 
-# hoặc các công cụ dòng lệnh khác kết nối với database của bạn.
-Database/seed.sql
-```
-
----
-
-> [!NOTE]
-> Thư mục `archive/` chứa các tệp tin SQL cũ (bao gồm cả các bản nháp PostgreSQL và các lệnh PostgREST cũ). Chúng chỉ được giữ lại để làm tài liệu đối chiếu và **không được dùng** trong quá trình vận hành hệ backend hiện tại.
+> **GHI CHÚ QUAN TRỌNG**: 
+> Bộ câu hỏi và điểm số này là bản seed demo cho đồ án, cần được giảng viên/chuyên gia Đông y thật rà soát lại trước khi dùng cho mục đích y tế thực tế.
