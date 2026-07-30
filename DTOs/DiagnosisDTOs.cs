@@ -6,7 +6,7 @@ namespace TMPMS.DTOs
     public class DiagnosisCreateDTO
     {
         public int PatientId { get; set; }
-        public int DoctorId { get; set; }
+        public int? DoctorId { get; set; }
         public string Symptoms { get; set; }
         public string ClinicalExamination { get; set; }
         public string DiagnosisResult { get; set; }
@@ -27,7 +27,7 @@ namespace TMPMS.DTOs
         public int Id { get; set; }
         public int PatientId { get; set; }
         public string PatientName { get; set; }
-        public int DoctorId { get; set; }
+        public int? DoctorId { get; set; }
         public string DoctorName { get; set; }
         public string Symptoms { get; set; }
         public string ClinicalExamination { get; set; }
@@ -46,7 +46,7 @@ namespace TMPMS.DTOs
 
         public string PatientName { get; set; }
 
-        public int DoctorId { get; set; }
+        public int? DoctorId { get; set; }
 
         public string DoctorName { get; set; }
 
