@@ -13,7 +13,7 @@ namespace TMPMS.Controllers
         public InvoiceController(IInvoiceService service) => _service = service;
 
         [HttpPost("generate/{orderId}")]
-        [Authorize(Roles = "Admin,Accountant")]
+        [Authorize]
         public async Task<ActionResult> Generate(int orderId)
         {
             try

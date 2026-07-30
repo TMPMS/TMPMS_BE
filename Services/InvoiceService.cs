@@ -21,8 +21,8 @@ namespace TMPMS.Services
             if (order == null)
                 throw new ArgumentException("Đơn hàng không tồn tại.");
 
-            if (order.PaymentStatus != "Paid")
-                throw new InvalidOperationException("Đơn hàng chưa thanh toán, không thể xuất hóa đơn.");
+            if (order.Status == "Cancelled")
+                throw new InvalidOperationException("Đơn hàng đã hủy, không thể xuất hóa đơn.");
 
             var invoice = new Invoice
             {
