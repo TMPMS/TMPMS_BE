@@ -7,7 +7,7 @@ namespace TMPMS.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "Admin,Accountant")]
+    [Authorize(Roles = "Admin,Staff,Pharmacy,Accountant")]
     public class ReportController : ControllerBase
     {
         private readonly IReportService _service;
