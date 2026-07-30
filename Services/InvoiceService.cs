@@ -1,6 +1,10 @@
 using BusinessObjects;
 using Repositories.Interfaces;
 using Services.Interfaces;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using TMPMS.DTOs;
 
 namespace TMPMS.Services
@@ -10,19 +14,21 @@ namespace TMPMS.Services
         private readonly IInvoiceRepository _repo;
         public InvoiceService(IInvoiceRepository repo) => _repo = repo;
 
-        // Sinh hóa đơn cho đơn hàng đã thanh toán thành công
-        public async Task<InvoiceResponseDTO> GenerateInvoice(int orderId)
+        public async Task<InvoiceResponseDTO> GenerateInvoice(int orderId, int currentUserId, bool isAdminOrStaff)
         {
-            var existing = await _repo.GetByOrderId(orderId);
-            if (existing != null)
-                return await BuildInvoiceDTO(existing);
-
             var order = await _repo.GetOrderWithDetails(orderId);
             if (order == null)
                 throw new ArgumentException("Đơn hàng không tồn tại.");
 
+            if (!isAdminOrStaff && order.UserId != currentUserId)
+                throw new UnauthorizedAccessException("Forbidden: Bạn không có quyền xem hoặc xuất hóa đơn cho đơn hàng này.");
+
             if (order.Status == "Cancelled")
                 throw new InvalidOperationException("Đơn hàng đã hủy, không thể xuất hóa đơn.");
+
+            var existing = await _repo.GetByOrderId(orderId);
+            if (existing != null)
+                return await BuildInvoiceDTO(existing);
 
             var invoice = new Invoice
             {
@@ -36,8 +42,14 @@ namespace TMPMS.Services
             return await BuildInvoiceDTO(created);
         }
 
-        public async Task<InvoiceResponseDTO> GetByOrderId(int orderId)
+        public async Task<InvoiceResponseDTO> GetByOrderId(int orderId, int currentUserId, bool isAdminOrStaff)
         {
+            var order = await _repo.GetOrderWithDetails(orderId);
+            if (order == null) return null;
+
+            if (!isAdminOrStaff && order.UserId != currentUserId)
+                throw new UnauthorizedAccessException("Forbidden: Bạn không có quyền xem hóa đơn của đơn hàng này.");
+
             var invoice = await _repo.GetByOrderId(orderId);
             return invoice == null ? null : await BuildInvoiceDTO(invoice);
         }
