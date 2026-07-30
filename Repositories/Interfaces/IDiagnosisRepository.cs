@@ -1,4 +1,6 @@
 using BusinessObjects;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using TMPMS.DTOs;
 
 namespace Repositories.Interfaces
@@ -14,6 +16,9 @@ namespace Repositories.Interfaces
         Task<bool> Delete(int id);
         Task<List<Diagnosis>> GetByPatientIdAsync(int patientId);
         Task<List<DiagnosisDTOs>> GetDiagnosisHistoryAsync(int patientId);
+
+        Task<List<SymptomQuestion>> GetQuestionsWithAnswersAsync();
+        Task<List<SyndromeType>> GetSyndromeTypesAsync();
+        Task<List<AnswerScoreMapping>> GetScoreMappingsAsync();
     }
 }
-

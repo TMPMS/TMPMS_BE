@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Services.Interfaces;
+using System;
+using System.Security.Claims;
+using System.Threading.Tasks;
 using TMPMS.DTOs;
 
 namespace TMPMS.Controllers
@@ -12,6 +15,37 @@ namespace TMPMS.Controllers
     {
         private readonly IDiagnosisService _service;
         public DiagnosisController(IDiagnosisService service) => _service = service;
+
+        [HttpGet("questions")]
+        [AllowAnonymous]
+        public async Task<ActionResult> GetQuestions()
+        {
+            var questions = await _service.GetQuestionsAsync();
+            return Ok(questions);
+        }
+
+        [HttpPost("classify")]
+        [AllowAnonymous]
+        public async Task<ActionResult> Classify([FromBody] DiagnosisClassifyRequestDTO dto)
+        {
+            try
+            {
+                int? userId = null;
+                var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                            ?? User.FindFirst("id")?.Value;
+                if (int.TryParse(claim, out int parsedId) && parsedId > 0)
+                {
+                    userId = parsedId;
+                }
+
+                var result = await _service.ClassifyAsync(dto, userId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
 
         [HttpPost]
         [Authorize]
