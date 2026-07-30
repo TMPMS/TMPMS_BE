@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using TMPMS.DTOs;
 
 namespace Services.Interfaces
@@ -11,5 +13,8 @@ namespace Services.Interfaces
         Task<List<DiagnosisResponseDTO>> GetAll();
         Task<DiagnosisResponseDTO> Update(int id, DiagnosisUpdateDTO dto);
         Task<bool> Delete(int id);
+
+        Task<List<SymptomQuestionDTO>> GetQuestionsAsync();
+        Task<DiagnosisResultDTO> ClassifyAsync(DiagnosisClassifyRequestDTO dto, int? currentUserId);
     }
 }

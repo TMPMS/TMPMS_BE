@@ -1,4 +1,4 @@
-﻿using BusinessObjects;
+using BusinessObjects;
 using Microsoft.EntityFrameworkCore;
 using Repositories.Interfaces;
 using TMPMS.Data;
@@ -100,6 +100,23 @@ namespace TMPMS.Repositories
                     PrescriptionCount = d.Prescriptions.Count()
                 })
                 .ToListAsync();
+        }
+        public async Task<List<SymptomQuestion>> GetQuestionsWithAnswersAsync()
+        {
+            return await _context.SymptomQuestions
+                .Include(q => q.AnswerOptions)
+                .OrderBy(q => q.QuestionOrder)
+                .ToListAsync();
+        }
+
+        public async Task<List<SyndromeType>> GetSyndromeTypesAsync()
+        {
+            return await _context.SyndromeTypes.ToListAsync();
+        }
+
+        public async Task<List<AnswerScoreMapping>> GetScoreMappingsAsync()
+        {
+            return await _context.AnswerScoreMappings.ToListAsync();
         }
     }
 }
