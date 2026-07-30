@@ -47,6 +47,11 @@ namespace TMPMS.Data
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<Appointment> Appointments { get; set; }
         public DbSet<Voucher> Vouchers { get; set; }
+        public DbSet<SymptomQuestion> SymptomQuestions { get; set; }
+        public DbSet<AnswerOption> AnswerOptions { get; set; }
+        public DbSet<SyndromeType> SyndromeTypes { get; set; }
+        public DbSet<AnswerScoreMapping> AnswerScoreMappings { get; set; }
+        public DbSet<DiagnosisAnswer> DiagnosisAnswers { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -145,6 +150,48 @@ namespace TMPMS.Data
                 .WithMany()
                 .HasForeignKey(d => d.DoctorId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Diagnosis>()
+                .HasOne(d => d.PrimarySyndrome)
+                .WithMany()
+                .HasForeignKey(d => d.PrimarySyndromeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Diagnosis>()
+                .HasOne(d => d.SecondarySyndrome)
+                .WithMany()
+                .HasForeignKey(d => d.SecondarySyndromeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<DiagnosisAnswer>()
+                .HasOne(da => da.Diagnosis)
+                .WithMany(d => d.DiagnosisAnswers)
+                .HasForeignKey(da => da.DiagnosisId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<DiagnosisAnswer>()
+                .HasOne(da => da.Question)
+                .WithMany()
+                .HasForeignKey(da => da.QuestionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<DiagnosisAnswer>()
+                .HasOne(da => da.AnswerOption)
+                .WithMany()
+                .HasForeignKey(da => da.AnswerOptionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<AnswerScoreMapping>()
+                .HasOne(asm => asm.AnswerOption)
+                .WithMany(ao => ao.ScoreMappings)
+                .HasForeignKey(asm => asm.AnswerOptionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<AnswerScoreMapping>()
+                .HasOne(asm => asm.SyndromeType)
+                .WithMany()
+                .HasForeignKey(asm => asm.SyndromeTypeId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<HerbalMedicineInfo>()
                 .HasOne(h => h.Medicine)

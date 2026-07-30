@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace BusinessObjects
 {
-    // Phiếu chẩn đoán của bác sĩ cho bệnh nhân
+    // Phiếu chẩn đoán của bác sĩ / Tự chẩn đoán Đông Y cho bệnh nhân
     public class Diagnosis
     {
         public int Id { get; set; }
@@ -16,8 +16,15 @@ namespace BusinessObjects
         public DateTime DiagnosisDate { get; set; }
         public DateTime CreatedAt { get; set; }
 
+        public int? PrimarySyndromeId { get; set; }
+        public int? SecondarySyndromeId { get; set; }
+        public string? ScoreSnapshotJson { get; set; }
+
         public User Patient { get; set; }
         public User? Doctor { get; set; }
+        public SyndromeType? PrimarySyndrome { get; set; }
+        public SyndromeType? SecondarySyndrome { get; set; }
         public ICollection<Prescription> Prescriptions { get; set; }
+        public ICollection<DiagnosisAnswer> DiagnosisAnswers { get; set; } = new List<DiagnosisAnswer>();
     }
 }
