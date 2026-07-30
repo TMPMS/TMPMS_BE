@@ -15,7 +15,7 @@ namespace TMPMS.Services
             var entity = new Diagnosis
             {
                 PatientId = dto.PatientId,
-                DoctorId = dto.DoctorId,
+                DoctorId = dto.DoctorId > 0 ? dto.DoctorId : 1,
                 Symptoms = dto.Symptoms,
                 ClinicalExamination = dto.ClinicalExamination,
                 DiagnosisResult = dto.DiagnosisResult,
