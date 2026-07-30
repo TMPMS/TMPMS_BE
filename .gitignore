@@ -42,3 +42,5 @@ appsettings.Development.json
 appsettings.Production.json
 appsettings.local.json
 launchSettings.json
+JWT_KEY_UPDATE_NOTICE.md
+
