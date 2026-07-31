@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using BusinessObjects;
 using TMPMS.Data;
+using System.Text.Json.Serialization;
 
 namespace TMPMS.Controllers
 {
@@ -18,8 +19,13 @@ namespace TMPMS.Controllers
 
         public class CartItemInput
         {
+            [JsonPropertyName("cart_id")]
             public int CartId { get; set; }
+
+            [JsonPropertyName("medicine_id")]
             public int MedicineId { get; set; }
+
+            [JsonPropertyName("quantity")]
             public int Quantity { get; set; }
         }
 
@@ -70,7 +76,7 @@ namespace TMPMS.Controllers
 
             if (existing != null)
             {
-                existing.Quantity += input.Quantity;
+                existing.Quantity = input.Quantity;
                 await _context.SaveChangesAsync();
                 return Ok(existing);
             }
