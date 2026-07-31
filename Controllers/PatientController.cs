@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using TMPMS.DTOs;
@@ -9,7 +9,7 @@ namespace TMPMS.Controllers
 
     [ApiController]
     [Route("api/patients")]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin,Staff,Pharmacy")]
     public class PatientController : ControllerBase
     {
         private readonly IPatientService _patientService;
@@ -51,7 +51,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> UpdatePatient(int id, UpdatePatientDto dto)
         {
             var result = await _patientService.UpdatePatientAsync(id, dto);

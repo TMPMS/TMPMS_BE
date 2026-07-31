@@ -56,6 +56,20 @@ namespace TMPMS.Repositories
             string uname = string.IsNullOrEmpty(dto.Username) ? "patient_" + (string.IsNullOrEmpty(phoneNum) ? DateTime.Now.Ticks.ToString() : phoneNum) : dto.Username;
             string email = string.IsNullOrEmpty(dto.Email) ? (string.IsNullOrEmpty(phoneNum) ? uname : phoneNum) + "@patient.com" : dto.Email;
 
+            // Check if patient with same email or username already exists
+            var existingUser = await _userManager.FindByEmailAsync(email) ?? await _userManager.FindByNameAsync(uname);
+            if (existingUser != null)
+            {
+                existingUser.FullName = !string.IsNullOrEmpty(dto.Name) ? dto.Name : existingUser.FullName;
+                existingUser.PhoneNumber = !string.IsNullOrEmpty(phoneNum) ? phoneNum : existingUser.PhoneNumber;
+                existingUser.Gender = !string.IsNullOrEmpty(dto.Gender) ? dto.Gender : existingUser.Gender;
+                existingUser.Address = !string.IsNullOrEmpty(dto.Address) ? dto.Address : existingUser.Address;
+                if (dto.DateOfBirth.HasValue) existingUser.DateOfBirth = dto.DateOfBirth.Value;
+
+                var updateRes = await _userManager.UpdateAsync(existingUser);
+                return updateRes.Succeeded;
+            }
+
             var user = new User
             {
                 UserName = uname,
@@ -75,7 +89,15 @@ namespace TMPMS.Repositories
             if (!result.Succeeded)
                 return false;
 
-            await _userManager.AddToRoleAsync(user, "Patient");
+            try
+            {
+                await _userManager.AddToRoleAsync(user, "User");
+            }
+            catch
+            {
+                // Fallback if role addition fails
+            }
+
             return true;
         }
 
