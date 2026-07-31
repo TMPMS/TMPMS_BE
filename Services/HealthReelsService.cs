@@ -51,9 +51,10 @@ namespace TMPMS.Services
             {
                 var videoList = new List<YouTubeVideoDto>();
 
-                // Build search endpoint URL for health Shorts / Đông Y videos
+                // Build search endpoint URL for health / Đông Y videos from configured channel or query
                 string channelFilter = channelIds.Any() ? $"&channelId={channelIds[0]}" : "";
-                string searchUrl = $"https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=10&order=date&q=sức+khỏe+đông+y+dược+liệu&type=video&key={apiKey}{channelFilter}";
+                string queryParam = channelIds.Any() ? "sức+khỏe" : "sức+khỏe+đông+y+bài+thuốc";
+                string searchUrl = $"https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=10&order=date&q={queryParam}&type=video&key={apiKey}{channelFilter}";
 
                 var searchResponse = await _httpClient.GetAsync(searchUrl);
                 if (!searchResponse.IsSuccessStatusCode)
