@@ -36,18 +36,20 @@ namespace TMPMS.Controllers
 
             var result = await _patientService.AddPatientAsync(dto);
 
-            if (!result)
-                return BadRequest(new
-                {
-                    message = "Create patient failed."
-                });
+            if (result.IsConflict)
+            {
+                return StatusCode(409, new { message = result.Message, conflictUserId = result.ConflictUserId, conflictUserName = result.ConflictUserName });
+            }
+
+            if (!result.Success)
+            {
+                return BadRequest(new { message = result.Message });
+            }
 
             return Ok(new
             {
-                message = "Patient created successfully."
+                message = result.Message
             });
-
-
         }
 
         [HttpPut("{id}")]
@@ -56,17 +58,22 @@ namespace TMPMS.Controllers
         {
             var result = await _patientService.UpdatePatientAsync(id, dto);
 
-            if (!result)
+            if (result.IsConflict)
+            {
+                return StatusCode(409, new { message = result.Message, conflictUserId = result.ConflictUserId, conflictUserName = result.ConflictUserName });
+            }
+
+            if (!result.Success)
             {
                 return NotFound(new
                 {
-                    message = "Patient not found."
+                    message = result.Message
                 });
             }
 
             return Ok(new
             {
-                message = "Update patient successfully."
+                message = result.Message
             });
         }
 

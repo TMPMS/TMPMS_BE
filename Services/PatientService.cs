@@ -1,4 +1,4 @@
-﻿using BusinessObjects;
+using BusinessObjects;
 using Microsoft.AspNetCore.Identity;
 using Repositories.Interfaces;
 using TMPMS.DTOs;
@@ -35,12 +35,12 @@ namespace TMPMS.Services
             return _patientRepository.GetAllPatientsAsync();
         }
 
-        public async Task<bool> AddPatientAsync(PatientCreateDTO dto)
+        public async Task<PatientOperationResult> AddPatientAsync(PatientCreateDTO dto)
         {
             return await _patientRepository.AddPatientAsync(dto);
         }
 
-        public async Task<bool> UpdatePatientAsync(int id, UpdatePatientDto dto)
+        public async Task<PatientOperationResult> UpdatePatientAsync(int id, UpdatePatientDto dto)
         {
             return await _patientRepository.UpdatePatientAsync(id, dto);
         }

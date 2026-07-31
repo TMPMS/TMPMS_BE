@@ -57,51 +57,71 @@ namespace TMPMS.Repositories
             return patients;
         }
 
-        public async Task<bool> AddPatientAsync(PatientCreateDTO dto)
+        public async Task<PatientOperationResult> AddPatientAsync(PatientCreateDTO dto)
         {
-            string phoneNum = dto.PhoneNumber ?? dto.Phone ?? "";
-            string uname = string.IsNullOrEmpty(dto.Username) ? "patient_" + (string.IsNullOrEmpty(phoneNum) ? DateTime.Now.Ticks.ToString() : phoneNum) : dto.Username;
-            string email = string.IsNullOrEmpty(dto.Email) ? (string.IsNullOrEmpty(phoneNum) ? uname : phoneNum) + "@patient.com" : dto.Email;
+            string phoneNum = (dto.PhoneNumber ?? dto.Phone ?? "").Trim();
+            string uname = string.IsNullOrEmpty(dto.Username) ? "patient_" + (string.IsNullOrEmpty(phoneNum) ? DateTime.Now.Ticks.ToString() : phoneNum) : dto.Username.Trim();
+            string email = string.IsNullOrEmpty(dto.Email) ? (string.IsNullOrEmpty(phoneNum) ? uname : phoneNum) + "@patient.com" : dto.Email.Trim();
 
-            // Check if patient with same email or username already exists
-            var existingUser = await _userManager.FindByEmailAsync(email) ?? await _userManager.FindByNameAsync(uname);
-            User targetUser = existingUser;
+            // STRICT ANTI-OVERWRITE RULE: Check if SĐT, Email, or Username is already linked to another User
+            User? existingUser = null;
+            if (!string.IsNullOrEmpty(phoneNum))
+            {
+                existingUser = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNum);
+            }
+            if (existingUser == null && !string.IsNullOrEmpty(email))
+            {
+                existingUser = await _userManager.FindByEmailAsync(email);
+            }
+            if (existingUser == null && !string.IsNullOrEmpty(uname))
+            {
+                existingUser = await _userManager.FindByNameAsync(uname);
+            }
 
             if (existingUser != null)
             {
-                existingUser.FullName = !string.IsNullOrEmpty(dto.Name) ? dto.Name : existingUser.FullName;
-                existingUser.PhoneNumber = !string.IsNullOrEmpty(phoneNum) ? phoneNum : existingUser.PhoneNumber;
-                existingUser.Gender = !string.IsNullOrEmpty(dto.Gender) ? dto.Gender : existingUser.Gender;
-                existingUser.Address = !string.IsNullOrEmpty(dto.Address) ? dto.Address : existingUser.Address;
-                if (dto.DateOfBirth.HasValue) existingUser.DateOfBirth = dto.DateOfBirth.Value;
-
-                await _userManager.UpdateAsync(existingUser);
-            }
-            else
-            {
-                targetUser = new User
+                string existingName = !string.IsNullOrEmpty(existingUser.FullName) ? existingUser.FullName : existingUser.UserName ?? "Chưa đặt tên";
+                return new PatientOperationResult
                 {
-                    UserName = uname,
-                    FullName = dto.Name ?? uname,
-                    Email = email,
-                    PhoneNumber = phoneNum,
-                    Gender = dto.Gender ?? "Nam",
-                    DateOfBirth = dto.DateOfBirth ?? DateTime.UtcNow.AddYears(-25),
-                    Address = dto.Address ?? "",
-                    IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    Success = false,
+                    IsConflict = true,
+                    ConflictUserId = existingUser.Id,
+                    ConflictUserName = existingName,
+                    Message = $"SĐT/Email này đã gắn với hồ sơ bệnh nhân khác (Mã: {existingUser.Id}, Tên: {existingName}). Vui lòng kiểm tra lại hoặc liên hệ Admin nếu đây là cùng 1 người cần gộp hồ sơ thủ công."
                 };
-
-                string pwd = string.IsNullOrEmpty(dto.Password) ? "Patient@123" : dto.Password;
-                var result = await _userManager.CreateAsync(targetUser, pwd);
-                if (!result.Succeeded) return false;
-
-                try
-                {
-                    await _userManager.AddToRoleAsync(targetUser, "User");
-                }
-                catch { }
             }
+
+            var targetUser = new User
+            {
+                UserName = uname,
+                FullName = dto.Name ?? uname,
+                Email = email,
+                PhoneNumber = phoneNum,
+                Gender = dto.Gender ?? "Nam",
+                DateOfBirth = dto.DateOfBirth ?? DateTime.UtcNow.AddYears(-25),
+                Address = dto.Address ?? "",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            string pwd = string.IsNullOrEmpty(dto.Password) ? "Patient@123" : dto.Password;
+            var result = await _userManager.CreateAsync(targetUser, pwd);
+            if (!result.Succeeded)
+            {
+                string errors = string.Join("; ", result.Errors.Select(e => e.Description));
+                return new PatientOperationResult
+                {
+                    Success = false,
+                    IsConflict = false,
+                    Message = $"Tạo tài khoản thất bại: {errors}"
+                };
+            }
+
+            try
+            {
+                await _userManager.AddToRoleAsync(targetUser, "User");
+            }
+            catch { }
 
             // Ensure an appointment record exists for this patient
             bool hasAppointment = await _context.Appointments.AnyAsync(a => a.UserId == targetUser.Id);
@@ -119,29 +139,91 @@ namespace TMPMS.Repositories
                 await _context.SaveChangesAsync();
             }
 
-            return true;
+            return new PatientOperationResult
+            {
+                Success = true,
+                IsConflict = false,
+                Message = "Tạo hồ sơ bệnh nhân thành công."
+            };
         }
 
-        public async Task<bool> UpdatePatientAsync(int id, UpdatePatientDto dto)
+        public async Task<PatientOperationResult> UpdatePatientAsync(int id, UpdatePatientDto dto)
         {
             var patient = await _userManager.FindByIdAsync(id.ToString());
 
             if (patient == null)
-                return false;
+            {
+                return new PatientOperationResult
+                {
+                    Success = false,
+                    IsConflict = false,
+                    Message = "Không tìm thấy hồ sơ bệnh nhân."
+                };
+            }
+
+            string phoneNum = (dto.PhoneNumber ?? dto.Phone ?? "").Trim();
+            if (!string.IsNullOrEmpty(phoneNum) && phoneNum != patient.PhoneNumber)
+            {
+                var existingPhoneUser = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNum && u.Id != id);
+                if (existingPhoneUser != null)
+                {
+                    string existingName = !string.IsNullOrEmpty(existingPhoneUser.FullName) ? existingPhoneUser.FullName : existingPhoneUser.UserName ?? "Chưa đặt tên";
+                    return new PatientOperationResult
+                    {
+                        Success = false,
+                        IsConflict = true,
+                        ConflictUserId = existingPhoneUser.Id,
+                        ConflictUserName = existingName,
+                        Message = $"SĐT/Email này đã gắn với hồ sơ bệnh nhân khác (Mã: {existingPhoneUser.Id}, Tên: {existingName}). Vui lòng kiểm tra lại hoặc liên hệ Admin nếu đây là cùng 1 người cần gộp hồ sơ thủ công."
+                    };
+                }
+                patient.PhoneNumber = phoneNum;
+            }
+
+            string email = (dto.Email ?? "").Trim();
+            if (!string.IsNullOrEmpty(email) && email != patient.Email)
+            {
+                var existingEmailUser = await _userManager.FindByEmailAsync(email);
+                if (existingEmailUser != null && existingEmailUser.Id != id)
+                {
+                    string existingName = !string.IsNullOrEmpty(existingEmailUser.FullName) ? existingEmailUser.FullName : existingEmailUser.UserName ?? "Chưa đặt tên";
+                    return new PatientOperationResult
+                    {
+                        Success = false,
+                        IsConflict = true,
+                        ConflictUserId = existingEmailUser.Id,
+                        ConflictUserName = existingName,
+                        Message = $"SĐT/Email này đã gắn với hồ sơ bệnh nhân khác (Mã: {existingEmailUser.Id}, Tên: {existingName}). Vui lòng kiểm tra lại hoặc liên hệ Admin nếu đây là cùng 1 người cần gộp hồ sơ thủ công."
+                    };
+                }
+                patient.Email = email;
+            }
 
             if (!string.IsNullOrEmpty(dto.Username)) patient.UserName = dto.Username;
             if (!string.IsNullOrEmpty(dto.Name)) patient.FullName = dto.Name;
-            if (!string.IsNullOrEmpty(dto.Email)) patient.Email = dto.Email;
-            
-            string phoneNum = dto.PhoneNumber ?? dto.Phone;
-            if (!string.IsNullOrEmpty(phoneNum)) patient.PhoneNumber = phoneNum;
             if (!string.IsNullOrEmpty(dto.Gender)) patient.Gender = dto.Gender;
             if (dto.DateOfBirth.HasValue) patient.DateOfBirth = dto.DateOfBirth.Value;
             if (dto.Address != null) patient.Address = dto.Address;
             patient.IsActive = dto.IsActive;
 
             var result = await _userManager.UpdateAsync(patient);
-            return result.Succeeded;
+            if (!result.Succeeded)
+            {
+                string errors = string.Join("; ", result.Errors.Select(e => e.Description));
+                return new PatientOperationResult
+                {
+                    Success = false,
+                    IsConflict = false,
+                    Message = $"Cập nhật thất bại: {errors}"
+                };
+            }
+
+            return new PatientOperationResult
+            {
+                Success = true,
+                IsConflict = false,
+                Message = "Cập nhật thông tin bệnh nhân thành công."
+            };
         }
 
         public async Task<bool> DeletePatientAsync(int id)

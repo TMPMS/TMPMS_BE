@@ -2,6 +2,7 @@ using BusinessObjects;
 using Repositories.Interfaces;
 using Services.Interfaces;
 using TMPMS.DTOs;
+using TMPMS.Repositories.Interfaces;
 
 namespace TMPMS.Services
 {
@@ -9,12 +10,14 @@ namespace TMPMS.Services
     {
         private readonly IReportRepository _repo;
         private readonly IInventoryRepository _inventoryRepo;
+        private readonly IPatientRepository _patientRepo;
         private const int LowStockThreshold = 20;
 
-        public ReportService(IReportRepository repo, IInventoryRepository inventoryRepo)
+        public ReportService(IReportRepository repo, IInventoryRepository inventoryRepo, IPatientRepository patientRepo)
         {
             _repo = repo;
             _inventoryRepo = inventoryRepo;
+            _patientRepo = patientRepo;
         }
 
         public async Task<List<RevenuePointDTO>> GetRevenueReport(RevenueReportRequestDTO dto)
@@ -96,11 +99,13 @@ namespace TMPMS.Services
             var topSelling = await GetTopSellingMedicines(last30Days, now, 5);
             var allOrders = await _repo.GetAllOrders();
             var paidOrders = allOrders.Where(o => o.PaymentStatus == "Paid").ToList();
+            var activePatients = await _patientRepo.GetAllPatientsAsync();
 
             return new DashboardSummaryDTO
             {
                 TotalRevenue = paidOrders.Sum(o => o.TotalAmount),
                 TotalOrders = allOrders.Count,
+                TotalCustomers = activePatients.Count,
                 TotalMedicines = await _repo.CountMedicines(),
                 PendingPrescriptions = await _repo.CountPendingPrescriptions(),
                 LowStockCount = await _repo.CountLowStockMedicines(LowStockThreshold),
