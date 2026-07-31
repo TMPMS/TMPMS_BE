@@ -221,7 +221,11 @@ using (var scope = app.Services.CreateScope())
     {
         new Role { Name = "Admin", Description = "System Administrator" },
         new Role { Name = "Pharmacy", Description = "Pharmacy Staff" },
-        new Role { Name = "User", Description = "Customer" }
+        new Role { Name = "User", Description = "Customer" },
+        new Role { Name = "Staff", Description = "Clinic Staff" },
+        new Role { Name = "Doctor", Description = "Doctor / Physician" },
+        new Role { Name = "Accountant", Description = "Accountant" },
+        new Role { Name = "Warehouse", Description = "Warehouse Staff" }
     };
 
     foreach (var role in roles)
