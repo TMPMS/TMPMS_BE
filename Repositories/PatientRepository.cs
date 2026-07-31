@@ -25,7 +25,7 @@ namespace TMPMS.Repositories
             var users = await _context.Users.ToListAsync();
             var appointmentUserIds = await _context.Appointments.Select(a => a.UserId).Distinct().ToListAsync();
             var diagnosisPatientIds = await _context.Diagnoses.Select(d => d.PatientId).Distinct().ToListAsync();
-            var activePatientIds = new HashSet<int>(appointmentUserIds.Concat(diagnosisPatientIds));
+            var activePatientUserIds = new HashSet<int>(appointmentUserIds.Concat(diagnosisPatientIds));
 
             var patients = new List<PatientDto>();
 
@@ -34,8 +34,8 @@ namespace TMPMS.Repositories
                 var roles = await _userManager.GetRolesAsync(user);
                 bool isStaffOrAdmin = roles.Contains("Admin") || roles.Contains("Doctor") || roles.Contains("Pharmacy") || roles.Contains("Staff");
 
-                // Include user as a patient if they have Patient/User role OR if they booked an appointment or diagnosis (and are not purely staff/admin)
-                if (roles.Contains("Patient") || roles.Contains("User") || activePatientIds.Contains(user.Id) || !isStaffOrAdmin)
+                // STRICT BUSINESS RULE: A user is ONLY listed as a Patient if they have an active Appointment or Diagnosis record (or explicit Patient role)
+                if (!isStaffOrAdmin && (activePatientUserIds.Contains(user.Id) || roles.Contains("Patient")))
                 {
                     patients.Add(new PatientDto
                     {
@@ -49,7 +49,7 @@ namespace TMPMS.Repositories
                         Address = user.Address ?? "",
                         IsActive = user.IsActive,
                         CreatedAt = user.CreatedAt,
-                        Role = roles.FirstOrDefault() ?? "User"
+                        Role = roles.FirstOrDefault() ?? "Patient"
                     });
                 }
             }
@@ -65,6 +65,8 @@ namespace TMPMS.Repositories
 
             // Check if patient with same email or username already exists
             var existingUser = await _userManager.FindByEmailAsync(email) ?? await _userManager.FindByNameAsync(uname);
+            User targetUser = existingUser;
+
             if (existingUser != null)
             {
                 existingUser.FullName = !string.IsNullOrEmpty(dto.Name) ? dto.Name : existingUser.FullName;
@@ -73,36 +75,48 @@ namespace TMPMS.Repositories
                 existingUser.Address = !string.IsNullOrEmpty(dto.Address) ? dto.Address : existingUser.Address;
                 if (dto.DateOfBirth.HasValue) existingUser.DateOfBirth = dto.DateOfBirth.Value;
 
-                var updateRes = await _userManager.UpdateAsync(existingUser);
-                return updateRes.Succeeded;
+                await _userManager.UpdateAsync(existingUser);
+            }
+            else
+            {
+                targetUser = new User
+                {
+                    UserName = uname,
+                    FullName = dto.Name ?? uname,
+                    Email = email,
+                    PhoneNumber = phoneNum,
+                    Gender = dto.Gender ?? "Nam",
+                    DateOfBirth = dto.DateOfBirth ?? DateTime.UtcNow.AddYears(-25),
+                    Address = dto.Address ?? "",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                string pwd = string.IsNullOrEmpty(dto.Password) ? "Patient@123" : dto.Password;
+                var result = await _userManager.CreateAsync(targetUser, pwd);
+                if (!result.Succeeded) return false;
+
+                try
+                {
+                    await _userManager.AddToRoleAsync(targetUser, "User");
+                }
+                catch { }
             }
 
-            var user = new User
+            // Ensure an appointment record exists for this patient
+            bool hasAppointment = await _context.Appointments.AnyAsync(a => a.UserId == targetUser.Id);
+            if (!hasAppointment)
             {
-                UserName = uname,
-                FullName = dto.Name ?? uname,
-                Email = email,
-                PhoneNumber = phoneNum,
-                Gender = dto.Gender ?? "Nam",
-                DateOfBirth = dto.DateOfBirth ?? DateTime.UtcNow.AddYears(-25),
-                Address = dto.Address ?? "",
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            string pwd = string.IsNullOrEmpty(dto.Password) ? "Patient@123" : dto.Password;
-            var result = await _userManager.CreateAsync(user, pwd);
-
-            if (!result.Succeeded)
-                return false;
-
-            try
-            {
-                await _userManager.AddToRoleAsync(user, "User");
-            }
-            catch
-            {
-                // Fallback if role addition fails
+                var appointment = new Appointment
+                {
+                    UserId = targetUser.Id,
+                    AppointmentDate = DateTime.Now,
+                    Reason = "Đăng ký khám bệnh trực tiếp tại nhà thuốc",
+                    Status = "Confirmed",
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _context.Appointments.AddAsync(appointment);
+                await _context.SaveChangesAsync();
             }
 
             return true;
