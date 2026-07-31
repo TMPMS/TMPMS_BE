@@ -186,6 +186,12 @@ namespace TMPMS.Controllers
             var session = await _context.PharmacyChatSessions.FindAsync(id);
             if (session == null) return NotFound(new { message = "Không tìm thấy phiên hội thoại" });
 
+            // Race-condition protection: prevent double assign if already taken by another pharmacist
+            if (session.Status != "Open" && session.AssignedPharmacistId != pharmacistId)
+            {
+                return StatusCode(409, new { message = "Phiên tư vấn này đã được tiếp nhận bởi Dược sĩ khác." });
+            }
+
             session.AssignedPharmacistId = pharmacistId;
             session.Status = "Assigned";
             await _context.SaveChangesAsync();

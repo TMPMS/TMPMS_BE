@@ -142,6 +142,11 @@ namespace TMPMS.Hubs
             var session = await _context.PharmacyChatSessions.FindAsync(sessionId);
             if (session == null || session.Status == "Closed") return;
 
+            if (session.Status != "Open" && session.AssignedPharmacistId != userId)
+            {
+                throw new HubException("Phiên tư vấn này đã được tiếp nhận bởi Dược sĩ khác.");
+            }
+
             session.AssignedPharmacistId = userId;
             session.Status = "Assigned";
             await _context.SaveChangesAsync();
