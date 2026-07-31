@@ -94,6 +94,19 @@ var authBuilder = builder.Services.AddAuthentication(options =>
         ValidAudience = builder.Configuration["JWT:Audience"] ?? "TMPMS_FE",
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
     };
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && (path.StartsWithSegments("/hubs") || path.StartsWithSegments("/trackingHub")))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
 });
 
 var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
@@ -375,6 +388,7 @@ using (var scope = app.Services.CreateScope())
     await DiagnosisSeeder.SeedAsync(context);
 }
 app.MapHub<TrackingHub>("/trackingHub");
+app.MapHub<TMPMS.Hubs.PharmacyChatHub>("/hubs/pharmacy-chat");
 app.MapControllers();
 
 app.Run();
