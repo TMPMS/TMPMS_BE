@@ -47,6 +47,8 @@ builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<IAddressService, AddressService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
+builder.Services.AddScoped<IHealthReelsService, HealthReelsService>();
+builder.Services.AddHttpClient();
 
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ISmsService, TwilioSmsService>();

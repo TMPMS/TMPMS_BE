@@ -24,9 +24,17 @@ namespace TMPMS.Hubs
             _userManager = userManager;
         }
 
+        private string? GetUserIdStr()
+        {
+            return Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+                   Context.User?.FindFirst("sub")?.Value ??
+                   Context.User?.FindFirst("id")?.Value ??
+                   Context.User?.FindFirst("nameid")?.Value;
+        }
+
         public override async Task OnConnectedAsync()
         {
-            var userIdStr = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userIdStr = GetUserIdStr();
             if (int.TryParse(userIdStr, out int userId))
             {
                 var user = await _userManager.FindByIdAsync(userIdStr);
@@ -69,7 +77,7 @@ namespace TMPMS.Hubs
         {
             if (string.IsNullOrWhiteSpace(content)) return;
 
-            var userIdStr = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userIdStr = GetUserIdStr();
             if (!int.TryParse(userIdStr, out int userId)) return;
 
             var user = await _userManager.FindByIdAsync(userIdStr);
@@ -108,8 +116,9 @@ namespace TMPMS.Hubs
                 isRead = msg.IsRead
             };
 
-            // Broadcast to the chat session group
+            // Broadcast to the chat session group AND pharmacy dashboard group
             await Clients.Group(sessionId.ToString()).SendAsync("ReceiveMessage", messageDto);
+            await Clients.Group("pharmacy-dashboard").SendAsync("ReceiveMessage", messageDto);
 
             // Broadcast notification to pharmacy dashboard group
             await Clients.Group("pharmacy-dashboard").SendAsync("SessionUpdated", new
@@ -125,7 +134,7 @@ namespace TMPMS.Hubs
 
         public async Task AssignPharmacist(int sessionId)
         {
-            var userIdStr = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userIdStr = GetUserIdStr();
             if (!int.TryParse(userIdStr, out int userId)) return;
 
             var pharmacist = await _userManager.FindByIdAsync(userIdStr);
@@ -153,8 +162,15 @@ namespace TMPMS.Hubs
 
             string pharmacistName = pharmacist.FullName ?? pharmacist.UserName ?? "Dược sĩ";
 
-            // Broadcast status change to session group
+            // Broadcast status change to session group AND pharmacy dashboard group
             await Clients.Group(sessionId.ToString()).SendAsync("PharmacistAssigned", new
+            {
+                sessionId = session.Id,
+                pharmacistId = userId,
+                pharmacistName = pharmacistName,
+                systemNotice = $"Dược sĩ {pharmacistName} đã tiếp nhận hội thoại và đang hỗ trợ bạn."
+            });
+            await Clients.Group("pharmacy-dashboard").SendAsync("PharmacistAssigned", new
             {
                 sessionId = session.Id,
                 pharmacistId = userId,
@@ -175,7 +191,7 @@ namespace TMPMS.Hubs
 
         public async Task CloseSession(int sessionId)
         {
-            var userIdStr = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userIdStr = GetUserIdStr();
             if (!int.TryParse(userIdStr, out int userId)) return;
 
             var user = await _userManager.FindByIdAsync(userIdStr);
