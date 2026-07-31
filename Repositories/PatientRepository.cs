@@ -23,26 +23,33 @@ namespace TMPMS.Repositories
         public async Task<List<PatientDto>> GetAllPatientsAsync()
         {
             var users = await _context.Users.ToListAsync();
+            var appointmentUserIds = await _context.Appointments.Select(a => a.UserId).Distinct().ToListAsync();
+            var diagnosisPatientIds = await _context.Diagnoses.Select(d => d.PatientId).Distinct().ToListAsync();
+            var activePatientIds = new HashSet<int>(appointmentUserIds.Concat(diagnosisPatientIds));
+
             var patients = new List<PatientDto>();
 
             foreach (var user in users)
             {
                 var roles = await _userManager.GetRolesAsync(user);
-                if (roles.Contains("Patient") || roles.Contains("User"))
+                bool isStaffOrAdmin = roles.Contains("Admin") || roles.Contains("Doctor") || roles.Contains("Pharmacy") || roles.Contains("Staff");
+
+                // Include user as a patient if they have Patient/User role OR if they booked an appointment or diagnosis (and are not purely staff/admin)
+                if (roles.Contains("Patient") || roles.Contains("User") || activePatientIds.Contains(user.Id) || !isStaffOrAdmin)
                 {
                     patients.Add(new PatientDto
                     {
                         Id = user.Id,
-                        Name = user.FullName ?? user.UserName,
+                        Name = !string.IsNullOrEmpty(user.FullName) ? user.FullName : user.UserName,
                         Username = user.UserName ?? "",
                         Email = user.Email ?? "",
                         PhoneNumber = user.PhoneNumber ?? "",
-                        Gender = user.Gender ?? "Nam",
+                        Gender = !string.IsNullOrEmpty(user.Gender) ? user.Gender : "Nam",
                         DateOfBirth = user.DateOfBirth,
                         Address = user.Address ?? "",
                         IsActive = user.IsActive,
                         CreatedAt = user.CreatedAt,
-                        Role = roles.FirstOrDefault()
+                        Role = roles.FirstOrDefault() ?? "User"
                     });
                 }
             }
