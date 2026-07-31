@@ -52,6 +52,8 @@ namespace TMPMS.Data
         public DbSet<SyndromeType> SyndromeTypes { get; set; }
         public DbSet<AnswerScoreMapping> AnswerScoreMappings { get; set; }
         public DbSet<DiagnosisAnswer> DiagnosisAnswers { get; set; }
+        public DbSet<PharmacyChatSession> PharmacyChatSessions { get; set; }
+        public DbSet<PharmacyChatMessage> PharmacyChatMessages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -280,6 +282,31 @@ namespace TMPMS.Data
                 .WithMany()
                 .HasForeignKey(sm => sm.MedicineId)
                 .OnDelete(DeleteBehavior.NoAction);
+
+            // Pharmacy Chat relationships
+            modelBuilder.Entity<PharmacyChatSession>()
+                .HasOne(s => s.User)
+                .WithMany()
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<PharmacyChatSession>()
+                .HasOne(s => s.AssignedPharmacist)
+                .WithMany()
+                .HasForeignKey(s => s.AssignedPharmacistId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<PharmacyChatMessage>()
+                .HasOne(m => m.Session)
+                .WithMany(s => s.Messages)
+                .HasForeignKey(m => m.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PharmacyChatMessage>()
+                .HasOne(m => m.Sender)
+                .WithMany()
+                .HasForeignKey(m => m.SenderId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }
