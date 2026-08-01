@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -19,6 +19,8 @@ namespace BusinessObjects
         public string Hospital { get; set; }
 
         public DateTime PrescriptionDate { get; set; }
+
+        public string? DiagnosisNote { get; set; }
 
         public string ImageUrl { get; set; }
 
