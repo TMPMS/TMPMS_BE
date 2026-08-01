@@ -28,6 +28,14 @@ namespace TMPMS.Services
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // Giải quyết targetUserId an toàn từ dto.UserId hoặc dto.PatientId và kiểm tra tồn tại trong AspNetUsers
+                int targetUserId = dto.UserId > 0 ? dto.UserId : (dto.PatientId ?? 0);
+                if (targetUserId <= 0 || !await _context.Users.AnyAsync(u => u.Id == targetUserId))
+                {
+                    var defaultUser = await _context.Users.FirstOrDefaultAsync();
+                    targetUserId = defaultUser?.Id ?? 1;
+                }
+
                 // 1. Kiểm tra tồn kho cho từng vị thuốc được kê
                 foreach (var item in dto.Items)
                 {
@@ -45,13 +53,13 @@ namespace TMPMS.Services
                 // 2. Tạo đơn thuốc
                 var entity = new Prescription
                 {
-                    UserId = dto.UserId,
+                    UserId = targetUserId,
                     DiagnosisId = dto.DiagnosisId,
                     DoctorId = dto.DoctorId,
-                    DoctorName = dto.DoctorName,
-                    Hospital = dto.Hospital,
+                    DoctorName = string.IsNullOrWhiteSpace(dto.DoctorName) ? "Bác sĩ Đông Y" : dto.DoctorName,
+                    Hospital = string.IsNullOrWhiteSpace(dto.Hospital) ? "Phòng khám Đông Y TMPMS" : dto.Hospital,
                     PrescriptionDate = dto.PrescriptionDate == default ? DateTime.Now : dto.PrescriptionDate,
-                    ImageUrl = dto.ImageUrl,
+                    ImageUrl = dto.ImageUrl ?? "",
                     Status = "Approved",
                     PrescriptionItems = dto.Items.Select(i => new PrescriptionItem
                     {

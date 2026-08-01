@@ -12,6 +12,7 @@ namespace TMPMS.DTOs
     public class PrescriptionCreateDTO
     {
         public int UserId { get; set; }
+        public int? PatientId { get; set; }
         public int? DiagnosisId { get; set; }
         public int? DoctorId { get; set; }
         public string DoctorName { get; set; }
