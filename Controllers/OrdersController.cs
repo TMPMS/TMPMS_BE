@@ -41,13 +41,17 @@ namespace TMPMS.Controllers
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // 1. Validate stock quantity
+                // 1. Validate stock quantity & price
                 foreach (var item in request.Items)
                 {
                     var medicine = await _context.Medicines.FindAsync(item.MedicineId);
                     if (medicine == null)
                     {
                         return NotFound(new { error = $"Không tìm thấy thuốc với mã ID {item.MedicineId}." });
+                    }
+                    if (medicine.Price == null)
+                    {
+                        return BadRequest(new { error = $"Vị thuốc '{medicine.Name}' chưa có giá bán, vui lòng liên hệ Dược sĩ để được tư vấn." });
                     }
                     if (medicine.StockQuantity < item.Quantity)
                     {

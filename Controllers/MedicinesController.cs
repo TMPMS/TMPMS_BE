@@ -50,7 +50,56 @@ namespace TMPMS.Controllers
                 .OrderBy(m => m.Id)
                 .ToListAsync();
 
-            return Ok(medicines);
+            var response = medicines.Select(m => new {
+                m.Id,
+                m.CategoryId,
+                m.SupplierId,
+                m.Name,
+                m.Description,
+                m.Price,
+                PriceStatus = m.Price == null ? "contact" : "available",
+                m.StockQuantity,
+                m.ManufactureDate,
+                m.ExpiryDate,
+                m.RequiresPrescription,
+                m.ImageUrl,
+                m.Unit,
+                m.Origin,
+                m.Packaging,
+                m.OldPrice,
+                m.Discount,
+                m.CreatedAt
+            });
+
+            return Ok(response);
+        }
+
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetMedicineById(int id)
+        {
+            var m = await _context.Medicines.FindAsync(id);
+            if (m == null) return NotFound();
+
+            return Ok(new {
+                m.Id,
+                m.CategoryId,
+                m.SupplierId,
+                m.Name,
+                m.Description,
+                m.Price,
+                PriceStatus = m.Price == null ? "contact" : "available",
+                m.StockQuantity,
+                m.ManufactureDate,
+                m.ExpiryDate,
+                m.RequiresPrescription,
+                m.ImageUrl,
+                m.Unit,
+                m.Origin,
+                m.Packaging,
+                m.OldPrice,
+                m.Discount,
+                m.CreatedAt
+            });
         }
 
         [HttpPost]

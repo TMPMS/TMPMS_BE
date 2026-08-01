@@ -56,8 +56,14 @@ namespace TMPMS.Repositories
             else
             {
                 existing.Quantity = stock.Quantity;
-                _context.InventoryStocks.Update(existing);
             }
+
+            var med = await _context.Medicines.FindAsync(stock.MedicineId);
+            if (med != null)
+            {
+                med.StockQuantity = stock.Quantity;
+            }
+
             await _context.SaveChangesAsync();
         }
 

@@ -71,6 +71,12 @@ namespace TMPMS.Controllers
         [HttpPost]
         public async Task<IActionResult> AddCartItem([FromBody] CartItemInput input)
         {
+            var medicine = await _context.Medicines.FindAsync(input.MedicineId);
+            if (medicine == null || medicine.Price == null)
+            {
+                return BadRequest(new { error = "Vị thuốc này chưa có giá bán, vui lòng liên hệ Dược sĩ để được tư vấn." });
+            }
+
             var existing = await _context.CartItems
                 .FirstOrDefaultAsync(ci => ci.CartId == input.CartId && ci.MedicineId == input.MedicineId);
 
@@ -136,6 +142,12 @@ namespace TMPMS.Controllers
 
             foreach (var item in input.p_items)
             {
+                var medicine = await _context.Medicines.FindAsync(item.medicine_id);
+                if (medicine == null || medicine.Price == null)
+                {
+                    return BadRequest(new { error = $"Vị thuốc '{medicine?.Name ?? item.medicine_id.ToString()}' chưa có giá bán, vui lòng liên hệ Dược sĩ để được tư vấn." });
+                }
+
                 var existing = await _context.CartItems
                     .FirstOrDefaultAsync(ci => ci.CartId == cart.Id && ci.MedicineId == item.medicine_id);
                 
