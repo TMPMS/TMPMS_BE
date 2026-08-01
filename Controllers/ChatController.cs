@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using BusinessObjects;
 using TMPMS.Data;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Net.Http;
@@ -24,9 +25,16 @@ namespace TMPMS.Controllers
             _config = config;
         }
 
+        public class ChatMessageItem
+        {
+            public string Role { get; set; } = "user"; // "user" or "model"
+            public string Text { get; set; } = "";
+        }
+
         public class ChatRequest
         {
             public string Text { get; set; } = "";
+            public List<ChatMessageItem>? History { get; set; }
         }
 
         [HttpPost]
@@ -49,16 +57,16 @@ namespace TMPMS.Controllers
 
                     var medicinesContext = string.Join("\n", medicines.Select(m => $"- ID: {m.Id}, Tên: {m.Name}, Mô tả: {m.Description}"));
 
-                    // 2. Build structured prompt with Intent Classification
-                    string prompt = $@"Bạn là trợ lý AI thông minh của hệ thống nhà thuốc/phòng khám y học cổ truyền TMPMS.
-Nhiệm vụ của bạn là phân tích ý định của người dùng và trả về JSON theo đúng cấu trúc yêu cầu.
+                    // 2. Build structured prompt with Intent Classification & Multi-turn memory
+                    string systemPrompt = $@"Bạn là trợ lý AI thông minh của hệ thống nhà thuốc/phòng khám y học cổ truyền TMPMS.
+Nhiệm vụ của bạn là phân tích ý định của người dùng (dựa trên câu hỏi HIỆN TẠI và LỊCH SỬ HỘI THOẠI trước đó) và trả về JSON theo đúng cấu trúc yêu cầu.
 
 Danh sách sản phẩm hiện có trong kho thuốc:
 {medicinesContext}
 
 Quy tắc phân loại ý định (intent):
-1. ""SYMPTOM_CONSULT"": Khách hàng mô tả triệu chứng bệnh hoặc xin tư vấn về thuốc/sức khỏe.
-   - reply: Lời khuyên tư vấn ngắn gọn (2-3 câu).
+1. ""SYMPTOM_CONSULT"": Khách hàng mô tả triệu chứng bệnh, xin tư vấn về thuốc/sức khỏe hoặc hỏi câu follow-up đề xuất thuốc dựa trên triệu chứng đã nói ở các tin nhắn trước.
+   - reply: Lời khuyên tư vấn ngắn gọn (2-3 câu), giải thích lý do đề xuất thuốc liên quan đến triệu chứng.
    - recommendedMedicineId: ID sản phẩm phù hợp nhất từ danh sách trên (hoặc null nếu không có).
    - suggestedAction: {{ ""type"": ""none"", ""label"": """" }}
 
@@ -96,23 +104,39 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
     ""type"": ""navigate_to_booking | open_pharmacist_chat | navigate_to_history | none"",
     ""label"": ""Nút gợi ý...""
   }}
-}}
+}}";
 
-Câu hỏi của người dùng:
-""{request.Text}""";
+                    var contentsList = new List<object>();
+
+                    // Multi-turn context injection
+                    if (request.History != null && request.History.Count > 0)
+                    {
+                        foreach (var h in request.History)
+                        {
+                            if (string.IsNullOrWhiteSpace(h.Text)) continue;
+                            string role = (h.Role == "model" || h.Role == "bot") ? "model" : "user";
+                            contentsList.Add(new
+                            {
+                                role = role,
+                                parts = new[] { new { text = h.Text } }
+                            });
+                        }
+                    }
+
+                    // Add current user request
+                    contentsList.Add(new
+                    {
+                        role = "user",
+                        parts = new[] { new { text = request.Text } }
+                    });
 
                     var payload = new
                     {
-                        contents = new[]
+                        systemInstruction = new
                         {
-                            new
-                            {
-                                parts = new[]
-                                {
-                                    new { text = prompt }
-                                }
-                            }
+                            parts = new[] { new { text = systemPrompt } }
                         },
+                        contents = contentsList,
                         generationConfig = new
                         {
                             responseMimeType = "application/json"
@@ -206,7 +230,7 @@ Câu hỏi của người dùng:
             }
 
             // =========================================================================
-            // BƯỚC 3 — UPGRADED FALLBACK FLOW (Rule-Based Intent Matching for Keyword Search)
+            // BƯỚC 4 — UPGRADED MULTI-TURN FALLBACK FLOW (Rule-Based Context-Aware Engine)
             // =========================================================================
             var lowerText = request.Text.ToLower().Trim();
 
@@ -275,40 +299,79 @@ Câu hỏi của người dùng:
                 });
             }
 
-            // 6. Intent: SYMPTOM_CONSULT
+            // 6. Intent: SYMPTOM_CONSULT (Direct + Multi-turn Context Lookup)
             string queryTerm = "";
-            string replyText = "Tôi đã ghi nhận thông tin sức khỏe của bạn. Để tư vấn chính xác nhất, bạn hãy mô tả chi tiết triệu chứng hoặc tìm các từ khóa như \"đau khớp\", \"dạ dày\", \"mệt mỏi\", \"táo bón\".";
+            string replyText = "";
+            string matchedIntent = "SYMPTOM_CONSULT";
 
             string[] jointPainKeywords = { "khớp", "khop", "lưng", "lung", "vai gáy", "khương thảo đan" };
             string[] stomachPainKeywords = { "dạ dày", "da day", "trào ngược", "bụng", "bình vị" };
             string[] fatigueKeywords = { "mệt mỏi", "met moi", "sâm", "yếu", "sinh lực" };
             string[] constipationKeywords = { "táo bón", "tao bon", "tiêu hóa", "gokids", "nhuận tràng" };
 
-            string matchedIntent = "SYMPTOM_CONSULT";
+            // Check current message first
+            bool currentHasJoint = jointPainKeywords.Any(k => lowerText.Contains(k));
+            bool currentHasStomach = stomachPainKeywords.Any(k => lowerText.Contains(k));
+            bool currentHasFatigue = fatigueKeywords.Any(k => lowerText.Contains(k));
+            bool currentHasConstipation = constipationKeywords.Any(k => lowerText.Contains(k));
 
-            if (jointPainKeywords.Any(k => lowerText.Contains(k)))
+            if (currentHasJoint)
             {
-                replyText = "Đối với các triệu chứng đau nhức xương khớp, thoái hóa khớp, tôi khuyên dùng viên uống Khương Thảo Đan giúp giảm đau xương khớp, tái tạo sụn khớp hiệu quả.";
-                queryTerm = "Khương Thảo Đan";
+                replyText = "Đối với các triệu chứng đau nhức xương khớp, thoái hóa khớp, tôi khuyên dùng Cao Xương Khớp Bách Thảo Dược giúp giảm đau xương khớp, tái tạo sụn khớp hiệu quả.";
+                queryTerm = "Khớp";
             }
-            else if (stomachPainKeywords.Any(k => lowerText.Contains(k)))
+            else if (currentHasStomach)
             {
-                replyText = "Triệu chứng trào ngược dạ dày, viêm loét dạ dày có thể được hỗ trợ cải thiện rất tốt nhờ Bình Vị giúp giảm tiết acid, bảo vệ niêm mạc dạ dày.";
-                queryTerm = "Bình Vị";
+                replyText = "Triệu chứng trào ngược dạ dày, viêm loét dạ dày có thể được hỗ trợ cải thiện rất tốt nhờ các bài thuốc Đông Y giúp giảm tiết acid, bảo vệ niêm mạc dạ dày.";
+                queryTerm = "Dạ Dày";
             }
-            else if (fatigueKeywords.Any(k => lowerText.Contains(k)))
+            else if (currentHasFatigue)
             {
-                replyText = "Để bồi bổ sức khỏe, tăng cường sinh lực và tăng sức đề kháng chống mệt mỏi, Trà Sâm là sự lựa chọn tuyệt vời.";
-                queryTerm = "Sâm";
+                replyText = "Để bồi bổ sức khỏe, tăng cường sinh lực và tăng sức đề kháng chống mệt mỏi, sản phẩm bồi bổ Đông Y là sự lựa chọn tuyệt vời.";
+                queryTerm = "Não";
             }
-            else if (constipationKeywords.Any(k => lowerText.Contains(k)))
+            else if (currentHasConstipation)
             {
-                replyText = "Bị táo bón, khó đi ngoài nên bổ sung Cốm Nhuận Tràng Gokids giúp làm mềm phân, kích thích nhu động ruột an toàn.";
-                queryTerm = "Gokids";
+                replyText = "Bị táo bón, khó đi ngoài nên bổ sung sản phẩm mát gan giải độc giúp làm mềm phân, kích thích nhu động ruột an toàn.";
+                queryTerm = "Gan";
             }
             else
             {
-                matchedIntent = "GENERAL_CHAT";
+                // Multi-turn context fallback lookup from previous user messages in History
+                string previousUserContext = "";
+                if (request.History != null)
+                {
+                    var userHistoryTexts = request.History
+                        .Where(h => (h.Role == "user" || h.Role == "human") && !string.IsNullOrWhiteSpace(h.Text))
+                        .Select(h => h.Text.ToLower().Trim());
+                    previousUserContext = string.Join(" ", userHistoryTexts);
+                }
+
+                if (previousUserContext.Contains("khớp") || previousUserContext.Contains("khop") || previousUserContext.Contains("lưng") || previousUserContext.Contains("vai gáy"))
+                {
+                    replyText = "Dựa trên tình trạng đau khớp bạn đã chia sẻ trước đó, tôi đề xuất sử dụng Cao Xương Khớp Bách Thảo Dược giúp giảm đau nhức xương khớp, phục hồi và tái tạo sụn khớp hiệu quả.";
+                    queryTerm = "Khớp";
+                }
+                else if (previousUserContext.Contains("dạ dày") || previousUserContext.Contains("da day") || previousUserContext.Contains("trào ngược"))
+                {
+                    replyText = "Dựa trên tình trạng dạ dày bạn đã chia sẻ trước đó, tôi đề xuất các sản phẩm hỗ trợ tiêu hóa giúp giảm bớt cơn đau dạ dày và trung hòa acid dịch vị.";
+                    queryTerm = "Dạ Dày";
+                }
+                else if (previousUserContext.Contains("mệt mỏi") || previousUserContext.Contains("met moi") || previousUserContext.Contains("yếu"))
+                {
+                    replyText = "Dựa trên biểu hiện mệt mỏi bạn đã đề cập, tôi khuyên dùng Hoạt Huyết Dưỡng Não giúp bổ sung năng lượng và tăng cường thể lực.";
+                    queryTerm = "Não";
+                }
+                else if (previousUserContext.Contains("táo bón") || previousUserContext.Contains("tao bon") || previousUserContext.Contains("tiêu hóa"))
+                {
+                    replyText = "Dựa trên tình trạng khó tiêu hóa bạn đã nhắc tới, sản phẩm trà Cà Gai Leo giải độc gan mát ruột là giải pháp thích hợp nhất.";
+                    queryTerm = "Gan";
+                }
+                else
+                {
+                    matchedIntent = "GENERAL_CHAT";
+                    replyText = "Tôi đã ghi nhận thông tin sức khỏe của bạn. Để tư vấn chính xác nhất, bạn hãy mô tả chi tiết triệu chứng hoặc tìm các từ khóa như \"đau khớp\", \"dạ dày\", \"mệt mỏi\", \"táo bón\".";
+                }
             }
 
             object? recommendedProductFallback = null;
