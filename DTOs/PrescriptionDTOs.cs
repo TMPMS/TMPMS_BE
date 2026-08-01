@@ -14,6 +14,7 @@ namespace TMPMS.DTOs
         public int UserId { get; set; }
         public int? PatientId { get; set; }
         public int? DiagnosisId { get; set; }
+        public string? DiagnosisNote { get; set; }
         public int? DoctorId { get; set; }
         public string DoctorName { get; set; }
         public string Hospital { get; set; }
@@ -43,7 +44,10 @@ namespace TMPMS.DTOs
         public int Id { get; set; }
         public int UserId { get; set; }
         public string UserName { get; set; }
+        public int? PatientId { get; set; }
+        public string PatientName { get; set; }
         public int? DiagnosisId { get; set; }
+        public string DiagnosisNote { get; set; }
         public int? DoctorId { get; set; }
         public string DoctorName { get; set; }
         public string Hospital { get; set; }

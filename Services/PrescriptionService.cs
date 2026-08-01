@@ -55,6 +55,7 @@ namespace TMPMS.Services
                 {
                     UserId = targetUserId,
                     DiagnosisId = dto.DiagnosisId,
+                    DiagnosisNote = string.IsNullOrWhiteSpace(dto.DiagnosisNote) ? "Chẩn đoán Đông Y" : dto.DiagnosisNote,
                     DoctorId = dto.DoctorId,
                     DoctorName = string.IsNullOrWhiteSpace(dto.DoctorName) ? "Bác sĩ Đông Y" : dto.DoctorName,
                     Hospital = string.IsNullOrWhiteSpace(dto.Hospital) ? "Phòng khám Đông Y TMPMS" : dto.Hospital,
@@ -149,12 +150,19 @@ namespace TMPMS.Services
 
         private PrescriptionResponseDTO Map(Prescription p)
         {
+            string patientDisplayName = !string.IsNullOrEmpty(p.User?.FullName) 
+                ? p.User.FullName 
+                : (!string.IsNullOrEmpty(p.User?.UserName) ? p.User.UserName : $"Bệnh nhân #{p.UserId}");
+
             return new PrescriptionResponseDTO
             {
                 Id = p.Id,
                 UserId = p.UserId,
-                UserName = p.User?.UserName,
+                UserName = patientDisplayName,
+                PatientId = p.UserId,
+                PatientName = patientDisplayName,
                 DiagnosisId = p.DiagnosisId,
+                DiagnosisNote = p.DiagnosisNote ?? "Chẩn đoán Đông Y",
                 DoctorId = p.DoctorId,
                 DoctorName = p.DoctorName ?? p.Doctor?.UserName,
                 Hospital = p.Hospital,
