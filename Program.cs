@@ -14,6 +14,7 @@ using TMPMS.Repositories.Interfaces;
 using TMPMS.Services;
 using TMPMS.Services.Interfaces;
 using TMPMS.Hubs;
+using TMPMS.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -378,11 +379,36 @@ using (var scope = app.Services.CreateScope())
                 CompanyName = "Viện Dược Liệu Đông Y Việt Nam",
                 ContactPerson = "Lê Hoàng Nam",
                 Email = "info@vienduoclieu.org.vn",
-                Phone = "02439342111",
-                Address = "3B Quang Trung, Hoàn Kiếm, Hà Nội",
-                TaxCode = "0100239102",
+                Phone = "02438521999",
+                Address = "Số 3B Quang Trung, Hoàn Kiếm, Hà Nội",
+                TaxCode = "0100293812",
                 Status = "Active"
             }
+        );
+        await context.SaveChangesAsync();
+    }
+
+    // Pharmacy Stores Seeding
+    if (!context.Stores.Any())
+    {
+        context.Stores.AddRange(
+            // Hà Nội
+            new PharmacyStore { ProvinceId = "hn", ProvinceName = "Hà Nội", DistrictId = "cg", DistrictName = "Quận Cầu Giấy", Name = "Nhà thuốc FPT Long Châu 102 Cầu Giấy", Address = "102 Cầu Giấy, Quan Hoa, Cầu Giấy, Hà Nội", Latitude = 21.036214, Longitude = 105.795412, Phone = "1800 6928", Hours = "07:00 - 22:00", IsActive = true },
+            new PharmacyStore { ProvinceId = "hn", ProvinceName = "Hà Nội", DistrictId = "cg", DistrictName = "Quận Cầu Giấy", Name = "Nhà thuốc FPT Long Châu 24 Xuân Thủy", Address = "24 Xuân Thủy, Dịch Vọng Hậu, Cầu Giấy, Hà Nội", Latitude = 21.036812, Longitude = 105.786521, Phone = "1800 6928", Hours = "07:00 - 22:00", IsActive = true },
+            new PharmacyStore { ProvinceId = "hn", ProvinceName = "Hà Nội", DistrictId = "dd", DistrictName = "Quận Đống Đa", Name = "Nhà thuốc FPT Long Châu 54 Chùa Bộc", Address = "54 Chùa Bộc, Quang Trung, Đống Đa, Hà Nội", Latitude = 21.007621, Longitude = 105.828412, Phone = "1800 6928", Hours = "06:30 - 22:30", IsActive = true },
+            new PharmacyStore { ProvinceId = "hn", ProvinceName = "Hà Nội", DistrictId = "hk", DistrictName = "Quận Hoàn Kiếm", Name = "Nhà thuốc FPT Long Châu 9 Hai Bà Trưng", Address = "9 Hai Bà Trưng, Tràng Tiền, Hoàn Kiếm, Hà Nội", Latitude = 21.023512, Longitude = 105.852412, Phone = "1800 6928", Hours = "07:00 - 22:00", IsActive = true },
+
+            // TP. Hồ Chí Minh
+            new PharmacyStore { ProvinceId = "hcm", ProvinceName = "TP. Hồ Chí Minh", DistrictId = "q1", DistrictName = "Quận 1", Name = "Nhà thuốc FPT Long Châu 12 Nguyễn Huệ", Address = "12 Nguyễn Huệ, Bến Nghé, Quận 1, Hồ Chí Minh", Latitude = 10.774512, Longitude = 106.704212, Phone = "1800 6928", Hours = "24/7 (Mở cả đêm)", IsActive = true },
+            new PharmacyStore { ProvinceId = "hcm", ProvinceName = "TP. Hồ Chí Minh", DistrictId = "q1", DistrictName = "Quận 1", Name = "Nhà thuốc FPT Long Châu 85 Trần Hưng Đạo", Address = "85 Trần Hưng Đạo, Cô Giang, Quận 1, Hồ Chí Minh", Latitude = 10.767512, Longitude = 106.692412, Phone = "1800 6928", Hours = "07:00 - 22:00", IsActive = true },
+
+            // Đà Nẵng (Dữ liệu thật với tọa độ lat/lng chính xác)
+            new PharmacyStore { ProvinceId = "dn", ProvinceName = "Đà Nẵng", DistrictId = "hc", DistrictName = "Quận Hải Châu", Name = "Nhà thuốc FPT Long Châu 52 Nguyễn Văn Linh", Address = "52 Nguyễn Văn Linh, Phường Nam Dương, Quận Hải Châu, Đà Nẵng", Latitude = 16.060783, Longitude = 108.217316, Phone = "1800 6928", Hours = "07:00 - 22:00", IsActive = true },
+            new PharmacyStore { ProvinceId = "dn", ProvinceName = "Đà Nẵng", DistrictId = "tk", DistrictName = "Quận Thanh Khê", Name = "Nhà thuốc FPT Long Châu 112 Điện Biên Phủ", Address = "112 Điện Biên Phủ, Phường Chính Gián, Quận Thanh Khê, Đà Nẵng", Latitude = 16.065842, Longitude = 108.204561, Phone = "1800 6928", Hours = "07:00 - 22:00", IsActive = true },
+            new PharmacyStore { ProvinceId = "dn", ProvinceName = "Đà Nẵng", DistrictId = "tk", DistrictName = "Quận Thanh Khê", Name = "Nhà thuốc Pharmacity 340 Hùng Vương", Address = "340 Hùng Vương, Phường Vĩnh Trung, Quận Thanh Khê, Đà Nẵng", Latitude = 16.067341, Longitude = 108.212450, Phone = "1800 6821", Hours = "06:00 - 23:30", IsActive = true },
+            new PharmacyStore { ProvinceId = "dn", ProvinceName = "Đà Nẵng", DistrictId = "tk", DistrictName = "Quận Thanh Khê", Name = "Nhà thuốc An Khang 456 Lê Duẩn", Address = "456 Lê Duẩn, Phường Chính Gián, Quận Thanh Khê, Đà Nẵng", Latitude = 16.068912, Longitude = 108.208123, Phone = "1900 1572", Hours = "06:30 - 22:00", IsActive = true },
+            new PharmacyStore { ProvinceId = "dn", ProvinceName = "Đà Nẵng", DistrictId = "hc", DistrictName = "Quận Hải Châu", Name = "Nhà thuốc Phước Thọ (Đông Y & Tây Y)", Address = "188 Đường 3 Tháng 2, Phường Thuận Phước, Quận Hải Châu, Đà Nẵng", Latitude = 16.084530, Longitude = 108.219842, Phone = "0236 3822 559", Hours = "07:00 - 21:30", IsActive = true },
+            new PharmacyStore { ProvinceId = "dn", ProvinceName = "Đà Nẵng", DistrictId = "nhs", DistrictName = "Quận Ngũ Hành Sơn", Name = "Nhà thuốc FPT Long Châu 235 Ngũ Hành Sơn", Address = "235 Ngũ Hành Sơn, Phường Mỹ An, Quận Ngũ Hành Sơn, Đà Nẵng", Latitude = 16.046124, Longitude = 108.240518, Phone = "1800 6928", Hours = "07:00 - 22:00", IsActive = true }
         );
         await context.SaveChangesAsync();
     }
