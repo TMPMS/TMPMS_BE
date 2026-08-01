@@ -11,6 +11,8 @@ namespace TMPMS.DTOs
         public long ViewCount { get; set; }
         public string EmbedUrl { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
+        public string DurationFormatted { get; set; } = "02:30";
+        public string ViewCountFormatted { get; set; } = "1.2K";
     }
 
     public class HealthReelsResponseDto

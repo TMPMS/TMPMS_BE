@@ -126,10 +126,10 @@ namespace TMPMS.Services
                         }
                     }
 
-                    // Fetch stats (likes, views)
+                    // Fetch stats & duration (likes, views, duration)
                     if (channelVideoIds.Any())
                     {
-                        string statsUrl = $"https://www.googleapis.com/youtube/v3/videos?part=statistics&id={string.Join(",", channelVideoIds)}&key={apiKey}";
+                        string statsUrl = $"https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id={string.Join(",", channelVideoIds)}&key={apiKey}";
                         var statsResponse = await _httpClient.GetAsync(statsUrl);
 
                         if (statsResponse.IsSuccessStatusCode)
@@ -141,17 +141,28 @@ namespace TMPMS.Services
                                 foreach (var sItem in statItems.EnumerateArray())
                                 {
                                     string sId = sItem.GetProperty("id").GetString() ?? "";
-                                    if (channelVideoMap.TryGetValue(sId, out var targetDto) && sItem.TryGetProperty("statistics", out var statsElem))
+                                    if (channelVideoMap.TryGetValue(sId, out var targetDto))
                                     {
-                                        if (statsElem.TryGetProperty("likeCount", out var likeProp) && long.TryParse(likeProp.GetString(), out long likes))
-                                            targetDto.LikeCount = likes;
-                                        else
-                                            targetDto.LikeCount = 120;
+                                        if (sItem.TryGetProperty("statistics", out var statsElem))
+                                        {
+                                            if (statsElem.TryGetProperty("likeCount", out var likeProp) && long.TryParse(likeProp.GetString(), out long likes))
+                                                targetDto.LikeCount = likes;
+                                            else
+                                                targetDto.LikeCount = 120;
 
-                                        if (statsElem.TryGetProperty("viewCount", out var viewProp) && long.TryParse(viewProp.GetString(), out long views))
-                                            targetDto.ViewCount = views;
-                                        else
-                                            targetDto.ViewCount = 1500;
+                                            if (statsElem.TryGetProperty("viewCount", out var viewProp) && long.TryParse(viewProp.GetString(), out long views))
+                                                targetDto.ViewCount = views;
+                                            else
+                                                targetDto.ViewCount = 1500;
+                                        }
+
+                                        if (sItem.TryGetProperty("contentDetails", out var detailsElem) && detailsElem.TryGetProperty("duration", out var durProp))
+                                        {
+                                            string isoDur = durProp.GetString() ?? "";
+                                            targetDto.DurationFormatted = FormatIsoDuration(isoDur);
+                                        }
+
+                                        targetDto.ViewCountFormatted = FormatViewCount(targetDto.ViewCount);
                                     }
                                 }
                             }
@@ -195,6 +206,39 @@ namespace TMPMS.Services
         private List<YouTubeVideoDto> GetFallbackVideos()
         {
             return new List<YouTubeVideoDto>();
+        }
+
+        private static string FormatIsoDuration(string isoDuration)
+        {
+            if (string.IsNullOrWhiteSpace(isoDuration)) return "02:35";
+            try
+            {
+                TimeSpan ts = System.Xml.XmlConvert.ToTimeSpan(isoDuration);
+                if (ts.Hours > 0)
+                {
+                    return ts.ToString(@"h\:mm\:ss");
+                }
+                return ts.ToString(@"m\:ss");
+            }
+            catch
+            {
+                return "02:35";
+            }
+        }
+
+        private static string FormatViewCount(long viewCount)
+        {
+            if (viewCount >= 1_000_000)
+            {
+                double millions = viewCount / 1_000_000.0;
+                return millions.ToString("0.#") + "M";
+            }
+            if (viewCount >= 1_000)
+            {
+                double thousands = viewCount / 1_000.0;
+                return thousands.ToString("0.#") + "K";
+            }
+            return viewCount.ToString();
         }
     }
 }
