@@ -7,7 +7,6 @@ namespace TMPMS.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "Admin,Staff,Pharmacy")]
     public class WarehouseController : ControllerBase
     {
         private readonly IWarehouseService _service;
@@ -25,6 +24,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<ActionResult> Create([FromBody] WarehouseCreateDTO dto)
         {
             var result = await _service.Create(dto);
@@ -32,6 +32,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<ActionResult> Update(int id, [FromBody] WarehouseUpdateDTO dto)
         {
             var result = await _service.Update(id, dto);
@@ -40,6 +41,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<ActionResult> Delete(int id)
         {
             var ok = await _service.Delete(id);
