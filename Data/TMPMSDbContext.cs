@@ -56,9 +56,19 @@ namespace TMPMS.Data
         public DbSet<PharmacyChatMessage> PharmacyChatMessages { get; set; }
         public DbSet<PharmacyStore> Stores { get; set; }
 
+        public DbSet<HealthQuiz> HealthQuizzes { get; set; }
+        public DbSet<QuizQuestion> QuizQuestions { get; set; }
+        public DbSet<QuizAnswerOption> QuizAnswerOptions { get; set; }
+        public DbSet<QuizResultBand> QuizResultBands { get; set; }
+        public DbSet<QuizSession> QuizSessions { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<HealthQuiz>()
+                .HasIndex(q => q.Code)
+                .IsUnique();
 
             modelBuilder.Entity<RefreshToken>()
                 .HasOne(rt => rt.User)

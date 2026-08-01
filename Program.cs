@@ -43,6 +43,7 @@ builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<IHealthQuizService, HealthQuizService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
@@ -414,6 +415,7 @@ using (var scope = app.Services.CreateScope())
     }
 
     await DiagnosisSeeder.SeedAsync(context);
+    await TMPMS.Database.HealthQuizSeeder.SeedAsync(context);
 }
 app.MapHub<TrackingHub>("/trackingHub");
 app.MapHub<TMPMS.Hubs.PharmacyChatHub>("/hubs/pharmacy-chat");
