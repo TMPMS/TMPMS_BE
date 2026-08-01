@@ -414,8 +414,19 @@ using (var scope = app.Services.CreateScope())
         await context.SaveChangesAsync();
     }
 
+    if (!context.Warehouses.Any())
+    {
+        context.Warehouses.Add(new Warehouse
+        {
+            Name = "Kho Tổng Dược Liệu & Thuốc Đông Y",
+            Address = "Số 138 Giảng Võ, Ba Đình, Hà Nội"
+        });
+        await context.SaveChangesAsync();
+    }
+
     await DiagnosisSeeder.SeedAsync(context);
     await TMPMS.Database.HealthQuizSeeder.SeedAsync(context);
+    await HerbalMedicineSeeder.SeedAsync(context);
 }
 app.MapHub<TrackingHub>("/trackingHub");
 app.MapHub<TMPMS.Hubs.PharmacyChatHub>("/hubs/pharmacy-chat");

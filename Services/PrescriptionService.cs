@@ -1,6 +1,8 @@
 using BusinessObjects;
+using Microsoft.EntityFrameworkCore;
 using Repositories.Interfaces;
 using Services.Interfaces;
+using TMPMS.Data;
 using TMPMS.DTOs;
 
 namespace TMPMS.Services
@@ -8,30 +10,92 @@ namespace TMPMS.Services
     public class PrescriptionService : IPrescriptionService
     {
         private readonly IPrescriptionRepository _repo;
-        public PrescriptionService(IPrescriptionRepository repo) => _repo = repo;
+        private readonly TMPMSDbContext _context;
+        private readonly IInventoryService _inventoryService;
+
+        public PrescriptionService(
+            IPrescriptionRepository repo,
+            TMPMSDbContext context,
+            IInventoryService inventoryService)
+        {
+            _repo = repo;
+            _context = context;
+            _inventoryService = inventoryService;
+        }
 
         public async Task<PrescriptionResponseDTO> Create(PrescriptionCreateDTO dto)
         {
-            var entity = new Prescription
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                UserId = dto.UserId,
-                DiagnosisId = dto.DiagnosisId,
-                DoctorId = dto.DoctorId,
-                DoctorName = dto.DoctorName,
-                Hospital = dto.Hospital,
-                PrescriptionDate = dto.PrescriptionDate == default ? DateTime.Now : dto.PrescriptionDate,
-                ImageUrl = dto.ImageUrl,
-                Status = "Pending",
-                PrescriptionItems = dto.Items.Select(i => new PrescriptionItem
+                // 1. Kiểm tra tồn kho cho từng vị thuốc được kê
+                foreach (var item in dto.Items)
                 {
-                    MedicineId = i.MedicineId,
-                    Quantity = i.Quantity
-                }).ToList()
-            };
+                    var med = await _context.Medicines.FindAsync(item.MedicineId);
+                    if (med == null)
+                    {
+                        throw new InvalidOperationException($"Không tìm thấy vị thuốc/dược liệu có mã ID {item.MedicineId}.");
+                    }
+                    if (med.StockQuantity < item.Quantity)
+                    {
+                        throw new InvalidOperationException($"Vị thuốc {med.Name} chỉ còn {med.StockQuantity}g trong kho, không đủ để kê {item.Quantity}g");
+                    }
+                }
 
-            var created = await _repo.Create(entity);
-            var full = await _repo.GetById(created.Id);
-            return Map(full);
+                // 2. Tạo đơn thuốc
+                var entity = new Prescription
+                {
+                    UserId = dto.UserId,
+                    DiagnosisId = dto.DiagnosisId,
+                    DoctorId = dto.DoctorId,
+                    DoctorName = dto.DoctorName,
+                    Hospital = dto.Hospital,
+                    PrescriptionDate = dto.PrescriptionDate == default ? DateTime.Now : dto.PrescriptionDate,
+                    ImageUrl = dto.ImageUrl,
+                    Status = "Approved",
+                    PrescriptionItems = dto.Items.Select(i => new PrescriptionItem
+                    {
+                        MedicineId = i.MedicineId,
+                        Quantity = i.Quantity
+                    }).ToList()
+                };
+
+                _context.Prescriptions.Add(entity);
+                await _context.SaveChangesAsync();
+
+                // 3. Trừ kho tự động & ghi nhận giao dịch xuất kho qua InventoryService
+                var defaultWarehouse = await _context.Warehouses.FirstOrDefaultAsync();
+                int warehouseId = defaultWarehouse?.Id ?? 1;
+
+                foreach (var item in dto.Items)
+                {
+                    var med = await _context.Medicines.FindAsync(item.MedicineId);
+                    if (med != null)
+                    {
+                        med.StockQuantity -= item.Quantity;
+                    }
+
+                    await _inventoryService.CreateTransaction(new StockTransactionCreateDTO
+                    {
+                        MedicineId = item.MedicineId,
+                        WarehouseId = warehouseId,
+                        Type = "Export",
+                        Quantity = item.Quantity,
+                        ReferenceId = $"RX-{entity.Id}"
+                    });
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var full = await _repo.GetById(entity.Id);
+                return Map(full);
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<PrescriptionResponseDTO> GetById(int id)

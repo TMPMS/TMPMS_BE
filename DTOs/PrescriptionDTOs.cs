@@ -17,7 +17,7 @@ namespace TMPMS.DTOs
         public string DoctorName { get; set; }
         public string Hospital { get; set; }
         public DateTime PrescriptionDate { get; set; }
-        public string ImageUrl { get; set; }
+        public string? ImageUrl { get; set; } = "";
         public List<PrescriptionItemCreateDTO> Items { get; set; } = new();
     }
 
