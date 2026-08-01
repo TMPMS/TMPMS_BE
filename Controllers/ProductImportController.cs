@@ -22,7 +22,6 @@ namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("api/admin/products")]
-    [Authorize]
     public class ProductImportController : ControllerBase
     {
         private readonly TMPMSDbContext _db;
