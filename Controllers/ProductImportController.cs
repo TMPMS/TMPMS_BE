@@ -51,6 +51,7 @@ namespace TMPMS.Controllers
         // Trả về file .xlsx mẫu với header + sheet hướng dẫn
         // ================================================================
         [HttpGet("import/template")]
+        [AllowAnonymous]
         public async Task<IActionResult> DownloadTemplate()
         {
             var workbook = await BuildTemplateWorkbook(null);
@@ -66,7 +67,9 @@ namespace TMPMS.Controllers
         // Xuất TOÀN BỘ danh mục ra Excel kèm ảnh nhúng
         // ================================================================
         [HttpGet("export")]
+        [AllowAnonymous]
         public async Task<IActionResult> ExportAll()
+
         {
             var medicines = await _db.Medicines
                 .Include(m => m.Category)
