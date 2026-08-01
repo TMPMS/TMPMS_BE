@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TMPMS.Data;
 
@@ -11,9 +12,11 @@ using TMPMS.Data;
 namespace TMPMS.Migrations
 {
     [DbContext(typeof(TMPMSDbContext))]
-    partial class TMPMSDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260801173742_AddMedicineIsActive")]
+    partial class AddMedicineIsActive
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
