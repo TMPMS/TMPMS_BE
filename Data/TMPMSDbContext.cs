@@ -54,6 +54,7 @@ namespace TMPMS.Data
         public DbSet<DiagnosisAnswer> DiagnosisAnswers { get; set; }
         public DbSet<PharmacyChatSession> PharmacyChatSessions { get; set; }
         public DbSet<PharmacyChatMessage> PharmacyChatMessages { get; set; }
+        public DbSet<PharmacyStore> Stores { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
