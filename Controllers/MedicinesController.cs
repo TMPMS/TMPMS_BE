@@ -8,6 +8,22 @@ using System.Threading.Tasks;
 
 namespace TMPMS.Controllers
 {
+    public class MedicineUpdateDto
+    {
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public decimal? Price { get; set; }
+        public decimal? OldPrice { get; set; }
+        public int? StockQuantity { get; set; }
+        public string? Unit { get; set; }
+        public string? Origin { get; set; }
+        public string? Packaging { get; set; }
+        public string? ImageUrl { get; set; }
+        public bool? RequiresPrescription { get; set; }
+        public int? CategoryId { get; set; }
+        public int? SupplierId { get; set; }
+    }
+
     [ApiController]
     [Route("medicines")]
     public class MedicinesController : ControllerBase
@@ -24,7 +40,7 @@ namespace TMPMS.Controllers
             [FromQuery(Name = "category_id")] string? categoryIdStr, 
             [FromQuery(Name = "name")] string? nameStr)
         {
-            var query = _context.Medicines.AsQueryable();
+            var query = _context.Medicines.Where(m => m.IsActive).AsQueryable();
 
             if (!string.IsNullOrEmpty(categoryIdStr))
             {
@@ -37,7 +53,6 @@ namespace TMPMS.Controllers
 
             if (!string.IsNullOrEmpty(nameStr))
             {
-                // Decodes URL tags and formats like "ilike.*Canxi*" -> "Canxi"
                 var searchTerm = Uri.UnescapeDataString(nameStr)
                     .Replace("ilike.*", "")
                     .Replace("*", "")
@@ -68,6 +83,7 @@ namespace TMPMS.Controllers
                 m.Packaging,
                 m.OldPrice,
                 m.Discount,
+                m.IsActive,
                 m.CreatedAt
             });
 
@@ -98,6 +114,7 @@ namespace TMPMS.Controllers
                 m.Packaging,
                 m.OldPrice,
                 m.Discount,
+                m.IsActive,
                 m.CreatedAt
             });
         }
@@ -106,6 +123,7 @@ namespace TMPMS.Controllers
         public async Task<IActionResult> AddMedicine([FromBody] Medicine medicine)
         {
             medicine.CreatedAt = DateTime.UtcNow;
+            medicine.IsActive = true;
             if (medicine.ManufactureDate == default) medicine.ManufactureDate = DateTime.UtcNow;
             if (medicine.ExpiryDate == default) medicine.ExpiryDate = DateTime.UtcNow.AddYears(1);
 
@@ -113,6 +131,92 @@ namespace TMPMS.Controllers
             await _context.SaveChangesAsync();
 
             return StatusCode(201, medicine);
+        }
+
+        [HttpPut("{id}")]
+        [HttpPatch("{id}")]
+        [HttpPut]
+        [HttpPatch]
+        public async Task<IActionResult> UpdateMedicine(
+            [FromRoute] int? id,
+            [FromQuery(Name = "id")] string? idQuery,
+            [FromBody] MedicineUpdateDto dto)
+        {
+            int medId = id ?? 0;
+            if (medId == 0 && !string.IsNullOrEmpty(idQuery))
+            {
+                var clean = idQuery.Replace("eq.", "");
+                int.TryParse(clean, out medId);
+            }
+
+            var med = await _context.Medicines.FindAsync(medId);
+            if (med == null) return NotFound(new { error = "Không tìm thấy dược phẩm" });
+
+            if (!string.IsNullOrWhiteSpace(dto.Name)) med.Name = dto.Name;
+            if (dto.Description != null) med.Description = dto.Description;
+            if (dto.Price != null) med.Price = dto.Price;
+            if (dto.OldPrice != null) med.OldPrice = dto.OldPrice;
+            if (dto.StockQuantity != null) med.StockQuantity = dto.StockQuantity.Value;
+            if (!string.IsNullOrWhiteSpace(dto.Unit)) med.Unit = dto.Unit;
+            if (!string.IsNullOrWhiteSpace(dto.Origin)) med.Origin = dto.Origin;
+            if (!string.IsNullOrWhiteSpace(dto.Packaging)) med.Packaging = dto.Packaging;
+            if (!string.IsNullOrWhiteSpace(dto.ImageUrl)) med.ImageUrl = dto.ImageUrl;
+            if (dto.RequiresPrescription != null) med.RequiresPrescription = dto.RequiresPrescription.Value;
+            if (dto.CategoryId != null && dto.CategoryId > 0) med.CategoryId = dto.CategoryId.Value;
+            if (dto.SupplierId != null && dto.SupplierId > 0) med.SupplierId = dto.SupplierId.Value;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new {
+                med.Id,
+                med.CategoryId,
+                med.SupplierId,
+                med.Name,
+                med.Description,
+                med.Price,
+                med.StockQuantity,
+                med.RequiresPrescription,
+                med.ImageUrl,
+                med.Unit,
+                med.Origin,
+                med.Packaging,
+                med.OldPrice,
+                med.IsActive
+            });
+        }
+
+        [HttpDelete("{id}")]
+        [HttpDelete]
+        public async Task<IActionResult> DeleteMedicine(
+            [FromRoute] int? id,
+            [FromQuery(Name = "id")] string? idQuery)
+        {
+            int medId = id ?? 0;
+            if (medId == 0 && !string.IsNullOrEmpty(idQuery))
+            {
+                var clean = idQuery.Replace("eq.", "");
+                int.TryParse(clean, out medId);
+            }
+
+            var med = await _context.Medicines.FindAsync(medId);
+            if (med == null) return NotFound(new { error = "Không tìm thấy dược phẩm" });
+
+            bool hasLinks = await _context.OrderItems.AnyAsync(oi => oi.MedicineId == medId) ||
+                            await _context.CartItems.AnyAsync(ci => ci.MedicineId == medId) ||
+                            await _context.PrescriptionItems.AnyAsync(pi => pi.MedicineId == medId);
+
+            if (hasLinks)
+            {
+                med.IsActive = false;
+                await _context.SaveChangesAsync();
+            }
+            else
+            {
+                _context.Medicines.Remove(med);
+                await _context.SaveChangesAsync();
+            }
+
+            return Ok(new { message = "Đã xóa hoặc ẩn dược phẩm thành công" });
         }
     }
 }
