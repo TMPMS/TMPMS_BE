@@ -220,12 +220,26 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// Serve static files (uploads/medicines) với đường dẫn tuyệt đối
+var uploadsPhysicalPath = Path.Combine(
+    Path.GetDirectoryName(typeof(Program).Assembly.Location)!,
+    "wwwroot");
+// Nếu chạy dotnet run thì Assembly.Location nằm trong bin/Debug, cần check source dir
+var sourceWwwroot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+if (!Directory.Exists(uploadsPhysicalPath) && Directory.Exists(sourceWwwroot))
+    uploadsPhysicalPath = sourceWwwroot;
+if (!Directory.Exists(uploadsPhysicalPath))
+    Directory.CreateDirectory(uploadsPhysicalPath);
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPhysicalPath),
+    RequestPath = ""
+});
+
 app.UseHttpsRedirection();
 
 app.UseCors("AllowFrontend");
-
-// Cho phép truy cập ảnh upload từ wwwroot (ảnh nhập từ Excel)
-app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
