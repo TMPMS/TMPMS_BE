@@ -224,6 +224,9 @@ app.UseHttpsRedirection();
 
 app.UseCors("AllowFrontend");
 
+// Cho phép truy cập ảnh upload từ wwwroot (ảnh nhập từ Excel)
+app.UseStaticFiles();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
