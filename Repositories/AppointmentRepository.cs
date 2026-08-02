@@ -88,5 +88,13 @@ namespace TMPMS.Repositories
                 x.AppointmentDate == appointmentDate &&
                 x.Status != "Cancelled");
         }
+
+        public async Task<bool> HasRecentActiveAppointment(int userId, DateTime since)
+        {
+            return await _context.Appointments.AnyAsync(x =>
+                x.UserId == userId &&
+                x.CreatedAt >= since &&
+                (x.Status == "Pending" || x.Status == "Confirmed"));
+        }
     }
 }

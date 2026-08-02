@@ -13,6 +13,7 @@ namespace BusinessObjects
         public int UserId { get; set; }
         public int? DiagnosisId { get; set; }
         public int? DoctorId { get; set; }
+        public int? AppointmentId { get; set; }
 
         public string DoctorName { get; set; }
 
@@ -29,6 +30,7 @@ namespace BusinessObjects
         public User User { get; set; }
         public User Doctor { get; set; }
         public Diagnosis Diagnosis { get; set; }
+        public Appointment Appointment { get; set; }
 
         public ICollection<PrescriptionItem> PrescriptionItems { get; set; }
     }

@@ -94,16 +94,23 @@ namespace TMPMS.Controllers
                 }
 
                 // 3. Add payment
+                // Thanh toán online (MOMO/ZALOPAY) đã được xác nhận bởi luồng thanh toán -> tự động đánh dấu đã thu
+                bool isOnlinePaid = request.PaymentMethod == "MOMO" || request.PaymentMethod == "ZALOPAY";
                 var payment = new Payment
                 {
                     OrderId = order.Id,
                     Method = request.PaymentMethod,
                     TransactionCode = "TXN-" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                     Amount = request.TotalAmount,
-                    Status = "Pending",
-                    PaidAt = null
+                    Status = isOnlinePaid ? "Success" : "Pending",
+                    PaidAt = isOnlinePaid ? DateTime.Now : (DateTime?)null
                 };
                 _context.Payments.Add(payment);
+
+                if (isOnlinePaid)
+                {
+                    order.PaymentStatus = "Paid";
+                }
 
                 // 4. Clear cart items
                 var cart = await _context.Carts.FirstOrDefaultAsync(c => c.UserId == request.UserId);
@@ -141,6 +148,9 @@ namespace TMPMS.Controllers
                     o.DeliveryMethod,
                     o.ShippingFee,
                     o.CreatedAt,
+                    PaymentId = _context.Payments.Where(p => p.OrderId == o.Id).OrderByDescending(p => p.Id).Select(p => (int?)p.Id).FirstOrDefault(),
+                    PaymentMethod = _context.Payments.Where(p => p.OrderId == o.Id).OrderByDescending(p => p.Id).Select(p => p.Method).FirstOrDefault(),
+                    PaymentStatusDetail = _context.Payments.Where(p => p.OrderId == o.Id).OrderByDescending(p => p.Id).Select(p => p.Status).FirstOrDefault(),
                     Items = _context.OrderItems
                         .Where(oi => oi.OrderId == o.Id)
                         .Join(_context.Medicines,
@@ -179,6 +189,9 @@ namespace TMPMS.Controllers
                     o.CreatedAt,
                     Username = _context.Users.Where(u => u.Id == o.UserId).Select(u => u.UserName).FirstOrDefault(),
                     Email = _context.Users.Where(u => u.Id == o.UserId).Select(u => u.Email).FirstOrDefault(),
+                    PaymentId = _context.Payments.Where(p => p.OrderId == o.Id).OrderByDescending(p => p.Id).Select(p => (int?)p.Id).FirstOrDefault(),
+                    PaymentMethod = _context.Payments.Where(p => p.OrderId == o.Id).OrderByDescending(p => p.Id).Select(p => p.Method).FirstOrDefault(),
+                    PaymentStatusDetail = _context.Payments.Where(p => p.OrderId == o.Id).OrderByDescending(p => p.Id).Select(p => p.Status).FirstOrDefault(),
                     Items = _context.OrderItems
                         .Where(oi => oi.OrderId == o.Id)
                         .Join(_context.Medicines,

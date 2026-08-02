@@ -16,6 +16,7 @@ namespace TMPMS.DTOs
         public int? DiagnosisId { get; set; }
         public string? DiagnosisNote { get; set; }
         public int? DoctorId { get; set; }
+        public int? AppointmentId { get; set; }
         public string DoctorName { get; set; }
         public string Hospital { get; set; }
         public DateTime PrescriptionDate { get; set; }
@@ -27,7 +28,7 @@ namespace TMPMS.DTOs
     {
         // Pending, Approved, Rejected, Fulfilled
         public string Status { get; set; }
-        public string RejectReason { get; set; }
+        public string? RejectReason { get; set; }
     }
 
     public class PrescriptionItemResponseDTO
@@ -49,6 +50,7 @@ namespace TMPMS.DTOs
         public int? DiagnosisId { get; set; }
         public string DiagnosisNote { get; set; }
         public int? DoctorId { get; set; }
+        public int? AppointmentId { get; set; }
         public string DoctorName { get; set; }
         public string Hospital { get; set; }
         public DateTime PrescriptionDate { get; set; }

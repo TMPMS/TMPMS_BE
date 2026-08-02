@@ -12,7 +12,7 @@ namespace TMPMS.DTOs
     public class PaymentUpdateStatusDTO
     {
         public string Status { get; set; }         // Pending, Success, Failed, Refunded
-        public string TransactionCode { get; set; }
+        public string? TransactionCode { get; set; }
     }
 
     public class PaymentResponseDTO
