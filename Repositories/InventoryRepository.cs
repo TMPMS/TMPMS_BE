@@ -12,10 +12,26 @@ namespace TMPMS.Repositories
 
         public async Task<InventoryStock> GetStock(int medicineId, int warehouseId)
         {
-            return await _context.InventoryStocks
+            var stock = await _context.InventoryStocks
                 .Include(s => s.Medicine)
                 .Include(s => s.Warehouse)
                 .FirstOrDefaultAsync(s => s.MedicineId == medicineId && s.WarehouseId == warehouseId);
+
+            if (stock == null)
+            {
+                var med = await _context.Medicines.FindAsync(medicineId);
+                if (med != null)
+                {
+                    return new InventoryStock
+                    {
+                        MedicineId = medicineId,
+                        WarehouseId = warehouseId,
+                        Quantity = med.StockQuantity
+                    };
+                }
+            }
+
+            return stock;
         }
 
         public async Task<List<InventoryStock>> GetStockByWarehouse(int warehouseId)
@@ -56,8 +72,14 @@ namespace TMPMS.Repositories
             else
             {
                 existing.Quantity = stock.Quantity;
-                _context.InventoryStocks.Update(existing);
             }
+
+            var med = await _context.Medicines.FindAsync(stock.MedicineId);
+            if (med != null)
+            {
+                med.StockQuantity = stock.Quantity;
+            }
+
             await _context.SaveChangesAsync();
         }
 

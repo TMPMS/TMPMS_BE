@@ -18,7 +18,7 @@ namespace BusinessObjects
 
         public string Description { get; set; }
 
-        public decimal Price { get; set; }
+        public decimal? Price { get; set; }
 
         public int StockQuantity { get; set; }
 
@@ -41,6 +41,9 @@ namespace BusinessObjects
         public int? Discount { get; set; }
 
         public DateTime CreatedAt { get; set; }
+
+        /// <summary>Soft-delete flag: false = ẩn khỏi cửa hàng nhưng giữ lịch sử đơn hàng</summary>
+        public bool IsActive { get; set; } = true;
 
         public Category Category { get; set; }
 

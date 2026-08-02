@@ -16,7 +16,7 @@ namespace TMPMS.Services
             if (order == null)
                 throw new ArgumentException("Đơn hàng không tồn tại.");
 
-            var allowedMethods = new[] { "Cash", "BankTransfer", "CreditCard", "MoMo", "VNPay" };
+            var allowedMethods = new[] { "Cash", "COD", "BankTransfer", "CreditCard", "MoMo", "MOMO", "ZaloPay", "ZALOPAY", "VNPay", "PayOS" };
             if (!allowedMethods.Contains(dto.Method))
                 throw new ArgumentException("Phương thức thanh toán không hợp lệ.");
 
