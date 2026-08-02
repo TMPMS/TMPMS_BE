@@ -10,6 +10,7 @@ using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -168,6 +169,7 @@ namespace TMPMS.Controllers
                 var imageCell = CellStr(9);
                 var deleteFlag = CellStr(10);
                 var productIdStr = CellStr(11);
+                var rxStr = CellStr(12);
 
                 // Bỏ qua hàng hoàn toàn trống
                 if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(priceStr)
@@ -187,6 +189,8 @@ namespace TMPMS.Controllers
                     Unit = unit,
                     Description = desc,
                     ProductId = productId,
+                    RxCell = rxStr,
+                    RequiresPrescription = ParseRxFlag(rxStr),
                     Status = "New"
                 };
 
@@ -394,7 +398,8 @@ namespace TMPMS.Controllers
                         ? $"data:image/jpeg;base64,{p.ImageThumbnailBase64}"
                         : null,
                     p.ProductId,
-                    p.ExistingId
+                    p.ExistingId,
+                    requiresPrescription = p.RequiresPrescription
                 })
             });
         }
@@ -496,7 +501,7 @@ namespace TMPMS.Controllers
                             Unit = row.Unit,
                             Description = row.Description,
                             ImageUrl = imageUrl,
-                            RequiresPrescription = false,
+                            RequiresPrescription = row.RequiresPrescription,
                             IsActive = true,
                             ManufactureDate = DateTime.UtcNow,
                             ExpiryDate = DateTime.UtcNow.AddYears(2),
@@ -533,6 +538,8 @@ namespace TMPMS.Controllers
                             if (row.HasImage) med.ImageUrl = imageUrl;
                             if (row.CategoryId > 0) med.CategoryId = row.CategoryId;
                             if (row.SupplierId > 0) med.SupplierId = row.SupplierId;
+                            // Chỉ cập nhật cờ kê đơn khi cột Excel có giá trị — tránh xoá cờ true của dữ liệu cũ khi import file template cũ (cột trống)
+                            if (!string.IsNullOrWhiteSpace(row.RxCell)) med.RequiresPrescription = row.RequiresPrescription;
                             med.IsActive = true; // đảm bảo không bị ẩn
 
                             if (stockQty > 0)
@@ -617,7 +624,7 @@ namespace TMPMS.Controllers
                 fontColor: NPOI.HSSF.Util.HSSFColor.DarkRed.Index);
 
             // Column widths
-            int[] colWidths = { 2000, 8000, 6000, 7000, 4000, 4000, 4000, 3000, 10000, 8000, 4000, 3000 };
+            int[] colWidths = { 2000, 8000, 6000, 7000, 4000, 4000, 4000, 3000, 10000, 8000, 4000, 3000, 4500 };
             for (int i = 0; i < colWidths.Length; i++)
                 sheet.SetColumnWidth(i, colWidths[i]);
 
@@ -625,7 +632,7 @@ namespace TMPMS.Controllers
             string[] headers = {
                 "STT", "Tên sản phẩm", "Danh mục", "Nhà cung cấp",
                 "Giá bán lẻ", "Giá niêm yết cũ", "Số lượng tồn kho",
-                "Đơn vị", "Mô tả", "Hình ảnh", "Đánh dấu Xóa", "ProductId"
+                "Đơn vị", "Mô tả", "Hình ảnh", "Đánh dấu Xóa", "ProductId", "Yêu cầu kê đơn (Có/Không)"
             };
             var headerRow = sheet.CreateRow(0);
             for (int i = 0; i < headers.Length; i++)
@@ -643,6 +650,8 @@ namespace TMPMS.Controllers
             noteRow.GetCell(10).CellStyle = noteStyle;
             noteRow.CreateCell(11).SetCellValue("← KHÔNG XÓA CỘT NÀY");
             noteRow.GetCell(11).CellStyle = noteStyle;
+            noteRow.CreateCell(12).SetCellValue("Có = cần kê đơn, để trống = không");
+            noteRow.GetCell(12).CellStyle = noteStyle;
 
             if (medicines == null || medicines.Count == 0)
             {
@@ -651,7 +660,7 @@ namespace TMPMS.Controllers
                 string[] example = {
                     "1", "Bạch truật thảo dược", "Thảo dược & Đông Y", "Dược liệu Việt Nam",
                     "85000", "100000", "200", "Túi 100g",
-                    "Bạch truật khô hỗ trợ tiêu hoá, bổ tỳ vị", "", "", ""
+                    "Bạch truật khô hỗ trợ tiêu hoá, bổ tỳ vị", "", "", "", "Không"
                 };
                 for (int i = 0; i < example.Length; i++)
                     exRow.CreateCell(i).SetCellValue(example[i]);
@@ -746,6 +755,9 @@ namespace TMPMS.Controllers
                     var idCell = row.CreateCell(11);
                     idCell.SetCellValue(med.Id);
                     idCell.CellStyle = idColStyle;
+
+                    // Cột Yêu cầu kê đơn (Có/Không)
+                    row.CreateCell(12).SetCellValue(med.RequiresPrescription ? "Có" : "Không");
                 }
             }
 
@@ -784,6 +796,28 @@ namespace TMPMS.Controllers
             if (data.Length >= 4 && data[0] == 0x52 && data[1] == 0x49) return ".webp";
             return ".jpg";
         }
+
+        // "Có", "Co", "1", "True", "X", "Y", "Yes", "Cần" -> true; "Không"/trống -> false
+        private static bool ParseRxFlag(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            var v = value.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+            v = new string(v.Where(c => char.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark).ToArray());
+            switch (v)
+            {
+                case "co":
+                case "1":
+                case "true":
+                case "x":
+                case "y":
+                case "yes":
+                case "can":
+                case "batbuoc":
+                    return true;
+                default:
+                    return false;
+            }
+        }
     }
 
     // ================================================================
@@ -805,6 +839,8 @@ namespace TMPMS.Controllers
         public int SupplierId { get; set; }
         public int ExistingId { get; set; }
         public int ProductId { get; set; }
+        public string RxCell { get; set; } = "";   // giá trị thô cột "Yêu cầu kê đơn"
+        public bool RequiresPrescription { get; set; } // đã parse (false nếu cột trống)
         public string Status { get; set; } = "New"; // New | Update | Delete | Error
         public string? ErrorMessage { get; set; }
         public List<string> Warnings { get; set; } = new();
