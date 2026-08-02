@@ -184,6 +184,7 @@ namespace TMPMS.Controllers
                     o.DeliveryMethod,
                     o.ShippingFee,
                     o.CreatedAt,
+                    o.ReturnReason,
                     PaymentId = _context.Payments.Where(p => p.OrderId == o.Id).OrderByDescending(p => p.Id).Select(p => (int?)p.Id).FirstOrDefault(),
                     PaymentMethod = _context.Payments.Where(p => p.OrderId == o.Id).OrderByDescending(p => p.Id).Select(p => p.Method).FirstOrDefault(),
                     PaymentStatusDetail = _context.Payments.Where(p => p.OrderId == o.Id).OrderByDescending(p => p.Id).Select(p => p.Status).FirstOrDefault(),
@@ -224,6 +225,7 @@ namespace TMPMS.Controllers
                     o.DeliveryMethod,
                     o.ShippingFee,
                     o.CreatedAt,
+                    o.ReturnReason,
                     Username = _context.Users.Where(u => u.Id == o.UserId).Select(u => u.UserName).FirstOrDefault(),
                     Email = _context.Users.Where(u => u.Id == o.UserId).Select(u => u.Email).FirstOrDefault(),
                     PaymentId = _context.Payments.Where(p => p.OrderId == o.Id).OrderByDescending(p => p.Id).Select(p => (int?)p.Id).FirstOrDefault(),
@@ -250,6 +252,70 @@ namespace TMPMS.Controllers
             return Ok(orders);
         }
 
+        private async Task RestockOrderItemsAsync(int orderId)
+        {
+            var items = await _context.OrderItems.Where(oi => oi.OrderId == orderId).ToListAsync();
+            foreach (var oi in items)
+            {
+                var med = await _context.Medicines.FindAsync(oi.MedicineId);
+                if (med != null)
+                {
+                    med.StockQuantity += oi.Quantity;
+                }
+            }
+        }
+
+        [HttpPost("orders/{id}/cancel")]
+        public async Task<IActionResult> CancelOrder(int id)
+        {
+            var currentUserId = GetUserId();
+            if (currentUserId == null) return Unauthorized();
+
+            var order = await _context.Orders.FindAsync(id);
+            if (order == null) return NotFound("Order not found");
+            if (!CanProxyOrder() && order.UserId != currentUserId.Value) return Forbid();
+
+            if (order.Status != "Pending")
+            {
+                return BadRequest(new { error = "Chỉ có thể hủy đơn đang ở trạng thái chờ xử lý." });
+            }
+
+            await RestockOrderItemsAsync(id);
+            order.Status = "Cancelled";
+            await _context.SaveChangesAsync();
+            return Ok(order);
+        }
+
+        public class ReturnRequestInput
+        {
+            public string Reason { get; set; } = "";
+        }
+
+        [HttpPost("orders/{id}/return-request")]
+        public async Task<IActionResult> RequestReturn(int id, [FromBody] ReturnRequestInput input)
+        {
+            var currentUserId = GetUserId();
+            if (currentUserId == null) return Unauthorized();
+
+            var order = await _context.Orders.FindAsync(id);
+            if (order == null) return NotFound("Order not found");
+            if (!CanProxyOrder() && order.UserId != currentUserId.Value) return Forbid();
+
+            if (order.Status != "Delivered")
+            {
+                return BadRequest(new { error = "Chỉ có thể yêu cầu trả hàng với đơn đã giao thành công." });
+            }
+            if (string.IsNullOrWhiteSpace(input.Reason))
+            {
+                return BadRequest(new { error = "Vui lòng nhập lý do trả hàng." });
+            }
+
+            order.Status = "ReturnRequested";
+            order.ReturnReason = input.Reason.Trim();
+            await _context.SaveChangesAsync();
+            return Ok(order);
+        }
+
         public class UpdateStatusRequest
         {
             public string? Status { get; set; }
@@ -263,6 +329,7 @@ namespace TMPMS.Controllers
             var order = await _context.Orders.FindAsync(id);
             if (order == null) return NotFound("Order not found");
 
+            var previousStatus = order.Status;
             if (request.Status != null)
             {
                 order.Status = request.Status;
@@ -270,6 +337,33 @@ namespace TMPMS.Controllers
             if (request.PaymentStatus != null)
             {
                 order.PaymentStatus = request.PaymentStatus;
+            }
+
+            // Hoàn kho khi đơn bị hủy hoặc đã duyệt trả hàng (chỉ 1 lần, không double-restock).
+            if (request.Status is "Cancelled" or "Returned" &&
+                previousStatus != "Cancelled" && previousStatus != "Returned")
+            {
+                await RestockOrderItemsAsync(id);
+            }
+
+            // Duyệt trả hàng: đồng bộ Payment.Status = Refunded + ghi nhận trên đơn.
+            if (request.Status == "Returned")
+            {
+                var payment = await _context.Payments
+                    .Where(p => p.OrderId == id)
+                    .OrderByDescending(p => p.Id)
+                    .FirstOrDefaultAsync();
+                if (payment != null)
+                {
+                    payment.Status = "Refunded";
+                }
+                order.PaymentStatus = "Refunded";
+            }
+
+            // Từ chối trả hàng: đơn quay về đã giao, xóa lý do.
+            if (previousStatus == "ReturnRequested" && request.Status == "Delivered")
+            {
+                order.ReturnReason = null;
             }
 
             await _context.SaveChangesAsync();

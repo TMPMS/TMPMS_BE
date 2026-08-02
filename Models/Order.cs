@@ -26,6 +26,8 @@ namespace BusinessObjects
 
         public DateTime CreatedAt { get; set; }
 
+        public string? ReturnReason { get; set; }
+
         public User User { get; set; }
 
         public ICollection<OrderItem> OrderItems { get; set; }
