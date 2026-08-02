@@ -1,4 +1,4 @@
-﻿using BusinessObjects;
+using BusinessObjects;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using TMPMS.Data;
@@ -194,7 +194,11 @@ namespace TMPMS.Repositories
                 Email = user.Email,
                 Phone = user.PhoneNumber,
                 IsActive = user.IsActive,
-                Address = user.Addresses.FirstOrDefault()?.AddressLine ?? ""
+                Address = user.Addresses.FirstOrDefault()?.AddressLine ?? user.Address ?? "",
+                FullName = user.FullName,
+                AvatarUrl = user.AvatarUrl,
+                DateOfBirth = user.DateOfBirth,
+                Gender = user.Gender
             };
         }
         public async Task<bool> UpdateProfileAsync(int userId, UpdateProfileDto dto)
@@ -209,12 +213,26 @@ namespace TMPMS.Repositories
             user.UserName = dto.Username;
             user.Email = dto.Email;
             user.PhoneNumber = dto.Phone;
+            user.FullName = dto.FullName;
+            user.AvatarUrl = dto.AvatarUrl;
+            user.DateOfBirth = dto.DateOfBirth;
+            user.Gender = dto.Gender;
+            user.Address = dto.Address;
 
             var address = user.Addresses.FirstOrDefault();
 
             if (address != null)
             {
                 address.AddressLine = dto.Address;
+            }
+            else if (!string.IsNullOrEmpty(dto.Address))
+            {
+                user.Addresses.Add(new UserAddress
+                {
+                    UserId = userId,
+                    AddressLine = dto.Address,
+                    IsDefault = true
+                });
             }
 
             await _context.SaveChangesAsync();

@@ -1,4 +1,4 @@
-﻿using BusinessObjects;
+using BusinessObjects;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +13,8 @@ namespace Services.Interfaces
     {
         Task<AuthResponseDTO> Register(RegisterRequestDTO dto);
         Task<AuthResponseDTO> Login(LoginRequestDTO dto, string ipAddress);
+        Task<AuthResponseDTO> OtpLogin(OtpLoginRequestDTO dto, string ipAddress);
+        Task<bool> SendOtp(string phone);
         Task<AuthResponseDTO> RefreshToken(string refreshToken, string ipAddress);
         Task<bool> RevokeToken(string refreshToken, string ipAddress);
         Task<bool> AssignRole(AssignRoleRequestDTO dto);
