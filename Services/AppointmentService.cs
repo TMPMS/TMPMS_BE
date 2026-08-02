@@ -32,14 +32,29 @@ namespace TMPMS.Services
                     targetStaffId = null; // fallback
             }
 
-            if (dto.AppointmentDate != default && dto.AppointmentDate < DateTime.Now.AddDays(-1))
+            // Chuẩn hoá múi giờ: toàn hệ thống lưu theo giờ địa phương (wall-clock), không chênh lệch UTC
+            DateTime appointmentDate = dto.AppointmentDate == default ? DateTime.Now.AddDays(1) : dto.AppointmentDate;
+            if (appointmentDate.Kind == DateTimeKind.Utc)
+                appointmentDate = appointmentDate.ToLocalTime();
+            appointmentDate = DateTime.SpecifyKind(appointmentDate, DateTimeKind.Local);
+
+            if (appointmentDate < DateTime.Now.AddDays(-1))
                 throw new Exception("Appointment date cannot be in the past.");
+
+            // Chống đặt trùng: không cho 2 lịch hẹn cùng bác sĩ tại cùng thời điểm (trừ lịch đã hủy)
+            if (targetStaffId != null && await _appointmentRepository.IsAppointmentExist(targetStaffId.Value, appointmentDate))
+                throw new Exception("Bác sĩ đã có lịch hẹn vào thời điểm này. Vui lòng chọn thời gian khác.");
+
+            // Chống spam: mỗi người chỉ được có 1 lịch hẹn đang chờ/đã xác nhận trong vòng 30 phút qua
+            var recentWindow = DateTime.UtcNow.AddMinutes(-30);
+            if (await _appointmentRepository.HasRecentActiveAppointment(targetUserId, recentWindow))
+                throw new Exception("Bạn vừa đặt lịch hẹn gần đây. Vui lòng chờ xác nhận lịch hẹn hiện tại trước khi đặt lịch mới.");
 
             Appointment appointment = new Appointment
             {
                 UserId = targetUserId,
                 StaffId = targetStaffId,
-                AppointmentDate = dto.AppointmentDate == default ? DateTime.Now.AddDays(1) : dto.AppointmentDate,
+                AppointmentDate = appointmentDate,
                 Reason = dto.Reason ?? "",
                 Note = dto.Note ?? dto.Notes,
                 Status = string.IsNullOrEmpty(dto.Status) ? "Pending" : (dto.Status == "Scheduled" ? "Pending" : dto.Status),
@@ -93,9 +108,19 @@ namespace TMPMS.Services
             if (appointment == null)
                 throw new Exception("Appointment not found.");
 
-            if (dto.AppointmentDate != default) appointment.AppointmentDate = dto.AppointmentDate;
+            DateTime appointmentDate = dto.AppointmentDate == default
+                ? appointment.AppointmentDate
+                : dto.AppointmentDate;
+            if (appointmentDate.Kind == DateTimeKind.Utc)
+                appointmentDate = appointmentDate.ToLocalTime();
+            appointmentDate = DateTime.SpecifyKind(appointmentDate, DateTimeKind.Local);
+            appointment.AppointmentDate = appointmentDate;
             if (!string.IsNullOrEmpty(dto.Reason)) appointment.Reason = dto.Reason;
             if (dto.Note != null) appointment.Note = dto.Note;
+
+            // Chống trùng lịch khi sửa: kiểm tra bác sĩ/thời gian mới có bị trùng lịch hẹn khác không
+            if (appointment.StaffId != null && await _appointmentRepository.IsAppointmentExist(appointment.StaffId, appointment.AppointmentDate, id))
+                throw new Exception("Bác sĩ đã có lịch hẹn vào thời điểm này. Vui lòng chọn thời gian khác.");
 
             return await _appointmentRepository.Update(appointment);
         }

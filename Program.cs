@@ -217,6 +217,23 @@ if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
     app.UseSwaggerUI();
 }
 
+// Serve static files (uploads/medicines) với đường dẫn tuyệt đối
+var uploadsPhysicalPath = Path.Combine(
+    Path.GetDirectoryName(typeof(Program).Assembly.Location)!,
+    "wwwroot");
+// Nếu chạy dotnet run thì Assembly.Location nằm trong bin/Debug, cần check source dir
+var sourceWwwroot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+if (!Directory.Exists(uploadsPhysicalPath) && Directory.Exists(sourceWwwroot))
+    uploadsPhysicalPath = sourceWwwroot;
+if (!Directory.Exists(uploadsPhysicalPath))
+    Directory.CreateDirectory(uploadsPhysicalPath);
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPhysicalPath),
+    RequestPath = ""
+});
+
 app.UseHttpsRedirection();
 
 app.UseCors("AllowFrontend");
@@ -414,8 +431,19 @@ using (var scope = app.Services.CreateScope())
         await context.SaveChangesAsync();
     }
 
+    if (!context.Warehouses.Any())
+    {
+        context.Warehouses.Add(new Warehouse
+        {
+            Name = "Kho Tổng Dược Liệu & Thuốc Đông Y",
+            Address = "Số 138 Giảng Võ, Ba Đình, Hà Nội"
+        });
+        await context.SaveChangesAsync();
+    }
+
     await DiagnosisSeeder.SeedAsync(context);
     await TMPMS.Database.HealthQuizSeeder.SeedAsync(context);
+    await HerbalMedicineSeeder.SeedAsync(context);
 }
 app.MapHub<TrackingHub>("/trackingHub");
 app.MapHub<TMPMS.Hubs.PharmacyChatHub>("/hubs/pharmacy-chat");

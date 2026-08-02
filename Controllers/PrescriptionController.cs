@@ -36,15 +36,15 @@ namespace TMPMS.Controllers
         public async Task<ActionResult> GetByUser(int userId) => Ok(await _service.GetByUser(userId));
 
         [HttpGet("status/{status}")]
-        [Authorize(Roles = "Pharmacist,Admin")]
+        [Authorize(Roles = "Pharmacy,Pharmacist,Admin")]
         public async Task<ActionResult> GetByStatus(string status) => Ok(await _service.GetByStatus(status));
 
         [HttpGet]
-        [Authorize(Roles = "Pharmacist,Admin")]
+        [Authorize(Roles = "Pharmacy,Pharmacist,Admin")]
         public async Task<ActionResult> GetAll() => Ok(await _service.GetAll());
 
         [HttpPut("{id}/status")]
-        [Authorize(Roles = "Pharmacist,Admin")]
+        [Authorize(Roles = "Pharmacy,Pharmacist,Admin")]
         public async Task<ActionResult> UpdateStatus(int id, [FromBody] PrescriptionStatusUpdateDTO dto)
         {
             try

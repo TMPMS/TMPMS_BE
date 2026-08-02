@@ -284,7 +284,7 @@ namespace TMPMS.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("MedicineId")
+                    b.Property<int?>("MedicineId")
                         .HasColumnType("int");
 
                     b.Property<string>("OriginPlace")
@@ -310,7 +310,8 @@ namespace TMPMS.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("MedicineId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[MedicineId] IS NOT NULL");
 
                     b.ToTable("HerbalMedicineInfos");
                 });
@@ -426,6 +427,9 @@ namespace TMPMS.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime>("ManufactureDate")
                         .HasColumnType("datetime2");
 
@@ -442,7 +446,7 @@ namespace TMPMS.Migrations
                     b.Property<string>("Packaging")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<decimal>("Price")
+                    b.Property<decimal?>("Price")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<bool>("RequiresPrescription")
@@ -603,8 +607,14 @@ namespace TMPMS.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AppointmentId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("DiagnosisId")
                         .HasColumnType("int");
+
+                    b.Property<string>("DiagnosisNote")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("DoctorId")
                         .HasColumnType("int");
@@ -632,6 +642,8 @@ namespace TMPMS.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AppointmentId");
 
                     b.HasIndex("DiagnosisId");
 
@@ -1610,9 +1622,7 @@ namespace TMPMS.Migrations
                 {
                     b.HasOne("BusinessObjects.Medicine", "Medicine")
                         .WithOne()
-                        .HasForeignKey("BusinessObjects.HerbalMedicineInfo", "MedicineId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("BusinessObjects.HerbalMedicineInfo", "MedicineId");
 
                     b.Navigation("Medicine");
                 });
@@ -1739,6 +1749,11 @@ namespace TMPMS.Migrations
 
             modelBuilder.Entity("BusinessObjects.Prescription", b =>
                 {
+                    b.HasOne("BusinessObjects.Appointment", "Appointment")
+                        .WithMany()
+                        .HasForeignKey("AppointmentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("BusinessObjects.Diagnosis", "Diagnosis")
                         .WithMany("Prescriptions")
                         .HasForeignKey("DiagnosisId")
@@ -1754,6 +1769,8 @@ namespace TMPMS.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Appointment");
 
                     b.Navigation("Diagnosis");
 

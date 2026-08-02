@@ -9,7 +9,7 @@ namespace TMPMS.Controllers
 
     [ApiController]
     [Route("api/patients")]
-    [Authorize(Roles = "Admin,Staff,Pharmacy")]
+    [Authorize]
     public class PatientController : ControllerBase
     {
         private readonly IPatientService _patientService;

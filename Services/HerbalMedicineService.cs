@@ -89,7 +89,7 @@ namespace TMPMS.Services
         {
             return new HerbalMedicineResponseDTO
             {
-                MedicineId = info.MedicineId,
+                MedicineId = info.MedicineId ?? 0,
                 Name = info.Medicine?.Name,
                 Description = info.Medicine?.Description,
                 Price = info.Medicine?.Price ?? 0,

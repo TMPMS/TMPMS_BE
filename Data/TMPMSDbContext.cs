@@ -152,6 +152,12 @@ namespace TMPMS.Data
                 .HasForeignKey(p => p.DiagnosisId)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            modelBuilder.Entity<Prescription>()
+                .HasOne(p => p.Appointment)
+                .WithMany()
+                .HasForeignKey(p => p.AppointmentId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             modelBuilder.Entity<Diagnosis>()
                 .HasOne(d => d.Patient)
                 .WithMany()
