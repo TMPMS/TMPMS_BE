@@ -96,5 +96,30 @@ namespace TMPMS.Repositories
                 x.CreatedAt >= since &&
                 (x.Status == "Pending" || x.Status == "Confirmed"));
         }
+
+        public async Task<int> ExpireOverdueAppointmentsAsync(DateTime now)
+        {
+            return await _context.Appointments
+                .Where(x => (x.Status == "Pending" || x.Status == "Confirmed") && x.AppointmentDate < now)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Status, "Expired"));
+        }
+
+        public async Task<int> AutoConfirmPendingAppointmentsAsync(DateTime utcNow, TimeSpan minAge)
+        {
+            var threshold = utcNow - minAge;
+            return await _context.Appointments
+                .Where(x => x.Status == "Pending" && x.CreatedAt <= threshold && x.AppointmentDate >= utcNow.ToLocalTime())
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Status, "Confirmed"));
+        }
+
+        public async Task<Appointment?> GetActiveAppointmentByUserId(int userId)
+        {
+            return await _context.Appointments
+                .Include(a => a.User)
+                .Include(a => a.Staff)
+                .Where(a => a.UserId == userId && (a.Status == "Pending" || a.Status == "Confirmed"))
+                .OrderBy(a => a.AppointmentDate)
+                .FirstOrDefaultAsync();
+        }
     }
 }

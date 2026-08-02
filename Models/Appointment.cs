@@ -19,7 +19,7 @@
         // Ghi chú
         public string? Note { get; set; }
 
-        // Pending | Confirmed | Completed | Cancelled
+        // Pending | Confirmed | Completed | Cancelled | Expired
         public string Status { get; set; } = "Pending";
 
         // Thời gian tạo

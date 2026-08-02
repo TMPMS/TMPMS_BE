@@ -24,12 +24,20 @@ namespace TMPMS.Controllers
         {
             try
             {
-                int userId = 0;
-                var claim = User.FindFirst(ClaimTypes.NameIdentifier);
-                if (claim != null) int.TryParse(claim.Value, out userId);
+                int userId = GetCurrentUserId();
+                var result = await _appointmentService.BookAppointment(userId, dto);
 
-                bool result = await _appointmentService.BookAppointment(userId, dto);
-                return Ok(new { success = result, message = "Book appointment successfully." });
+                if (result.BlockingAppointment != null)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Bạn đang có lịch hẹn chưa xử lý xong. Vui lòng chờ xác nhận, quá hạn hoặc hủy lịch hẹn này trước khi đặt lịch mới.",
+                        blockingAppointment = result.BlockingAppointment
+                    });
+                }
+
+                return Ok(new { success = result.Success, message = "Book appointment successfully." });
             }
             catch (Exception ex)
             {
@@ -41,7 +49,7 @@ namespace TMPMS.Controllers
         [Authorize]
         public async Task<IActionResult> GetAppointments()
         {
-            int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            int userId = GetCurrentUserId();
             var appointments = await _appointmentService.GetAppointments(userId);
             return Ok(appointments);
         }
@@ -92,7 +100,8 @@ namespace TMPMS.Controllers
         {
             try
             {
-                bool result = await _appointmentService.CancelAppointment(id);
+                int currentUserId = GetCurrentUserId();
+                bool result = await _appointmentService.CancelAppointment(id, currentUserId, CanProxy());
                 return Ok(new { Success = result, Message = "Appointment cancelled successfully." });
             }
             catch (Exception ex)
@@ -129,6 +138,18 @@ namespace TMPMS.Controllers
             {
                 return BadRequest(new { Success = false, Message = ex.Message });
             }
+        }
+
+        private int GetCurrentUserId()
+        {
+            var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            int.TryParse(claim, out int userId);
+            return userId;
+        }
+
+        private bool CanProxy()
+        {
+            return User.IsInRole("Admin") || User.IsInRole("Staff") || User.IsInRole("Pharmacy");
         }
     }
 }
