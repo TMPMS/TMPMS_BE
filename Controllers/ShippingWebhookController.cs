@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using System.Threading.Tasks;
+using TMPMS.Data;
 using TMPMS.Hubs;
 using TMPMS.Services;
 
@@ -12,11 +14,13 @@ namespace TMPMS.Controllers
     {
         private readonly IHubContext<TrackingHub> _hubContext;
         private readonly TrackingSimulationService _simulationService;
+        private readonly TMPMSDbContext _context;
 
-        public ShippingWebhookController(IHubContext<TrackingHub> hubContext, TrackingSimulationService simulationService)
+        public ShippingWebhookController(IHubContext<TrackingHub> hubContext, TrackingSimulationService simulationService, TMPMSDbContext context)
         {
             _hubContext = hubContext;
             _simulationService = simulationService;
+            _context = context;
         }
 
         public class WebhookRequest
@@ -37,6 +41,18 @@ namespace TMPMS.Controllers
 
             // Update simulation service
             _simulationService.UpdateSimulationFromWebhook(request.OrderId, request.Status, request.Coords, request.Shipper);
+
+            // Persist Order.Status (Shipping / Delivered) in the database
+            var orderStatus = TrackingStatusSync.ToOrderStatus(request.Status);
+            if (orderStatus != null)
+            {
+                var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == request.OrderId);
+                if (order != null)
+                {
+                    order.Status = orderStatus;
+                    await _context.SaveChangesAsync();
+                }
+            }
 
             // Broadcast to SignalR group immediately
             await _hubContext.Clients.Group(request.OrderId.ToString()).SendAsync("ReceiveTrackingUpdate", new

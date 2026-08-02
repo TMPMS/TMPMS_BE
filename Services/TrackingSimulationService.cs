@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
@@ -6,6 +8,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using TMPMS.Data;
 using TMPMS.Hubs;
 
 namespace TMPMS.Services
@@ -13,6 +16,7 @@ namespace TMPMS.Services
     public class TrackingSimulationService : BackgroundService
     {
         private readonly IHubContext<TrackingHub> _hubContext;
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<TrackingSimulationService> _logger;
         
         // Coordinates definition
@@ -22,9 +26,10 @@ namespace TMPMS.Services
 
         private readonly ConcurrentDictionary<int, SimState> _activeSimulations = new();
 
-        public TrackingSimulationService(IHubContext<TrackingHub> hubContext, ILogger<TrackingSimulationService> logger)
+        public TrackingSimulationService(IHubContext<TrackingHub> hubContext, IServiceScopeFactory scopeFactory, ILogger<TrackingSimulationService> logger)
         {
             _hubContext = hubContext;
+            _scopeFactory = scopeFactory;
             _logger = logger;
         }
 
@@ -80,6 +85,29 @@ namespace TMPMS.Services
             _logger.LogInformation($"Cancelled simulation for order {orderId}.");
         }
 
+        // Persist the mapped Order.Status into the database using a scoped DbContext.
+        private async Task SyncOrderStatusAsync(int orderId, string trackingStatus)
+        {
+            var orderStatus = TrackingStatusSync.ToOrderStatus(trackingStatus);
+            if (orderStatus == null) return;
+
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<TMPMSDbContext>();
+                var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+                if (order == null) return;
+
+                order.Status = orderStatus;
+                await db.SaveChangesAsync();
+                _logger.LogInformation($"Synced order {orderId} status to {orderStatus}.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Failed to sync order {orderId} status.");
+            }
+        }
+
         public void UpdateSimulationFromWebhook(int orderId, string status, Coords? customCoords = null, object? customShipper = null)
         {
             if (_activeSimulations.TryGetValue(orderId, out var state))
@@ -110,6 +138,7 @@ namespace TMPMS.Services
                         if (state.CurrentStep == 1)
                         {
                             state.Status = "Shipping";
+                            await SyncOrderStatusAsync(orderId, state.Status);
                         }
 
                         if (state.CurrentStep >= Waypoints.Count)
@@ -125,6 +154,7 @@ namespace TMPMS.Services
                                 coords = Waypoints[^1]
                             }, stoppingToken);
 
+                            await SyncOrderStatusAsync(orderId, state.Status);
                             _activeSimulations.TryRemove(orderId, out _);
                             _logger.LogInformation($"Order {orderId} reached its destination.");
                             continue;
