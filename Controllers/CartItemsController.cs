@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using BusinessObjects;
 using TMPMS.Data;
+using System;
 using System.Text.Json.Serialization;
 
 namespace TMPMS.Controllers
@@ -53,19 +54,33 @@ namespace TMPMS.Controllers
             var cleanId = cartIdStr.Replace("eq.", "");
             if (!int.TryParse(cleanId, out int cartId)) return BadRequest("Invalid cart_id format");
 
+            var cart = await _context.Carts.FirstOrDefaultAsync(c => c.Id == cartId);
+
             var items = await _context.CartItems
                 .Where(ci => ci.CartId == cartId)
                 .Include(ci => ci.Medicine)
-                .Select(ci => new {
+                .ToListAsync();
+
+            var result = new List<object>();
+            foreach (var ci in items)
+            {
+                int? allowedQuantity = null;
+                if (ci.Medicine.RequiresPrescription && cart != null)
+                {
+                    var (_, maxAllowed) = await GetRxAllowanceAsync(cart.UserId, ci.MedicineId);
+                    allowedQuantity = Math.Max(0, maxAllowed);
+                }
+                result.Add(new {
                     Id = ci.Id,
                     CartId = ci.CartId,
                     MedicineId = ci.MedicineId,
                     Quantity = ci.Quantity,
+                    AllowedQuantity = allowedQuantity,
                     Medicine = ci.Medicine
-                })
-                .ToListAsync();
+                });
+            }
 
-            return Ok(items);
+            return Ok(result);
         }
 
         [HttpPost]
@@ -75,6 +90,28 @@ namespace TMPMS.Controllers
             if (medicine == null || medicine.Price == null)
             {
                 return BadRequest(new { error = "Vị thuốc này chưa có giá bán, vui lòng liên hệ Dược sĩ để được tư vấn." });
+            }
+
+            if (medicine.RequiresPrescription)
+            {
+                var cart = await _context.Carts.FirstOrDefaultAsync(c => c.Id == input.CartId);
+                var cartUserId = cart?.UserId ?? 0;
+                var (allowed, maxAllowed) = await GetRxAllowanceAsync(cartUserId, input.MedicineId);
+                if (!allowed)
+                {
+                    return StatusCode(403, new { error = "Sản phẩm này cần được Dược sĩ kê đơn trước khi mua." });
+                }
+                if (maxAllowed <= 0)
+                {
+                    return BadRequest(new { error = $"Số lượng {medicine.Name} đã đạt tối đa trong đơn thuốc của bạn." });
+                }
+                var existingForRx = await _context.CartItems
+                    .FirstOrDefaultAsync(ci => ci.CartId == input.CartId && ci.MedicineId == input.MedicineId);
+                var wouldHave = (existingForRx?.Quantity ?? 0) + input.Quantity;
+                if (wouldHave > maxAllowed)
+                {
+                    return BadRequest(new { error = $"Số lượng {medicine.Name} vượt quá liều lượng trong đơn thuốc (tối đa {maxAllowed})." });
+                }
             }
 
             var existing = await _context.CartItems
@@ -107,6 +144,25 @@ namespace TMPMS.Controllers
 
             var item = await _context.CartItems.FindAsync(itemId);
             if (item == null) return NotFound("Cart item not found");
+
+            if (item.Quantity != input.Quantity)
+            {
+                var medicine = await _context.Medicines.FindAsync(item.MedicineId);
+                if (medicine != null && medicine.RequiresPrescription)
+                {
+                    var cart = await _context.Carts.FirstOrDefaultAsync(c => c.Id == item.CartId);
+                    var cartUserId = cart?.UserId ?? 0;
+                    var (allowed, maxAllowed) = await GetRxAllowanceAsync(cartUserId, item.MedicineId);
+                    if (!allowed)
+                    {
+                        return StatusCode(403, new { error = "Sản phẩm này cần được Dược sĩ kê đơn trước khi mua." });
+                    }
+                    if (input.Quantity > Math.Max(0, maxAllowed))
+                    {
+                        return BadRequest(new { error = $"Số lượng {medicine.Name} vượt quá liều lượng trong đơn thuốc (tối đa {Math.Max(0, maxAllowed)})." });
+                    }
+                }
+            }
 
             item.Quantity = input.Quantity;
             await _context.SaveChangesAsync();
@@ -148,6 +204,19 @@ namespace TMPMS.Controllers
                     return BadRequest(new { error = $"Vị thuốc '{medicine?.Name ?? item.medicine_id.ToString()}' chưa có giá bán, vui lòng liên hệ Dược sĩ để được tư vấn." });
                 }
 
+                if (medicine.RequiresPrescription)
+                {
+                    var (allowed, maxAllowed) = await GetRxAllowanceAsync(input.p_user_id, item.medicine_id);
+                    if (!allowed)
+                    {
+                        return StatusCode(403, new { error = "Sản phẩm này cần được Dược sĩ kê đơn trước khi mua." });
+                    }
+                    if (item.quantity > Math.Max(0, maxAllowed))
+                    {
+                        return BadRequest(new { error = $"Số lượng {medicine.Name} vượt quá liều lượng trong đơn thuốc (tối đa {Math.Max(0, maxAllowed)})." });
+                    }
+                }
+
                 var existing = await _context.CartItems
                     .FirstOrDefaultAsync(ci => ci.CartId == cart.Id && ci.MedicineId == item.medicine_id);
                 
@@ -167,6 +236,26 @@ namespace TMPMS.Controllers
             }
             await _context.SaveChangesAsync();
             return Ok(new { message = "Synced successfully" });
+        }
+
+        // Returns (Allowed, MaxAllowed):
+        // Allowed = user has an Approved/Fulfilled prescription containing the medicine.
+        // MaxAllowed = total prescribed quantity minus what has already been purchased
+        // in non-cancelled orders (does NOT subtract the current cart quantity).
+        private async Task<(bool Allowed, int MaxAllowed)> GetRxAllowanceAsync(int userId, int medicineId)
+        {
+            var prescribed = await _context.PrescriptionItems
+                .Where(pi => pi.MedicineId == medicineId && pi.Prescription.UserId == userId)
+                .Where(pi => pi.Prescription.Status == "Approved" || pi.Prescription.Status == "Fulfilled")
+                .SumAsync(pi => pi.Quantity);
+
+            if (prescribed <= 0) return (false, 0);
+
+            var purchased = await _context.OrderItems
+                .Where(oi => oi.MedicineId == medicineId && oi.Order.UserId == userId && oi.Order.Status != "Cancelled")
+                .SumAsync(oi => oi.Quantity);
+
+            return (true, Math.Max(0, prescribed - purchased));
         }
     }
 }
