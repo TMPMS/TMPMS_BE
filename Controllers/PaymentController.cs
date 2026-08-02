@@ -36,7 +36,7 @@ namespace TMPMS.Controllers
         public async Task<ActionResult> GetByOrder(int orderId) => Ok(await _service.GetByOrder(orderId));
 
         [HttpPut("{id}/status")]
-        [Authorize(Roles = "Admin,Accountant")]
+        [Authorize(Roles = "Admin,Accountant,Pharmacy")]
         public async Task<ActionResult> UpdateStatus(int id, [FromBody] PaymentUpdateStatusDTO dto)
         {
             try
