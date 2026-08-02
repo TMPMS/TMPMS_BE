@@ -38,9 +38,15 @@ namespace TMPMS.Controllers
         [HttpGet]
         public async Task<IActionResult> GetMedicines(
             [FromQuery(Name = "category_id")] string? categoryIdStr, 
-            [FromQuery(Name = "name")] string? nameStr)
+            [FromQuery(Name = "name")] string? nameStr,
+            [FromQuery(Name = "include_rx")] bool includeRx = false)
         {
             var query = _context.Medicines.Where(m => m.IsActive).AsQueryable();
+
+            if (!includeRx)
+            {
+                query = query.Where(m => !m.RequiresPrescription);
+            }
 
             if (!string.IsNullOrEmpty(categoryIdStr))
             {
