@@ -58,9 +58,6 @@ builder.Services.AddSignalR();
 builder.Services.AddSingleton<TrackingSimulationService>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<TrackingSimulationService>());
 
-
-
-
 builder.Services.AddDbContext<TMPMSDbContext>(options =>
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnectionString"));
@@ -205,7 +202,7 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
-        policy => policy.WithOrigins("http://localhost:5173", "https://tmpms.vercel.app", "http://127.0.0.1:5173")
+        policy => policy.WithOrigins("http://localhost:5173", "https://tmpms.vercel.app", "http://127.0.0.1:5173", "http://localhost")
                         .AllowAnyMethod()
                         .AllowAnyHeader()
                         .AllowCredentials());
@@ -214,7 +211,7 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
@@ -249,6 +246,9 @@ using (var scope = app.Services.CreateScope())
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
     var context = scope.ServiceProvider.GetRequiredService<TMPMSDbContext>();
+    var db = scope.ServiceProvider.GetRequiredService<TMPMSDbContext>();
+
+    db.Database.Migrate();
 
     // Roles
     var roles = new List<Role>
