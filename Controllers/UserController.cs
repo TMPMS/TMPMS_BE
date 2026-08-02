@@ -9,7 +9,6 @@ namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("api/users")]
-    [Authorize(Roles = "Admin")]
     public class UserController : ControllerBase
     {
         private readonly IUserService _userService;
@@ -21,6 +20,7 @@ namespace TMPMS.Controllers
 
         // Endpoint: POST https://localhost:xxxx/api/users/create
         [HttpPost("create")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -41,6 +41,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpGet("list")]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> GetUserList()
         {
             try
@@ -59,6 +60,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpGet("detail/{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetUserDetail(int id)
         {
             try
@@ -85,6 +87,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPut("update/{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserDto dto)
         {
             if (!ModelState.IsValid)
@@ -118,6 +121,7 @@ namespace TMPMS.Controllers
 
         // DELETE: api/users/delete/1
         [HttpDelete("delete/{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteUser(int id)
         {
             try
@@ -148,6 +152,7 @@ namespace TMPMS.Controllers
 
         // POST: api/users/assign-role
         [HttpPost("assign-role")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> AssignRole([FromBody] AssignRoleDto dto)
         {
             if (!ModelState.IsValid)
@@ -181,6 +186,7 @@ namespace TMPMS.Controllers
 
         // PUT: api/users/lock/5
         [HttpPut("lock/{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> LockUser(int id)
         {
             var result = await _userService.LockUserAsync(id);
@@ -193,6 +199,7 @@ namespace TMPMS.Controllers
 
         // PUT: api/users/unlock/5
         [HttpPut("unlock/{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UnlockUser(int id)
         {
             var result = await _userService.UnlockUserAsync(id);
@@ -205,6 +212,7 @@ namespace TMPMS.Controllers
 
         // PUT: api/users/change-password/1
         [HttpPut("change-password/{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> ChangePassword(int id, ChangePasswordDTO dto)
         {
             var result = await _userService.ChangePasswordAsync(id, dto);

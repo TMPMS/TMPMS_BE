@@ -57,6 +57,7 @@ builder.Services.AddScoped<ISmsService, TwilioSmsService>();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<TrackingSimulationService>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<TrackingSimulationService>());
+builder.Services.AddHostedService<AppointmentStatusBackgroundService>();
 
 builder.Services.AddDbContext<TMPMSDbContext>(options =>
 {
@@ -234,7 +235,8 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = ""
 });
 
-app.UseHttpsRedirection();
+// Disabled for free local hosting behind Cloudflare tunnel (HTTP upstream).
+// app.UseHttpsRedirection();
 
 app.UseCors("AllowFrontend");
 
@@ -448,5 +450,8 @@ using (var scope = app.Services.CreateScope())
 app.MapHub<TrackingHub>("/trackingHub");
 app.MapHub<TMPMS.Hubs.PharmacyChatHub>("/hubs/pharmacy-chat");
 app.MapControllers();
+
+// SPA fallback: serve index.html for client-side routes served from wwwroot.
+app.MapFallbackToFile("index.html");
 
 app.Run();

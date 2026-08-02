@@ -16,5 +16,8 @@ namespace TMPMS.Repositories.Interfaces
         Task<bool> Delete(int id);
         Task<bool> IsAppointmentExist(int? staffId, DateTime appointmentDate, int appointmentId);
         Task<bool> HasRecentActiveAppointment(int userId, DateTime since);
+        Task<int> ExpireOverdueAppointmentsAsync(DateTime now);
+        Task<int> AutoConfirmPendingAppointmentsAsync(DateTime now, TimeSpan minAge);
+        Task<Appointment?> GetActiveAppointmentByUserId(int userId);
     }
 }

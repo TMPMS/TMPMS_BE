@@ -15,7 +15,15 @@ namespace TMPMS.Services
             _appointmentRepository = appointmentRepository;
         }
 
-        public async Task<bool> BookAppointment(int userId, AppointmentCreateDTO dto)
+        public async Task ExpireOverdueAppointmentsAsync()
+        {
+            // AppointmentDate lưu theo giờ địa phương (wall-clock) => so với DateTime.Now.
+            // CreatedAt lưu theo UTC => so với DateTime.UtcNow.
+            await _appointmentRepository.ExpireOverdueAppointmentsAsync(DateTime.Now);
+            await _appointmentRepository.AutoConfirmPendingAppointmentsAsync(DateTime.UtcNow, TimeSpan.FromMinutes(5));
+        }
+
+        public async Task<AppointmentBookingResult> BookAppointment(int userId, AppointmentCreateDTO dto)
         {
             int targetUserId = (dto.PatientId.HasValue && dto.PatientId.Value > 0) ? dto.PatientId.Value : userId;
             if (targetUserId <= 0) targetUserId = 1;
@@ -38,17 +46,31 @@ namespace TMPMS.Services
                 appointmentDate = appointmentDate.ToLocalTime();
             appointmentDate = DateTime.SpecifyKind(appointmentDate, DateTimeKind.Local);
 
-            if (appointmentDate < DateTime.Now.AddDays(-1))
-                throw new Exception("Appointment date cannot be in the past.");
+            if (appointmentDate < DateTime.Now)
+                throw new Exception("Thời gian hẹn khám phải ở tương lai. Vui lòng chọn khung giờ chưa trôi qua.");
+            if (appointmentDate > DateTime.Now.AddDays(14))
+                throw new Exception("Chỉ được đặt lịch hẹn trước tối đa 14 ngày.");
+
+            // Làm mới trạng thái trước khi kiểm tra rule "1 lịch hoạt động":
+            // các lịch quá hạn sẽ bị Expired / Pending quá 5 phút sẽ tự Confirmed.
+            await ExpireOverdueAppointmentsAsync();
+
+            // Quy tắc nghiệp vụ: mỗi user chỉ được có tối đa 1 lịch hẹn đang hoạt động
+            // (Status = Pending | Confirmed và chưa quá hạn). Nếu có lịch đang chặn,
+            // trả thông tin chi tiết lịch đó để FE hiển thị cụ thể.
+            var active = await _appointmentRepository.GetActiveAppointmentByUserId(targetUserId);
+            if (active != null)
+            {
+                return new AppointmentBookingResult
+                {
+                    Success = false,
+                    BlockingAppointment = ToDTO(active)
+                };
+            }
 
             // Chống đặt trùng: không cho 2 lịch hẹn cùng bác sĩ tại cùng thời điểm (trừ lịch đã hủy)
             if (targetStaffId != null && await _appointmentRepository.IsAppointmentExist(targetStaffId.Value, appointmentDate))
                 throw new Exception("Bác sĩ đã có lịch hẹn vào thời điểm này. Vui lòng chọn thời gian khác.");
-
-            // Chống spam: mỗi người chỉ được có 1 lịch hẹn đang chờ/đã xác nhận trong vòng 30 phút qua
-            var recentWindow = DateTime.UtcNow.AddMinutes(-30);
-            if (await _appointmentRepository.HasRecentActiveAppointment(targetUserId, recentWindow))
-                throw new Exception("Bạn vừa đặt lịch hẹn gần đây. Vui lòng chờ xác nhận lịch hẹn hiện tại trước khi đặt lịch mới.");
 
             Appointment appointment = new Appointment
             {
@@ -61,45 +83,22 @@ namespace TMPMS.Services
                 CreatedAt = DateTime.UtcNow
             };
 
-            return await _appointmentRepository.Add(appointment);
+            bool created = await _appointmentRepository.Add(appointment);
+            return new AppointmentBookingResult { Success = created };
         }
 
         public async Task<List<AppointmentDTO>> GetAppointments(int userId)
         {
+            await ExpireOverdueAppointmentsAsync();
             var appointments = await _appointmentRepository.GetByUserId(userId);
-            return appointments.Select(a => new AppointmentDTO
-            {
-                Id = a.Id,
-                PatientId = a.UserId,
-                PatientName = a.User?.FullName ?? a.User?.UserName ?? "Bệnh nhân",
-                PatientPhone = a.User?.PhoneNumber,
-                DoctorId = a.StaffId,
-                DoctorName = a.Staff != null ? (a.Staff.FullName ?? a.Staff.UserName) : "Bác sĩ phụ trách",
-                AppointmentDate = a.AppointmentDate,
-                Reason = a.Reason,
-                Status = a.Status == "Pending" ? "Scheduled" : a.Status,
-                Notes = a.Note,
-                CreatedAt = a.CreatedAt
-            }).ToList();
+            return appointments.Select(ToDTO).ToList();
         }
 
         public async Task<List<AppointmentDTO>> GetAllAppointments()
         {
+            await ExpireOverdueAppointmentsAsync();
             var appointments = await _appointmentRepository.GetAll();
-            return appointments.Select(a => new AppointmentDTO
-            {
-                Id = a.Id,
-                PatientId = a.UserId,
-                PatientName = a.User?.FullName ?? a.User?.UserName ?? "Bệnh nhân",
-                PatientPhone = a.User?.PhoneNumber,
-                DoctorId = a.StaffId,
-                DoctorName = a.Staff != null ? (a.Staff.FullName ?? a.Staff.UserName) : "Bác sĩ phụ trách",
-                AppointmentDate = a.AppointmentDate,
-                Reason = a.Reason,
-                Status = a.Status == "Pending" ? "Scheduled" : a.Status,
-                Notes = a.Note,
-                CreatedAt = a.CreatedAt
-            }).ToList();
+            return appointments.Select(ToDTO).ToList();
         }
 
         public async Task<bool> UpdateAppointment(int id, AppointmentUpdateDTO dto)
@@ -130,10 +129,12 @@ namespace TMPMS.Services
             return await _appointmentRepository.Delete(id);
         }
 
-        public async Task<bool> CancelAppointment(int id)
+        public async Task<bool> CancelAppointment(int id, int currentUserId, bool isStaff)
         {
             var appointment = await _appointmentRepository.GetById(id);
             if (appointment == null) throw new Exception("Appointment not found.");
+            if (!isStaff && appointment.UserId != currentUserId)
+                throw new Exception("Bạn không có quyền hủy lịch hẹn này.");
             appointment.Status = "Cancelled";
             return await _appointmentRepository.Update(appointment);
         }
@@ -152,6 +153,24 @@ namespace TMPMS.Services
             if (appointment == null) throw new Exception("Appointment not found.");
             appointment.Status = "Completed";
             return await _appointmentRepository.Update(appointment);
+        }
+
+        private static AppointmentDTO ToDTO(Appointment a)
+        {
+            return new AppointmentDTO
+            {
+                Id = a.Id,
+                PatientId = a.UserId,
+                PatientName = a.User?.FullName ?? a.User?.UserName ?? "Bệnh nhân",
+                PatientPhone = a.User?.PhoneNumber,
+                DoctorId = a.StaffId,
+                DoctorName = a.Staff != null ? (a.Staff.FullName ?? a.Staff.UserName) : "Bác sĩ phụ trách",
+                AppointmentDate = a.AppointmentDate,
+                Reason = a.Reason,
+                Status = a.Status == "Pending" ? "Scheduled" : a.Status,
+                Notes = a.Note,
+                CreatedAt = a.CreatedAt
+            };
         }
     }
 }
