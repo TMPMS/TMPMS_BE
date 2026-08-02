@@ -82,7 +82,7 @@ namespace TMPMS.Controllers
 
             if (existing != null)
             {
-                existing.Quantity = input.Quantity;
+                existing.Quantity += input.Quantity;
                 await _context.SaveChangesAsync();
                 return Ok(existing);
             }

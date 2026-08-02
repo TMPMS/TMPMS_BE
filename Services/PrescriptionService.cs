@@ -61,7 +61,8 @@ namespace TMPMS.Services
                     Hospital = string.IsNullOrWhiteSpace(dto.Hospital) ? "Phòng khám Đông Y TMPMS" : dto.Hospital,
                     PrescriptionDate = dto.PrescriptionDate == default ? DateTime.Now : dto.PrescriptionDate,
                     ImageUrl = dto.ImageUrl ?? "",
-                    Status = "Approved",
+                    AppointmentId = dto.AppointmentId,
+                    Status = dto.Items != null && dto.Items.Any() ? "Approved" : "Pending",
                     PrescriptionItems = dto.Items.Select(i => new PrescriptionItem
                     {
                         MedicineId = i.MedicineId,
@@ -71,6 +72,17 @@ namespace TMPMS.Services
 
                 _context.Prescriptions.Add(entity);
                 await _context.SaveChangesAsync();
+
+                // 2.1 Đồng bộ trạng thái lịch hẹn: lịch hẹn liên kết được hoàn tất việc kê đơn
+                if (dto.AppointmentId.HasValue)
+                {
+                    var appointment = await _context.Appointments.FindAsync(dto.AppointmentId.Value);
+                    if (appointment != null && appointment.Status != "Cancelled")
+                    {
+                        appointment.Status = "Completed";
+                        _context.Appointments.Update(appointment);
+                    }
+                }
 
                 // 3. Trừ kho tự động & ghi nhận giao dịch xuất kho qua InventoryService
                 var defaultWarehouse = await _context.Warehouses.FirstOrDefaultAsync();
@@ -166,6 +178,7 @@ namespace TMPMS.Services
                 DoctorId = p.DoctorId,
                 DoctorName = p.DoctorName ?? p.Doctor?.UserName,
                 Hospital = p.Hospital,
+                AppointmentId = p.AppointmentId,
                 PrescriptionDate = p.PrescriptionDate,
                 ImageUrl = p.ImageUrl,
                 Status = p.Status,
