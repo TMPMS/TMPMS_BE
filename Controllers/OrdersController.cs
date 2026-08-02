@@ -8,6 +8,7 @@ using TMPMS.Data;
 namespace TMPMS.Controllers
 {
     [ApiController]
+    [Authorize]
     public class OrdersController : ControllerBase
     {
         private readonly TMPMSDbContext _context;
@@ -35,9 +36,38 @@ namespace TMPMS.Controllers
             public decimal ShippingFee { get; set; }
         }
 
+        private int? GetUserId()
+        {
+            var claim = User.FindFirst(ClaimTypes.NameIdentifier);
+            return claim != null && int.TryParse(claim.Value, out var id) ? id : (int?)null;
+        }
+
+        private bool CanProxyOrder()
+        {
+            return User.IsInRole("Admin") || User.IsInRole("Staff") || User.IsInRole("Pharmacy");
+        }
+
         [HttpPost("orders")]
         public async Task<IActionResult> CreateOrder([FromBody] CheckoutRequest request)
         {
+            var currentUserId = GetUserId();
+            if (currentUserId == null) return Unauthorized();
+
+            // Người dùng thường chỉ được tạo đơn cho CHÍNH MÌNH.
+            // Admin/Staff/Pharmacy được phép tạo đơn thay mặt khách hàng (proxy).
+            if (!CanProxyOrder())
+            {
+                if (request.UserId != currentUserId.Value)
+                {
+                    return Forbid();
+                }
+                request.UserId = currentUserId.Value;
+            }
+            else if (request.UserId <= 0)
+            {
+                request.UserId = currentUserId.Value;
+            }
+
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
@@ -93,26 +123,23 @@ namespace TMPMS.Controllers
                     _context.OrderItems.Add(orderItem);
                 }
 
-                // 3. Add payment
-                // Thanh toán online (MOMO/ZALOPAY) đã được xác nhận bởi luồng thanh toán -> tự động đánh dấu đã thu
-                bool isOnlinePaid = request.PaymentMethod == "MOMO" || request.PaymentMethod == "ZALOPAY";
+                // 4. Add payment
+                // KHÔNG tự đánh dấu "Paid" khi tạo đơn dựa trên chuỗi PaymentMethod.
+                // Mọi đơn luôn khởi tạo ở trạng thái chờ thanh toán (Unpaid/Pending);
+                // chỉ được chuyển sang Paid qua cổng thanh toán THẬT (PayOS webhook/verify)
+                // hoặc do Admin/Accountant đối soát qua PUT /api/Payment/{id}/status.
                 var payment = new Payment
                 {
                     OrderId = order.Id,
                     Method = request.PaymentMethod,
                     TransactionCode = "TXN-" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                     Amount = request.TotalAmount,
-                    Status = isOnlinePaid ? "Success" : "Pending",
-                    PaidAt = isOnlinePaid ? DateTime.Now : (DateTime?)null
+                    Status = "Pending",
+                    PaidAt = null
                 };
                 _context.Payments.Add(payment);
 
-                if (isOnlinePaid)
-                {
-                    order.PaymentStatus = "Paid";
-                }
-
-                // 4. Clear cart items
+                // 5. Clear cart items
                 var cart = await _context.Carts.FirstOrDefaultAsync(c => c.UserId == request.UserId);
                 if (cart != null)
                 {
@@ -135,6 +162,15 @@ namespace TMPMS.Controllers
         [HttpGet("user-orders/{userId}")]
         public async Task<IActionResult> GetUserOrders(int userId)
         {
+            var currentUserId = GetUserId();
+            if (currentUserId == null) return Unauthorized();
+
+            // Admin/Staff/Pharmacy được xem đơn của mọi user; user thường chỉ xem đơn của mình.
+            if (!CanProxyOrder() && userId != currentUserId.Value)
+            {
+                return Forbid();
+            }
+
             var orders = await _context.Orders
                 .Where(o => o.UserId == userId)
                 .OrderByDescending(o => o.CreatedAt)
@@ -173,6 +209,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpGet("admin/orders")]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> GetAdminOrders()
         {
             var orders = await _context.Orders
@@ -220,6 +257,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPatch("admin/orders/{id}")]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> UpdateOrderStatus(int id, [FromBody] UpdateStatusRequest request)
         {
             var order = await _context.Orders.FindAsync(id);
