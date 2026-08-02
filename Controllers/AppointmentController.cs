@@ -19,6 +19,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPost("book")]
+        [Authorize]
         public async Task<IActionResult> BookAppointment(AppointmentCreateDTO dto)
         {
             try
@@ -46,6 +47,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpGet("all")]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> GetAllAppointments()
         {
             var appointments = await _appointmentService.GetAllAppointments();
@@ -53,6 +55,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize]
         public async Task<IActionResult> UpdateAppointment(int id, AppointmentUpdateDTO dto)
         {
             try
@@ -68,6 +71,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize]
         public async Task<IActionResult> DeleteAppointment(int id)
         {
             try
@@ -83,6 +87,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPut("cancel/{id}")]
+        [Authorize]
         public async Task<IActionResult> CancelAppointment(int id)
         {
             try
@@ -97,6 +102,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPut("approve/{id}")]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> ApproveAppointment(int id)
         {
             try
@@ -111,6 +117,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPut("complete/{id}")]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> CompleteAppointment(int id)
         {
             try

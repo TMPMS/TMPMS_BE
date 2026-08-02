@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using BusinessObjects;
 using TMPMS.Data;
@@ -126,6 +127,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> AddMedicine([FromBody] Medicine medicine)
         {
             medicine.CreatedAt = DateTime.UtcNow;
@@ -143,6 +145,7 @@ namespace TMPMS.Controllers
         [HttpPatch("{id}")]
         [HttpPut]
         [HttpPatch]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> UpdateMedicine(
             [FromRoute] int? id,
             [FromQuery(Name = "id")] string? idQuery,
@@ -193,6 +196,7 @@ namespace TMPMS.Controllers
 
         [HttpDelete("{id}")]
         [HttpDelete]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> DeleteMedicine(
             [FromRoute] int? id,
             [FromQuery(Name = "id")] string? idQuery)

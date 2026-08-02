@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using PayOS;
 using PayOS.Models;
 using PayOS.Models.Webhooks;
 using PayOS.Models.V2.PaymentRequests;
 using TMPMS.Data;
+using System.Security.Claims;
 
 namespace TMPMS.Controllers
 {
@@ -44,6 +46,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPost("payment-link")]
+        [Authorize]
         public async Task<IActionResult> CreatePaymentLink([FromBody] CreatePaymentLinkInput input)
         {
             if (!Uri.TryCreate(input.ReturnUrl, UriKind.Absolute, out _) ||
@@ -57,6 +60,11 @@ namespace TMPMS.Controllers
                 .FirstOrDefaultAsync(o => o.Id == input.OrderId);
 
             if (order == null) return NotFound(new { error = "Không tìm thấy đơn hàng." });
+
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null) return Unauthorized();
+            if (!CanProxy() && order.UserId != currentUserId.Value) return Forbid();
+
             if (order.PaymentStatus == "Paid") return BadRequest(new { error = "Đơn hàng đã được thanh toán." });
             if (order.TotalAmount <= 0 || order.TotalAmount > int.MaxValue)
                 return BadRequest(new { error = "Số tiền thanh toán không hợp lệ." });
@@ -132,6 +140,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPost("verify/{orderId:int}")]
+        [Authorize]
         public async Task<IActionResult> VerifyPayment(int orderId)
         {
             var order = await _context.Orders
@@ -139,6 +148,10 @@ namespace TMPMS.Controllers
                 .FirstOrDefaultAsync(o => o.Id == orderId);
 
             if (order == null) return NotFound(new { error = "Không tìm thấy đơn hàng." });
+
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null) return Unauthorized();
+            if (!CanProxy() && order.UserId != currentUserId.Value) return Forbid();
 
             try
             {
@@ -176,6 +189,17 @@ namespace TMPMS.Controllers
             {
                 return BadRequest(new { error = $"Không thể kiểm tra giao dịch PayOS: {ex.Message}" });
             }
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return int.TryParse(claim, out var id) ? id : (int?)null;
+        }
+
+        private bool CanProxy()
+        {
+            return User.IsInRole("Admin") || User.IsInRole("Staff") || User.IsInRole("Pharmacy");
         }
     }
 }

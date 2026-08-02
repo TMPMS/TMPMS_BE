@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using BusinessObjects;
 using TMPMS.Data;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Security.Claims;
 
 namespace TMPMS.Controllers
 {
@@ -39,8 +41,13 @@ namespace TMPMS.Controllers
         }
 
         [HttpGet("check-eligibility")]
+        [Authorize]
         public async Task<IActionResult> CheckEligibility([FromQuery] int medicineId, [FromQuery] int userId)
         {
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null) return Unauthorized();
+            if (!CanProxy() && userId != currentUserId.Value) return Forbid();
+
             var hasPurchased = await _context.Orders
                 .Where(o => o.UserId == userId)
                 .AnyAsync(o => o.OrderItems.Any(oi => oi.MedicineId == medicineId));
@@ -57,6 +64,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPost]
+        [Authorize]
         public async Task<IActionResult> CreateReview([FromBody] CreateReviewInput input)
         {
             if (input.Rating < 1 || input.Rating > 5)
@@ -64,8 +72,13 @@ namespace TMPMS.Controllers
                 return BadRequest("Đánh giá phải từ 1 đến 5 sao.");
             }
 
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null) return Unauthorized();
+            if (!CanProxy() && input.UserId != currentUserId.Value) return Forbid();
+            var userId = CanProxy() && input.UserId != 0 ? input.UserId : currentUserId.Value;
+
             var hasPurchased = await _context.Orders
-                .Where(o => o.UserId == input.UserId)
+                .Where(o => o.UserId == userId)
                 .AnyAsync(o => o.OrderItems.Any(oi => oi.MedicineId == input.MedicineId));
 
             if (!hasPurchased)
@@ -75,7 +88,7 @@ namespace TMPMS.Controllers
 
             var review = new Review
             {
-                UserId = input.UserId,
+                UserId = userId,
                 MedicineId = input.MedicineId,
                 Rating = input.Rating,
                 Comment = input.Comment,
@@ -93,6 +106,17 @@ namespace TMPMS.Controllers
                 review.Comment,
                 review.CreatedAt
             });
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return int.TryParse(claim, out var id) ? id : (int?)null;
+        }
+
+        private bool CanProxy()
+        {
+            return User.IsInRole("Admin") || User.IsInRole("Staff") || User.IsInRole("Pharmacy");
         }
     }
 }

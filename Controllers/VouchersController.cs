@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using BusinessObjects;
 using TMPMS.Data;
@@ -31,6 +32,7 @@ namespace TMPMS.Controllers
 
         // GET /admin/vouchers
         [HttpGet("admin/vouchers")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetAdminVouchers()
         {
             var vouchers = await _context.Vouchers
@@ -55,6 +57,7 @@ namespace TMPMS.Controllers
 
         // POST /admin/vouchers
         [HttpPost("admin/vouchers")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateVoucher([FromBody] CreateVoucherInput input)
         {
             var voucher = new Voucher
@@ -93,6 +96,7 @@ namespace TMPMS.Controllers
 
         // PATCH /admin/vouchers/{id}
         [HttpPatch("admin/vouchers/{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateVoucher(int id, [FromBody] UpdateVoucherInput input)
         {
             var voucher = await _context.Vouchers.FindAsync(id);
@@ -115,6 +119,7 @@ namespace TMPMS.Controllers
 
         // DELETE /admin/vouchers/{id}
         [HttpDelete("admin/vouchers/{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteVoucher(int id)
         {
             var voucher = await _context.Vouchers.FindAsync(id);

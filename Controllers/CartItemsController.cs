@@ -1,14 +1,17 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using BusinessObjects;
 using TMPMS.Data;
 using System;
+using System.Security.Claims;
 using System.Text.Json.Serialization;
 
 namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("cart_items")]
+    [Authorize]
     public class CartItemsController : ControllerBase
     {
         private readonly TMPMSDbContext _context;
@@ -54,7 +57,8 @@ namespace TMPMS.Controllers
             var cleanId = cartIdStr.Replace("eq.", "");
             if (!int.TryParse(cleanId, out int cartId)) return BadRequest("Invalid cart_id format");
 
-            var cart = await _context.Carts.FirstOrDefaultAsync(c => c.Id == cartId);
+            var cart = await GetOwnedCartAsync(cartId);
+            if (cart == null) return Forbid();
 
             var items = await _context.CartItems
                 .Where(ci => ci.CartId == cartId)
@@ -92,10 +96,12 @@ namespace TMPMS.Controllers
                 return BadRequest(new { error = "Vị thuốc này chưa có giá bán, vui lòng liên hệ Dược sĩ để được tư vấn." });
             }
 
+            var cart = await GetOwnedCartAsync(input.CartId);
+            if (cart == null) return Forbid();
+
             if (medicine.RequiresPrescription)
             {
-                var cart = await _context.Carts.FirstOrDefaultAsync(c => c.Id == input.CartId);
-                var cartUserId = cart?.UserId ?? 0;
+                var cartUserId = cart.UserId;
                 var (allowed, maxAllowed) = await GetRxAllowanceAsync(cartUserId, input.MedicineId);
                 if (!allowed)
                 {
@@ -145,13 +151,15 @@ namespace TMPMS.Controllers
             var item = await _context.CartItems.FindAsync(itemId);
             if (item == null) return NotFound("Cart item not found");
 
+            var cart = await GetOwnedCartAsync(item.CartId);
+            if (cart == null) return Forbid();
+
             if (item.Quantity != input.Quantity)
             {
                 var medicine = await _context.Medicines.FindAsync(item.MedicineId);
                 if (medicine != null && medicine.RequiresPrescription)
                 {
-                    var cart = await _context.Carts.FirstOrDefaultAsync(c => c.Id == item.CartId);
-                    var cartUserId = cart?.UserId ?? 0;
+                    var cartUserId = cart.UserId;
                     var (allowed, maxAllowed) = await GetRxAllowanceAsync(cartUserId, item.MedicineId);
                     if (!allowed)
                     {
@@ -179,6 +187,9 @@ namespace TMPMS.Controllers
             var item = await _context.CartItems.FindAsync(itemId);
             if (item == null) return NotFound();
 
+            var cart = await GetOwnedCartAsync(item.CartId);
+            if (cart == null) return Forbid();
+
             _context.CartItems.Remove(item);
             await _context.SaveChangesAsync();
             return Ok(new { message = "Deleted" });
@@ -188,6 +199,10 @@ namespace TMPMS.Controllers
         [Route("~/rpc/sync_cart_items")]
         public async Task<IActionResult> SyncCartItems([FromBody] SyncInput input)
         {
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null) return Unauthorized();
+            if (!CanProxy() && input.p_user_id != currentUserId.Value) return Forbid();
+
             var cart = await _context.Carts.FirstOrDefaultAsync(c => c.UserId == input.p_user_id);
             if (cart == null)
             {
@@ -256,6 +271,27 @@ namespace TMPMS.Controllers
                 .SumAsync(oi => oi.Quantity);
 
             return (true, Math.Max(0, prescribed - purchased));
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return int.TryParse(claim, out var id) ? id : (int?)null;
+        }
+
+        private bool CanProxy()
+        {
+            return User.IsInRole("Admin") || User.IsInRole("Staff") || User.IsInRole("Pharmacy");
+        }
+
+        private async Task<Cart?> GetOwnedCartAsync(int cartId)
+        {
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null) return null;
+            var cart = await _context.Carts.FirstOrDefaultAsync(c => c.Id == cartId);
+            if (cart == null) return null;
+            if (!CanProxy() && cart.UserId != currentUserId.Value) return null;
+            return cart;
         }
     }
 }

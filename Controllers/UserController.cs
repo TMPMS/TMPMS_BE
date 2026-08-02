@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using TMPMS.DTOs;
 using TMPMS.DTOs.TMPMS_BE.DTOs;
 using TMPMS.Services.Interfaces;
@@ -8,6 +9,7 @@ namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("api/users")]
+    [Authorize(Roles = "Admin")]
     public class UserController : ControllerBase
     {
         private readonly IUserService _userService;
