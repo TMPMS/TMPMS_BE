@@ -1,4 +1,4 @@
-﻿using BusinessObjects;
+using BusinessObjects;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -46,10 +46,29 @@ namespace TMPMS.Data
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<Appointment> Appointments { get; set; }
+        public DbSet<Voucher> Vouchers { get; set; }
+        public DbSet<SymptomQuestion> SymptomQuestions { get; set; }
+        public DbSet<AnswerOption> AnswerOptions { get; set; }
+        public DbSet<SyndromeType> SyndromeTypes { get; set; }
+        public DbSet<AnswerScoreMapping> AnswerScoreMappings { get; set; }
+        public DbSet<DiagnosisAnswer> DiagnosisAnswers { get; set; }
+        public DbSet<PharmacyChatSession> PharmacyChatSessions { get; set; }
+        public DbSet<PharmacyChatMessage> PharmacyChatMessages { get; set; }
+        public DbSet<PharmacyStore> Stores { get; set; }
+
+        public DbSet<HealthQuiz> HealthQuizzes { get; set; }
+        public DbSet<QuizQuestion> QuizQuestions { get; set; }
+        public DbSet<QuizAnswerOption> QuizAnswerOptions { get; set; }
+        public DbSet<QuizResultBand> QuizResultBands { get; set; }
+        public DbSet<QuizSession> QuizSessions { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<HealthQuiz>()
+                .HasIndex(q => q.Code)
+                .IsUnique();
 
             modelBuilder.Entity<RefreshToken>()
                 .HasOne(rt => rt.User)
@@ -145,6 +164,48 @@ namespace TMPMS.Data
                 .HasForeignKey(d => d.DoctorId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<Diagnosis>()
+                .HasOne(d => d.PrimarySyndrome)
+                .WithMany()
+                .HasForeignKey(d => d.PrimarySyndromeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Diagnosis>()
+                .HasOne(d => d.SecondarySyndrome)
+                .WithMany()
+                .HasForeignKey(d => d.SecondarySyndromeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<DiagnosisAnswer>()
+                .HasOne(da => da.Diagnosis)
+                .WithMany(d => d.DiagnosisAnswers)
+                .HasForeignKey(da => da.DiagnosisId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<DiagnosisAnswer>()
+                .HasOne(da => da.Question)
+                .WithMany()
+                .HasForeignKey(da => da.QuestionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<DiagnosisAnswer>()
+                .HasOne(da => da.AnswerOption)
+                .WithMany()
+                .HasForeignKey(da => da.AnswerOptionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<AnswerScoreMapping>()
+                .HasOne(asm => asm.AnswerOption)
+                .WithMany(ao => ao.ScoreMappings)
+                .HasForeignKey(asm => asm.AnswerOptionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<AnswerScoreMapping>()
+                .HasOne(asm => asm.SyndromeType)
+                .WithMany()
+                .HasForeignKey(asm => asm.SyndromeTypeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             modelBuilder.Entity<HerbalMedicineInfo>()
                 .HasOne(h => h.Medicine)
                 .WithOne()
@@ -232,6 +293,31 @@ namespace TMPMS.Data
                 .WithMany()
                 .HasForeignKey(sm => sm.MedicineId)
                 .OnDelete(DeleteBehavior.NoAction);
+
+            // Pharmacy Chat relationships
+            modelBuilder.Entity<PharmacyChatSession>()
+                .HasOne(s => s.User)
+                .WithMany()
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<PharmacyChatSession>()
+                .HasOne(s => s.AssignedPharmacist)
+                .WithMany()
+                .HasForeignKey(s => s.AssignedPharmacistId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<PharmacyChatMessage>()
+                .HasOne(m => m.Session)
+                .WithMany(s => s.Messages)
+                .HasForeignKey(m => m.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PharmacyChatMessage>()
+                .HasOne(m => m.Sender)
+                .WithMany()
+                .HasForeignKey(m => m.SenderId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

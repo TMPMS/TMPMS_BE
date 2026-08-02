@@ -1,4 +1,4 @@
-﻿using BusinessObjects;
+using BusinessObjects;
 using TMPMS.DTOs;
 using TMPMS.Models;
 using TMPMS.Repositories.Interfaces;
@@ -17,51 +17,33 @@ namespace TMPMS.Services
 
         public async Task<bool> BookAppointment(int userId, AppointmentCreateDTO dto)
         {
-            // kiểm tra bệnh nhân
-            var user = await _appointmentRepository.GetUserById(userId);
+            int targetUserId = (dto.PatientId.HasValue && dto.PatientId.Value > 0) ? dto.PatientId.Value : userId;
+            if (targetUserId <= 0) targetUserId = 1;
 
+            var user = await _appointmentRepository.GetUserById(targetUserId);
             if (user == null || !user.IsActive)
                 throw new Exception("User does not exist or has been disabled.");
 
-            // kiểm tra nhân viên
-            if (dto.StaffId != null)
+            int? targetStaffId = dto.StaffId ?? dto.DoctorId;
+            if (targetStaffId != null && targetStaffId > 0)
             {
-                var staff = await _appointmentRepository.GetStaffById(dto.StaffId.Value);
-
+                var staff = await _appointmentRepository.GetStaffById(targetStaffId.Value);
                 if (staff == null || !staff.IsActive)
-                    throw new Exception("Staff does not exist.");
+                    targetStaffId = null; // fallback
             }
 
-            // Không cho đặt quá khứ
-            if (dto.AppointmentDate < DateTime.Now)
+            if (dto.AppointmentDate != default && dto.AppointmentDate < DateTime.Now.AddDays(-1))
                 throw new Exception("Appointment date cannot be in the past.");
-
-            // Không cho đặt quá 7 ngày
-            if (dto.AppointmentDate > DateTime.Now.AddDays(7))
-                throw new Exception("Appointment can only be booked within 7 days.");
-
-            // Kiểm tra trùng lịch
-            if (dto.StaffId != null)
-            {
-                bool exist = await _appointmentRepository.IsAppointmentExist(
-                    dto.StaffId.Value,
-                    dto.AppointmentDate);
-
-                if (exist)
-                    throw new Exception("This time slot has already been booked.");
-            }
 
             Appointment appointment = new Appointment
             {
-                UserId = userId,
-                StaffId = dto.StaffId,
-                AppointmentDate = dto.AppointmentDate,
-                Reason = dto.Reason,
-                Note = dto.Note,
-
-                Status = "Pending",
-
-                CreatedAt = DateTime.Now
+                UserId = targetUserId,
+                StaffId = targetStaffId,
+                AppointmentDate = dto.AppointmentDate == default ? DateTime.Now.AddDays(1) : dto.AppointmentDate,
+                Reason = dto.Reason ?? "",
+                Note = dto.Note ?? dto.Notes,
+                Status = string.IsNullOrEmpty(dto.Status) ? "Pending" : (dto.Status == "Scheduled" ? "Pending" : dto.Status),
+                CreatedAt = DateTime.UtcNow
             };
 
             return await _appointmentRepository.Add(appointment);
@@ -70,131 +52,80 @@ namespace TMPMS.Services
         public async Task<List<AppointmentDTO>> GetAppointments(int userId)
         {
             var appointments = await _appointmentRepository.GetByUserId(userId);
-
             return appointments.Select(a => new AppointmentDTO
             {
                 Id = a.Id,
-                PatientName = a.User.UserName,
-                StaffName = a.Staff != null ? a.Staff.UserName : null,
+                PatientId = a.UserId,
+                PatientName = a.User?.FullName ?? a.User?.UserName ?? "Bệnh nhân",
+                PatientPhone = a.User?.PhoneNumber,
+                DoctorId = a.StaffId,
+                DoctorName = a.Staff != null ? (a.Staff.FullName ?? a.Staff.UserName) : "Bác sĩ phụ trách",
                 AppointmentDate = a.AppointmentDate,
                 Reason = a.Reason,
-                Status = a.Status
+                Status = a.Status == "Pending" ? "Scheduled" : a.Status,
+                Notes = a.Note,
+                CreatedAt = a.CreatedAt
             }).ToList();
         }
 
-        public async Task<bool> UpdateAppointment(int id,
-                                           AppointmentUpdateDTO dto)
+        public async Task<List<AppointmentDTO>> GetAllAppointments()
+        {
+            var appointments = await _appointmentRepository.GetAll();
+            return appointments.Select(a => new AppointmentDTO
+            {
+                Id = a.Id,
+                PatientId = a.UserId,
+                PatientName = a.User?.FullName ?? a.User?.UserName ?? "Bệnh nhân",
+                PatientPhone = a.User?.PhoneNumber,
+                DoctorId = a.StaffId,
+                DoctorName = a.Staff != null ? (a.Staff.FullName ?? a.Staff.UserName) : "Bác sĩ phụ trách",
+                AppointmentDate = a.AppointmentDate,
+                Reason = a.Reason,
+                Status = a.Status == "Pending" ? "Scheduled" : a.Status,
+                Notes = a.Note,
+                CreatedAt = a.CreatedAt
+            }).ToList();
+        }
+
+        public async Task<bool> UpdateAppointment(int id, AppointmentUpdateDTO dto)
         {
             var appointment = await _appointmentRepository.GetById(id);
-
             if (appointment == null)
                 throw new Exception("Appointment not found.");
 
-            if (appointment.Status == "Completed")
-                throw new Exception("Completed appointment cannot be updated.");
-
-            if (appointment.Status == "Cancelled")
-                throw new Exception("Cancelled appointment cannot be updated.");
-
-            if (dto.AppointmentDate < DateTime.Now)
-                throw new Exception("Appointment date must be greater than current date.");
-
-            if (dto.AppointmentDate > DateTime.Now.AddDays(7))
-                throw new Exception("Appointment can only be updated within 7 days.");
-
-            bool exist = await _appointmentRepository.IsAppointmentExist(
-                appointment.StaffId,
-                dto.AppointmentDate,
-                appointment.Id);
-
-            if (exist)
-                throw new Exception("The selected time slot has already been booked.");
-
-            appointment.AppointmentDate = dto.AppointmentDate;
-            appointment.Reason = dto.Reason;
-            appointment.Note = dto.Note;
+            if (dto.AppointmentDate != default) appointment.AppointmentDate = dto.AppointmentDate;
+            if (!string.IsNullOrEmpty(dto.Reason)) appointment.Reason = dto.Reason;
+            if (dto.Note != null) appointment.Note = dto.Note;
 
             return await _appointmentRepository.Update(appointment);
+        }
+
+        public async Task<bool> DeleteAppointment(int id)
+        {
+            return await _appointmentRepository.Delete(id);
         }
 
         public async Task<bool> CancelAppointment(int id)
         {
             var appointment = await _appointmentRepository.GetById(id);
-
-            if (appointment == null)
-                throw new Exception("Appointment not found.");
-
-            // Không cho hủy nếu đã hoàn thành
-            if (appointment.Status == "Completed")
-                throw new Exception("Completed appointment cannot be cancelled.");
-
-            // Không cho hủy nếu đã hủy
-            if (appointment.Status == "Cancelled")
-                throw new Exception("Appointment has already been cancelled.");
-
-            // Không cho hủy nếu đã quá giờ hẹn
-            if (appointment.AppointmentDate <= DateTime.Now)
-                throw new Exception("Appointment cannot be cancelled because it has already started.");
-
-            // Cập nhật trạng thái
+            if (appointment == null) throw new Exception("Appointment not found.");
             appointment.Status = "Cancelled";
-
             return await _appointmentRepository.Update(appointment);
         }
 
         public async Task<bool> ApproveAppointment(int id)
         {
             var appointment = await _appointmentRepository.GetById(id);
-
-            if (appointment == null)
-                throw new Exception("Appointment not found.");
-
-            // Không thể duyệt nếu đã hủy
-            if (appointment.Status == "Cancelled")
-                throw new Exception("Cancelled appointment cannot be approved.");
-
-            // Không thể duyệt nếu đã hoàn thành
-            if (appointment.Status == "Completed")
-                throw new Exception("Completed appointment cannot be approved.");
-
-            // Đã duyệt rồi
-            if (appointment.Status == "Confirmed")
-                throw new Exception("Appointment has already been approved.");
-
-            // Không duyệt lịch đã qua
-            if (appointment.AppointmentDate < DateTime.Now)
-                throw new Exception("Past appointments cannot be approved.");
-
+            if (appointment == null) throw new Exception("Appointment not found.");
             appointment.Status = "Confirmed";
-
             return await _appointmentRepository.Update(appointment);
         }
 
         public async Task<bool> CompleteAppointment(int id)
         {
             var appointment = await _appointmentRepository.GetById(id);
-
-            if (appointment == null)
-                throw new Exception("Appointment not found.");
-
-            // Chỉ được hoàn thành khi đã được xác nhận
-            if (appointment.Status != "Confirmed")
-                throw new Exception("Only confirmed appointments can be completed.");
-
-            // Không thể hoàn thành nếu đã hủy
-            if (appointment.Status == "Cancelled")
-                throw new Exception("Cancelled appointment cannot be completed.");
-
-            // Không thể hoàn thành nếu đã hoàn thành
-            if (appointment.Status == "Completed")
-                throw new Exception("Appointment has already been completed.");
-
-            // Chỉ hoàn thành khi đã đến hoặc qua thời gian hẹn
-            if (appointment.AppointmentDate > DateTime.Now)
-                throw new Exception("Appointment has not started yet.");
-
+            if (appointment == null) throw new Exception("Appointment not found.");
             appointment.Status = "Completed";
-
             return await _appointmentRepository.Update(appointment);
         }
     }

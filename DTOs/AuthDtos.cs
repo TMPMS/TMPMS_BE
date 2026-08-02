@@ -1,4 +1,4 @@
-﻿namespace TMPMS.DTOs
+namespace TMPMS.DTOs
 {
     public class RegisterRequestDTO
     {
@@ -13,8 +13,19 @@
 
     public class LoginRequestDTO
     {
-        public string Email { get; set; }
+        public string UserName { get; set; }
         public string Password { get; set; }
+    }
+
+    public class OtpLoginRequestDTO
+    {
+        public string Phone { get; set; }
+        public string Code { get; set; }
+    }
+
+    public class SendOtpRequestDTO
+    {
+        public string Phone { get; set; }
     }
 
     public class RefreshTokenRequestDTO
@@ -59,5 +70,10 @@
         public bool IsActive { get; set; }
         public DateTime CreatedAt { get; set; }
         public List<string> Roles { get; set; } = new();
+        public string? FullName { get; set; }
+        public string? Address { get; set; }
+        public string? AvatarUrl { get; set; }
+        public DateTime? DateOfBirth { get; set; }
+        public string? Gender { get; set; }
     }
 }
