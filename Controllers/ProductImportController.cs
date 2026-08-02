@@ -90,6 +90,7 @@ namespace TMPMS.Controllers
         // ================================================================
         [HttpPost("import/preview")]
         [RequestSizeLimit(50 * 1024 * 1024)]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> PreviewImport([FromForm] IFormFile file)
         {
             if (file == null || file.Length == 0)
@@ -402,6 +403,7 @@ namespace TMPMS.Controllers
         // POST /api/admin/products/import/confirm
         // ================================================================
         [HttpPost("import/confirm")]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> ConfirmImport([FromBody] ImportConfirmRequest req)
         {
             if (string.IsNullOrWhiteSpace(req.ImportSessionId))

@@ -14,6 +14,7 @@ namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("api/profile")]
+    [Authorize]
     public class ProfileController : ControllerBase
     {
         private readonly IUserService _userService;
@@ -25,48 +26,41 @@ namespace TMPMS.Controllers
             _userManager = userManager;
         }
 
+        private int? GetCurrentUserId()
+        {
+            var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return int.TryParse(claim, out var id) ? id : (int?)null;
+        }
+
+        private bool CanProxy()
+        {
+            return User.IsInRole("Admin") || User.IsInRole("Staff") || User.IsInRole("Pharmacy");
+        }
+
         // GET: api/profile/me
         [HttpGet("me")]
         public async Task<IActionResult> GetMyProfile()
         {
-            if (Request.Headers.TryGetValue("X-User-Id", out var headerValue) && int.TryParse(headerValue, out int userId))
-            {
-                var profile = await _userService.GetProfileAsync(userId);
-                if (profile != null) return Ok(profile);
-            }
+            var userId = GetCurrentUserId();
+            if (userId == null) return Unauthorized();
 
-            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (int.TryParse(userIdClaim, out int tokenUserId))
-            {
-                var profile = await _userService.GetProfileAsync(tokenUserId);
-                if (profile != null) return Ok(profile);
-            }
+            var profile = await _userService.GetProfileAsync(userId.Value);
+            if (profile == null) return NotFound();
 
-            return Unauthorized("Unauthorized profile access.");
+            return Ok(profile);
         }
 
         // PATCH: api/profile/me
         [HttpPatch("me")]
         public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateProfileDto dto)
         {
-            int userId = 0;
-            if (Request.Headers.TryGetValue("X-User-Id", out var headerValue) && int.TryParse(headerValue, out int headerUserId))
-            {
-                userId = headerUserId;
-            }
-            else
-            {
-                var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (!int.TryParse(userIdClaim, out userId))
-                {
-                    return Unauthorized();
-                }
-            }
+            var userId = GetCurrentUserId();
+            if (userId == null) return Unauthorized();
 
-            var result = await _userService.UpdateProfileAsync(userId, dto);
+            var result = await _userService.UpdateProfileAsync(userId.Value, dto);
             if (!result) return NotFound();
 
-            var profile = await _userService.GetProfileAsync(userId);
+            var profile = await _userService.GetProfileAsync(userId.Value);
             return Ok(profile);
         }
 
@@ -74,6 +68,15 @@ namespace TMPMS.Controllers
         [HttpGet("{userId}")]
         public async Task<IActionResult> GetProfile(int userId)
         {
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null) return Unauthorized();
+
+            // Người dùng thường chỉ xem profile của chính mình; Admin/Staff/Pharmacy xem được mọi người.
+            if (!CanProxy() && userId != currentUserId.Value)
+            {
+                return Forbid();
+            }
+
             var profile = await _userService.GetProfileAsync(userId);
             if (profile == null)
                 return NotFound();
@@ -85,6 +88,14 @@ namespace TMPMS.Controllers
         [HttpPut("{userId}")]
         public async Task<IActionResult> UpdateProfile(int userId, UpdateProfileDto dto)
         {
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null) return Unauthorized();
+
+            if (!CanProxy() && userId != currentUserId.Value)
+            {
+                return Forbid();
+            }
+
             var result = await _userService.UpdateProfileAsync(userId, dto);
             if (!result)
                 return NotFound();
@@ -93,14 +104,13 @@ namespace TMPMS.Controllers
         }
 
         // PUT: api/profile/change-password
-        [Authorize]
         [HttpPut("change-password")]
         public async Task<IActionResult> ChangePassword(ChangePasswordDTO dto)
         {
-            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (!int.TryParse(userIdClaim, out var userId)) return Unauthorized();
+            var userId = GetCurrentUserId();
+            if (userId == null) return Unauthorized();
 
-            var result = await _userService.ChangePasswordAsync(userId, dto);
+            var result = await _userService.ChangePasswordAsync(userId.Value, dto);
             if (!result)
             {
                 return BadRequest(new { message = "Old password is incorrect." });
@@ -108,6 +118,5 @@ namespace TMPMS.Controllers
 
             return Ok(new { message = "Password changed successfully." });
         }
-
-        }
+    }
 }
