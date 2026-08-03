@@ -19,15 +19,30 @@
         // Ghi chú
         public string? Note { get; set; }
 
-        // Pending | Confirmed | Completed | Cancelled | Expired
-        public string Status { get; set; } = "Pending";
+        // PendingConfirmation (Chờ xác nhận) | Confirmed (Đã xác nhận) |
+        // Completed (Hoàn thành) | Cancelled (Đã hủy) | Rejected (Từ chối) | Expired (Quá hạn)
+        public string Status { get; set; } = "PendingConfirmation";
 
-        // Thời gian tạo
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        // Thời gian tạo (UTC)
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        // Hạn chót Pharmacy phải xác nhận — quá hạn mà chưa xác nhận => Expired (giải phóng khung giờ)
+        public DateTime ConfirmationDeadline { get; set; }
+
+        // Thời điểm Pharmacy xác nhận lịch hẹn
+        public DateTime? ConfirmedAt { get; set; }
+
+        // Staff/Admin đã xác nhận lịch hẹn (FK -> AspNetUsers)
+        public int? ConfirmedByStaffId { get; set; }
+
+        // Lý do từ chối (khi Status = Rejected)
+        public string? RejectionReason { get; set; }
 
         // Navigation Property
         public User User { get; set; }
 
         public User? Staff { get; set; }
+
+        public User? ConfirmedBy { get; set; }
     }
 }
