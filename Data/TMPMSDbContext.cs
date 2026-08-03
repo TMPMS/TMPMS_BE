@@ -355,6 +355,12 @@ namespace TMPMS.Data
                 .WithMany()
                 .HasForeignKey(m => m.SenderId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Mỗi GoogleId chỉ liên kết đúng 1 tài khoản; NULL trùng nhau thì được phép
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.GoogleId)
+                .IsUnique()
+                .HasFilter("[GoogleId] IS NOT NULL");
         }
     }
 }

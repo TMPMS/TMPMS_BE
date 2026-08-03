@@ -23,6 +23,11 @@ namespace TMPMS.DTOs
         public string Code { get; set; }
     }
 
+    public class GoogleLoginRequestDTO
+    {
+        public string IdToken { get; set; }
+    }
+
     public class SendOtpRequestDTO
     {
         public string Phone { get; set; }
