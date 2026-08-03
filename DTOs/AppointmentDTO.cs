@@ -13,5 +13,8 @@ namespace TMPMS.DTOs
         public string Status { get; set; } = "";
         public string? Notes { get; set; }
         public DateTime CreatedAt { get; set; }
+        public DateTime ConfirmationDeadline { get; set; }
+        public DateTime? ConfirmedAt { get; set; }
+        public string? RejectionReason { get; set; }
     }
 }
