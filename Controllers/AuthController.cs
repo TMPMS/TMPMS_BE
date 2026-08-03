@@ -40,6 +40,19 @@ namespace TMPMS.Controllers
             catch (Exception ex) { return BadRequest(ex.Message); }
         }
 
+        [HttpPost("google-login")]
+        public async Task<ActionResult> GoogleLogin([FromBody] GoogleLoginRequestDTO dto)
+        {
+            try
+            {
+                var result = await _authService.GoogleLogin(dto, GetIp());
+                return Ok(result);
+            }
+            catch (UnauthorizedAccessException ex) { return Unauthorized(ex.Message); } // ID token giả/hết hạn
+            catch (InvalidOperationException ex) { return BadRequest(ex.Message); }      // tài khoản bị khóa / đã liên kết Google khác
+            catch (Exception ex) { return BadRequest(ex.Message); }
+        }
+
         [HttpPost("refresh-token")]
         public async Task<ActionResult> RefreshToken([FromBody] RefreshTokenRequestDTO dto)
         {

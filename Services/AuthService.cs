@@ -16,6 +16,7 @@ using TMPMS.DTOs;
 using TMPMS.Models;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.EntityFrameworkCore;
+using Google.Apis.Auth;
 
 namespace TMPMS.Services
 {
@@ -147,6 +148,79 @@ namespace TMPMS.Services
             return await BuildAuthResponse(user, ipAddress, includeRefreshToken: true);
         }
 
+        // ---------- GOOGLE LOGIN (ID Token flow) ----------
+        public async Task<AuthResponseDTO> GoogleLogin(GoogleLoginRequestDTO dto, string ipAddress)
+        {
+            if (string.IsNullOrWhiteSpace(dto.IdToken))
+                throw new UnauthorizedAccessException("Thiếu ID Token.");
+
+            var googleClientId = _configuration["Authentication:Google:ClientId"];
+            if (string.IsNullOrEmpty(googleClientId))
+                throw new InvalidOperationException("Chưa cấu hình Google ClientId trên server.");
+
+            // BẮT BUỘC verify chữ ký + issuer + audience bằng Google, không tin token từ client
+            GoogleJsonWebSignature.Payload payload;
+            try
+            {
+                payload = await GoogleJsonWebSignature.ValidateAsync(dto.IdToken, new GoogleJsonWebSignature.ValidationSettings
+                {
+                    Audience = new[] { googleClientId }
+                });
+            }
+            catch (Exception)
+            {
+                throw new UnauthorizedAccessException("ID Token Google không hợp lệ hoặc đã hết hạn.");
+            }
+
+            var email = payload.Email;
+            if (string.IsNullOrEmpty(email))
+                throw new UnauthorizedAccessException("Tài khoản Google không có email.");
+
+            var googleId = payload.Subject;
+            if (string.IsNullOrEmpty(googleId))
+                throw new UnauthorizedAccessException("ID Token Google thiếu thông tin tài khoản.");
+
+            var user = await _userManager.FindByEmailAsync(email);
+
+            if (user == null)
+            {
+                // Chưa có tài khoản → tạo User mới, role mặc định "User"
+                user = new User
+                {
+                    UserName = await GenerateGoogleUserName(email),
+                    Email = email,
+                    FullName = payload.Name,
+                    AvatarUrl = payload.Picture,
+                    GoogleId = googleId,
+                    IsActive = true,
+                    EmailConfirmed = true, // Google đã xác thực email
+                    CreatedAt = DateTime.Now
+                };
+                var createResult = await _userManager.CreateAsync(user, GenerateGooglePassword());
+                if (!createResult.Succeeded)
+                    throw new InvalidOperationException("Không thể tạo tài khoản từ Google: " + string.Join("; ", createResult.Errors.Select(e => e.Description)));
+                await _userManager.AddToRoleAsync(user, "User");
+            }
+            else
+            {
+                // Email đã tồn tại → LIÊN KẾT tài khoản cũ, không tạo trùng
+                if (!user.IsActive)
+                    throw new InvalidOperationException("Tài khoản đã bị vô hiệu hóa.");
+
+                if (!string.IsNullOrEmpty(user.GoogleId) && user.GoogleId != googleId)
+                    throw new InvalidOperationException("Email này đã được liên kết với một tài khoản Google khác.");
+
+                var changed = false;
+                if (string.IsNullOrEmpty(user.GoogleId)) { user.GoogleId = googleId; changed = true; }
+                if (string.IsNullOrEmpty(user.FullName) && !string.IsNullOrEmpty(payload.Name)) { user.FullName = payload.Name; changed = true; }
+                if (string.IsNullOrEmpty(user.AvatarUrl) && !string.IsNullOrEmpty(payload.Picture)) { user.AvatarUrl = payload.Picture; changed = true; }
+                if (changed)
+                    await _userManager.UpdateAsync(user);
+            }
+
+            return await BuildAuthResponse(user, ipAddress, includeRefreshToken: true);
+        }
+
         // ---------- SEND OTP ----------
         public async Task<bool> SendOtp(string phone)
         {
@@ -263,6 +337,28 @@ namespace TMPMS.Services
         }
 
         // ---------- HELPERS ----------
+        private async Task<string> GenerateGoogleUserName(string email)
+        {
+            var baseName = email.Split('@')[0].ToLowerInvariant();
+            var candidate = new string(baseName.Where(char.IsLetterOrDigit).ToArray());
+            if (candidate.Length == 0) candidate = "google_user";
+            if (candidate.Length > 20) candidate = candidate.Substring(0, 20);
+
+            var name = candidate;
+            var i = 1;
+            while (await _userManager.FindByNameAsync(name) != null)
+            {
+                name = candidate + i.ToString();
+                i++;
+            }
+            return name;
+        }
+
+        private string GenerateGooglePassword()
+        {
+            return "Google!" + Guid.NewGuid().ToString("N") + "Aa1";
+        }
+
         private async Task<AuthResponseDTO> BuildAuthResponse(User user, string ipAddress, bool includeRefreshToken)
         {
             var roles = await _userManager.GetRolesAsync(user);
