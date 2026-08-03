@@ -26,7 +26,7 @@ namespace TMPMS.Repositories
             return await _context.Appointments.AnyAsync(x =>
                 x.StaffId == staffId &&
                 x.AppointmentDate == appointmentDate &&
-                x.Status != "Cancelled");
+                (x.Status == "PendingConfirmation" || x.Status == "Confirmed"));
         }
 
         public async Task<User?> GetUserById(int userId)
@@ -86,7 +86,7 @@ namespace TMPMS.Repositories
                 x.Id != appointmentId &&
                 x.StaffId == staffId &&
                 x.AppointmentDate == appointmentDate &&
-                x.Status != "Cancelled");
+                (x.Status == "PendingConfirmation" || x.Status == "Confirmed"));
         }
 
         public async Task<bool> HasRecentActiveAppointment(int userId, DateTime since)
@@ -94,22 +94,16 @@ namespace TMPMS.Repositories
             return await _context.Appointments.AnyAsync(x =>
                 x.UserId == userId &&
                 x.CreatedAt >= since &&
-                (x.Status == "Pending" || x.Status == "Confirmed"));
+                (x.Status == "PendingConfirmation" || x.Status == "Pending" || x.Status == "Confirmed"));
         }
 
-        public async Task<int> ExpireOverdueAppointmentsAsync(DateTime now)
+        public async Task<int> ExpireOverdueAppointmentsAsync(DateTime now, DateTime utcNow)
         {
             return await _context.Appointments
-                .Where(x => (x.Status == "Pending" || x.Status == "Confirmed") && x.AppointmentDate < now)
+                .Where(x =>
+                    (x.Status == "Pending" || x.Status == "Confirmed") && x.AppointmentDate < now ||
+                    x.Status == "PendingConfirmation" && x.ConfirmationDeadline < utcNow)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Status, "Expired"));
-        }
-
-        public async Task<int> AutoConfirmPendingAppointmentsAsync(DateTime utcNow, TimeSpan minAge)
-        {
-            var threshold = utcNow - minAge;
-            return await _context.Appointments
-                .Where(x => x.Status == "Pending" && x.CreatedAt <= threshold && x.AppointmentDate >= utcNow.ToLocalTime())
-                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Status, "Confirmed"));
         }
 
         public async Task<Appointment?> GetActiveAppointmentByUserId(int userId)
@@ -117,7 +111,7 @@ namespace TMPMS.Repositories
             return await _context.Appointments
                 .Include(a => a.User)
                 .Include(a => a.Staff)
-                .Where(a => a.UserId == userId && (a.Status == "Pending" || a.Status == "Confirmed"))
+                .Where(a => a.UserId == userId && (a.Status == "PendingConfirmation" || a.Status == "Pending" || a.Status == "Confirmed"))
                 .OrderBy(a => a.AppointmentDate)
                 .FirstOrDefaultAsync();
         }

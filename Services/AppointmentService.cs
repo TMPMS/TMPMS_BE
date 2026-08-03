@@ -18,9 +18,8 @@ namespace TMPMS.Services
         public async Task ExpireOverdueAppointmentsAsync()
         {
             // AppointmentDate lưu theo giờ địa phương (wall-clock) => so với DateTime.Now.
-            // CreatedAt lưu theo UTC => so với DateTime.UtcNow.
-            await _appointmentRepository.ExpireOverdueAppointmentsAsync(DateTime.Now);
-            await _appointmentRepository.AutoConfirmPendingAppointmentsAsync(DateTime.UtcNow, TimeSpan.FromMinutes(5));
+            // ConfirmationDeadline/CreatedAt lưu theo UTC => so với DateTime.UtcNow.
+            await _appointmentRepository.ExpireOverdueAppointmentsAsync(DateTime.Now, DateTime.UtcNow);
         }
 
         public async Task<AppointmentBookingResult> BookAppointment(int userId, AppointmentCreateDTO dto)
@@ -52,11 +51,11 @@ namespace TMPMS.Services
                 throw new Exception("Chỉ được đặt lịch hẹn trước tối đa 14 ngày.");
 
             // Làm mới trạng thái trước khi kiểm tra rule "1 lịch hoạt động":
-            // các lịch quá hạn sẽ bị Expired / Pending quá 5 phút sẽ tự Confirmed.
+            // các lịch quá hạn (hết hạn chờ xác nhận 24h hoặc đã qua giờ hẹn) sẽ bị Expired.
             await ExpireOverdueAppointmentsAsync();
 
             // Quy tắc nghiệp vụ: mỗi user chỉ được có tối đa 1 lịch hẹn đang hoạt động
-            // (Status = Pending | Confirmed và chưa quá hạn). Nếu có lịch đang chặn,
+            // (Status = PendingConfirmation | Confirmed và chưa quá hạn). Nếu có lịch đang chặn,
             // trả thông tin chi tiết lịch đó để FE hiển thị cụ thể.
             var active = await _appointmentRepository.GetActiveAppointmentByUserId(targetUserId);
             if (active != null)
@@ -68,7 +67,7 @@ namespace TMPMS.Services
                 };
             }
 
-            // Chống đặt trùng: không cho 2 lịch hẹn cùng bác sĩ tại cùng thời điểm (trừ lịch đã hủy)
+            // Chống đặt trùng: không cho 2 lịch hẹn cùng bác sĩ tại cùng thời điểm (trừ lịch đã hủy/từ chối/hoàn thành)
             if (targetStaffId != null && await _appointmentRepository.IsAppointmentExist(targetStaffId.Value, appointmentDate))
                 throw new Exception("Bác sĩ đã có lịch hẹn vào thời điểm này. Vui lòng chọn thời gian khác.");
 
@@ -79,8 +78,10 @@ namespace TMPMS.Services
                 AppointmentDate = appointmentDate,
                 Reason = dto.Reason ?? "",
                 Note = dto.Note ?? dto.Notes,
-                Status = string.IsNullOrEmpty(dto.Status) ? "Pending" : (dto.Status == "Scheduled" ? "Pending" : dto.Status),
-                CreatedAt = DateTime.UtcNow
+                // Lịch mới luôn ở trạng thái chờ Pharmacy xác nhận (thủ công, không auto-confirm)
+                Status = "PendingConfirmation",
+                CreatedAt = DateTime.UtcNow,
+                ConfirmationDeadline = DateTime.UtcNow.AddHours(24)
             };
 
             bool created = await _appointmentRepository.Add(appointment);
@@ -139,11 +140,29 @@ namespace TMPMS.Services
             return await _appointmentRepository.Update(appointment);
         }
 
-        public async Task<bool> ApproveAppointment(int id)
+        public async Task<bool> ApproveAppointment(int id, int staffId)
         {
             var appointment = await _appointmentRepository.GetById(id);
             if (appointment == null) throw new Exception("Appointment not found.");
+            if (appointment.Status != "PendingConfirmation")
+                throw new Exception("Chỉ lịch hẹn đang chờ xác nhận mới được xác nhận.");
             appointment.Status = "Confirmed";
+            appointment.ConfirmedAt = DateTime.UtcNow;
+            appointment.ConfirmedByStaffId = staffId;
+            appointment.RejectionReason = null;
+            return await _appointmentRepository.Update(appointment);
+        }
+
+        public async Task<bool> RejectAppointment(int id, int staffId, string reason)
+        {
+            var appointment = await _appointmentRepository.GetById(id);
+            if (appointment == null) throw new Exception("Appointment not found.");
+            if (appointment.Status != "PendingConfirmation")
+                throw new Exception("Chỉ lịch hẹn đang chờ xác nhận mới được từ chối.");
+            appointment.Status = "Rejected";
+            appointment.ConfirmedAt = null;
+            appointment.ConfirmedByStaffId = staffId;
+            appointment.RejectionReason = string.IsNullOrWhiteSpace(reason) ? "Không cung cấp lý do" : reason.Trim();
             return await _appointmentRepository.Update(appointment);
         }
 
@@ -169,7 +188,10 @@ namespace TMPMS.Services
                 Reason = a.Reason,
                 Status = a.Status == "Pending" ? "Scheduled" : a.Status,
                 Notes = a.Note,
-                CreatedAt = a.CreatedAt
+                CreatedAt = a.CreatedAt,
+                ConfirmationDeadline = a.ConfirmationDeadline,
+                ConfirmedAt = a.ConfirmedAt,
+                RejectionReason = a.RejectionReason
             };
         }
     }

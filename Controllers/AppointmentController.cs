@@ -116,8 +116,23 @@ namespace TMPMS.Controllers
         {
             try
             {
-                bool result = await _appointmentService.ApproveAppointment(id);
+                bool result = await _appointmentService.ApproveAppointment(id, GetCurrentUserId());
                 return Ok(new { Success = result, Message = "Appointment approved successfully." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Success = false, Message = ex.Message });
+            }
+        }
+
+        [HttpPut("reject/{id}")]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
+        public async Task<IActionResult> RejectAppointment(int id, AppointmentRejectDTO dto)
+        {
+            try
+            {
+                bool result = await _appointmentService.RejectAppointment(id, GetCurrentUserId(), dto?.Reason);
+                return Ok(new { Success = result, Message = "Appointment rejected successfully." });
             }
             catch (Exception ex)
             {
