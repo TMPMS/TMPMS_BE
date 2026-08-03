@@ -66,6 +66,30 @@ namespace TMPMS.Data
         {
             base.OnModelCreating(modelBuilder);
 
+            // Các cột lưu thời điểm (instant) theo UTC: đánh dấu lại Kind=Utc khi đọc
+            // để JSON trả về kèm "Z" (FE quy đổi sang giờ địa phương thay vì in thô UTC).
+            modelBuilder.Entity<Order>()
+                .Property(o => o.CreatedAt).HasConversion(UtcDateTimeValueConverter.Instance);
+
+            modelBuilder.Entity<Appointment>()
+                .Property(a => a.CreatedAt).HasConversion(UtcDateTimeValueConverter.Instance);
+            modelBuilder.Entity<Appointment>()
+                .Property(a => a.ConfirmationDeadline).HasConversion(UtcDateTimeValueConverter.Instance);
+            modelBuilder.Entity<Appointment>()
+                .Property(a => a.ConfirmedAt).HasConversion(UtcDateTimeValueConverter.Instance);
+
+            modelBuilder.Entity<Review>()
+                .Property(r => r.CreatedAt).HasConversion(UtcDateTimeValueConverter.Instance);
+
+            modelBuilder.Entity<QuizSession>()
+                .Property(q => q.CreatedAt).HasConversion(UtcDateTimeValueConverter.Instance);
+
+            modelBuilder.Entity<Voucher>()
+                .Property(v => v.CreatedAt).HasConversion(UtcDateTimeValueConverter.Instance);
+
+            modelBuilder.Entity<Medicine>()
+                .Property(m => m.CreatedAt).HasConversion(UtcDateTimeValueConverter.Instance);
+
             modelBuilder.Entity<HealthQuiz>()
                 .HasIndex(q => q.Code)
                 .IsUnique();
