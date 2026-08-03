@@ -71,8 +71,7 @@ namespace TMPMS.Controllers
                 int? allowedQuantity = null;
                 if (ci.Medicine.RequiresPrescription && cart != null)
                 {
-                    var (_, maxAllowed) = await GetRxAllowanceAsync(cart.UserId, ci.MedicineId);
-                    allowedQuantity = Math.Max(0, maxAllowed);
+                    var (_, maxAllowed, _, _) = await GetRxAllowanceAsync(cart.UserId, ci.MedicineId);                    allowedQuantity = Math.Max(0, maxAllowed);
                 }
                 result.Add(new {
                     Id = ci.Id,
@@ -102,21 +101,21 @@ namespace TMPMS.Controllers
             if (medicine.RequiresPrescription)
             {
                 var cartUserId = cart.UserId;
-                var (allowed, maxAllowed) = await GetRxAllowanceAsync(cartUserId, input.MedicineId);
+                var (allowed, maxAllowed, prescribed, purchased) = await GetRxAllowanceAsync(cartUserId, input.MedicineId);
                 if (!allowed)
                 {
                     return StatusCode(403, new { error = "Sản phẩm này cần được Dược sĩ kê đơn trước khi mua." });
                 }
                 if (maxAllowed <= 0)
                 {
-                    return BadRequest(new { error = $"Số lượng {medicine.Name} đã đạt tối đa trong đơn thuốc của bạn." });
+                    return BadRequest(new { error = $"Mỗi khách hàng chỉ được mua đúng số lượng thuốc mà bác sĩ đã kê đơn. Thuốc \"{medicine.Name}\": toa cho phép {prescribed}, bạn đã đặt {purchased} trong các đơn chưa hủy nên không thể mua thêm. Vui lòng hủy một đơn đang xử lý hoặc nhờ Dược sĩ điều chỉnh đơn thuốc." });
                 }
                 var existingForRx = await _context.CartItems
                     .FirstOrDefaultAsync(ci => ci.CartId == input.CartId && ci.MedicineId == input.MedicineId);
                 var wouldHave = (existingForRx?.Quantity ?? 0) + input.Quantity;
                 if (wouldHave > maxAllowed)
                 {
-                    return BadRequest(new { error = $"Số lượng {medicine.Name} vượt quá liều lượng trong đơn thuốc (tối đa {maxAllowed})." });
+                    return BadRequest(new { error = $"Mỗi khách hàng chỉ được mua đúng số lượng thuốc mà bác sĩ đã kê đơn. Thuốc \"{medicine.Name}\": toa cho phép {prescribed}, bạn còn được mua {maxAllowed}. Vui lòng giảm số lượng hoặc nhờ Dược sĩ điều chỉnh đơn thuốc." });
                 }
             }
 
@@ -160,14 +159,14 @@ namespace TMPMS.Controllers
                 if (medicine != null && medicine.RequiresPrescription)
                 {
                     var cartUserId = cart.UserId;
-                    var (allowed, maxAllowed) = await GetRxAllowanceAsync(cartUserId, item.MedicineId);
+                    var (allowed, maxAllowed, prescribed, purchased) = await GetRxAllowanceAsync(cartUserId, item.MedicineId);
                     if (!allowed)
                     {
                         return StatusCode(403, new { error = "Sản phẩm này cần được Dược sĩ kê đơn trước khi mua." });
                     }
-                    if (input.Quantity > Math.Max(0, maxAllowed))
+                    if (input.Quantity > maxAllowed)
                     {
-                        return BadRequest(new { error = $"Số lượng {medicine.Name} vượt quá liều lượng trong đơn thuốc (tối đa {Math.Max(0, maxAllowed)})." });
+                        return BadRequest(new { error = $"Mỗi khách hàng chỉ được mua đúng số lượng thuốc mà bác sĩ đã kê đơn. Thuốc \"{medicine.Name}\": toa cho phép {prescribed}, bạn đã đặt {purchased} và chỉ còn được mua {maxAllowed}. Vui lòng giảm số lượng hoặc nhờ Dược sĩ điều chỉnh đơn thuốc." });
                     }
                 }
             }
@@ -221,14 +220,14 @@ namespace TMPMS.Controllers
 
                 if (medicine.RequiresPrescription)
                 {
-                    var (allowed, maxAllowed) = await GetRxAllowanceAsync(input.p_user_id, item.medicine_id);
+                    var (allowed, maxAllowed, prescribed, purchased) = await GetRxAllowanceAsync(input.p_user_id, item.medicine_id);
                     if (!allowed)
                     {
                         return StatusCode(403, new { error = "Sản phẩm này cần được Dược sĩ kê đơn trước khi mua." });
                     }
-                    if (item.quantity > Math.Max(0, maxAllowed))
+                    if (item.quantity > maxAllowed)
                     {
-                        return BadRequest(new { error = $"Số lượng {medicine.Name} vượt quá liều lượng trong đơn thuốc (tối đa {Math.Max(0, maxAllowed)})." });
+                        return BadRequest(new { error = $"Mỗi khách hàng chỉ được mua đúng số lượng thuốc mà bác sĩ đã kê đơn. Thuốc \"{medicine.Name}\": toa cho phép {prescribed}, bạn đã đặt {purchased} và chỉ còn được mua {maxAllowed}. Vui lòng giảm số lượng hoặc nhờ Dược sĩ điều chỉnh đơn thuốc." });
                     }
                 }
 
@@ -253,24 +252,25 @@ namespace TMPMS.Controllers
             return Ok(new { message = "Synced successfully" });
         }
 
-        // Returns (Allowed, MaxAllowed):
+        // Returns (Allowed, MaxAllowed, Prescribed, Purchased):
         // Allowed = user has an Approved/Fulfilled prescription containing the medicine.
         // MaxAllowed = total prescribed quantity minus what has already been purchased
         // in non-cancelled orders (does NOT subtract the current cart quantity).
-        private async Task<(bool Allowed, int MaxAllowed)> GetRxAllowanceAsync(int userId, int medicineId)
+        // Prescribed/Purchased: số liệu chi tiết để FE thông báo rõ ràng cho user.
+        private async Task<(bool Allowed, int MaxAllowed, int Prescribed, int Purchased)> GetRxAllowanceAsync(int userId, int medicineId)
         {
             var prescribed = await _context.PrescriptionItems
                 .Where(pi => pi.MedicineId == medicineId && pi.Prescription.UserId == userId)
                 .Where(pi => pi.Prescription.Status == "Approved" || pi.Prescription.Status == "Fulfilled")
                 .SumAsync(pi => pi.Quantity);
 
-            if (prescribed <= 0) return (false, 0);
+            if (prescribed <= 0) return (false, 0, 0, 0);
 
             var purchased = await _context.OrderItems
                 .Where(oi => oi.MedicineId == medicineId && oi.Order.UserId == userId && oi.Order.Status != "Cancelled")
                 .SumAsync(oi => oi.Quantity);
 
-            return (true, Math.Max(0, prescribed - purchased));
+            return (true, Math.Max(0, prescribed - purchased), prescribed, purchased);
         }
 
         private int? GetCurrentUserId()
