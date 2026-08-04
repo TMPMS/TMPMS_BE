@@ -21,5 +21,7 @@ namespace Services.Interfaces
         Task<bool> AssignRole(AssignRoleRequestDTO dto);
         Task<UserProfileDTO> GetProfile(int userId);
         Task<bool> ChangePassword(int userId, ChangePasswordRequestDTO dto);
+        Task<bool> SendPasswordResetOtp(ForgotPasswordRequestDTO dto);
+        Task ResetPassword(ResetPasswordRequestDTO dto);
     }
 }

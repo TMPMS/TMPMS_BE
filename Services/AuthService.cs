@@ -336,6 +336,62 @@ namespace TMPMS.Services
             return true;
         }
 
+        // ---------- FORGOT / RESET PASSWORD ----------
+        public async Task<bool> SendPasswordResetOtp(ForgotPasswordRequestDTO dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Phone))
+                throw new ArgumentException("Vui lòng nhập số điện thoại.");
+
+            var cooldownKey = $"password_reset_cooldown_{dto.Phone}";
+            if (_cache.TryGetValue(cooldownKey, out _))
+                throw new InvalidOperationException("Vui lòng chờ 60 giây trước khi gửi lại mã.");
+            _cache.Set(cooldownKey, true, TimeSpan.FromSeconds(60));
+
+            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == dto.Phone);
+            if (user == null || !user.IsActive)
+                return true;
+
+            var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+            _cache.Set($"password_reset_{dto.Phone}", otp, TimeSpan.FromMinutes(2));
+            var sent = await _smsService.SendSmsAsync(
+                dto.Phone,
+                $"[TMPMS Clinic] Ma dat lai mat khau cua ban la: {otp}. Hieu luc 2 phut.");
+
+            if (!sent)
+            {
+                _cache.Remove($"password_reset_{dto.Phone}");
+                _cache.Remove(cooldownKey);
+                throw new InvalidOperationException("Không thể gửi mã xác nhận. Vui lòng thử lại.");
+            }
+            return true;
+        }
+
+        public async Task ResetPassword(ResetPasswordRequestDTO dto)
+        {
+            if (dto.NewPassword != dto.ConfirmPassword)
+                throw new ArgumentException("Mật khẩu xác nhận không khớp.");
+            if (string.IsNullOrEmpty(dto.NewPassword) ||
+                !Regex.IsMatch(dto.NewPassword, @"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s])\S{8,}$"))
+                throw new ArgumentException("Mật khẩu phải có ít nhất 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.");
+
+            var cacheKey = $"password_reset_{dto.Phone}";
+            if (!_cache.TryGetValue(cacheKey, out string? storedOtp) ||
+                string.IsNullOrWhiteSpace(dto.Code) || storedOtp != dto.Code)
+                throw new ArgumentException("Mã xác nhận không đúng hoặc đã hết hạn.");
+
+            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == dto.Phone);
+            if (user == null || !user.IsActive)
+                throw new ArgumentException("Không thể đặt lại mật khẩu.");
+
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var result = await _userManager.ResetPasswordAsync(user, token, dto.NewPassword);
+            if (!result.Succeeded)
+                throw new ArgumentException(string.Join("; ", result.Errors.Select(e => e.Description)));
+
+            _cache.Remove(cacheKey); // OTP chỉ được sử dụng một lần.
+            await _userManager.ResetAccessFailedCountAsync(user);
+        }
+
         // ---------- HELPERS ----------
         private async Task<string> GenerateGoogleUserName(string email)
         {

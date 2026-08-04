@@ -110,5 +110,27 @@ namespace TMPMS.Controllers
             }
             catch (Exception ex) { return BadRequest(ex.Message); }
         }
+
+        [HttpPost("forgot-password")]
+        public async Task<ActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDTO dto)
+        {
+            try
+            {
+                await _authService.SendPasswordResetOtp(dto);
+                return Ok(new { message = "Nếu số điện thoại đã đăng ký, mã xác nhận sẽ được gửi trong ít phút." });
+            }
+            catch (Exception ex) { return BadRequest(ex.Message); }
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<ActionResult> ResetPassword([FromBody] ResetPasswordRequestDTO dto)
+        {
+            try
+            {
+                await _authService.ResetPassword(dto);
+                return Ok(new { message = "Đặt lại mật khẩu thành công." });
+            }
+            catch (Exception ex) { return BadRequest(ex.Message); }
+        }
     }
 }
