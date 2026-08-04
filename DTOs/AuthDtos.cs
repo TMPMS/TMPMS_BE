@@ -55,6 +55,19 @@ namespace TMPMS.DTOs
         public string NewPassword { get; set; }
     }
 
+    public class ForgotPasswordRequestDTO
+    {
+        public string Phone { get; set; }
+    }
+
+    public class ResetPasswordRequestDTO
+    {
+        public string Phone { get; set; }
+        public string Code { get; set; }
+        public string NewPassword { get; set; }
+        public string ConfirmPassword { get; set; }
+    }
+
     public class AuthResponseDTO
     {
         public int UserId { get; set; }
