@@ -456,6 +456,13 @@ namespace TMPMS.Services
             };
             claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
 
+            var secret = _configuration["JWT:SecretKey"];
+
+            if (string.IsNullOrWhiteSpace(secret))
+            {
+                throw new Exception("JWT:SecretKey is missing.");
+            }
+
             var symmetricKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:SecretKey"]));
             var signCredential = new SigningCredentials(symmetricKey, SecurityAlgorithms.HmacSha256);
 
