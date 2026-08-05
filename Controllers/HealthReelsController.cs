@@ -7,6 +7,7 @@ namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Route("[controller]")]
     [AllowAnonymous]
     public class HealthReelsController : ControllerBase
     {
