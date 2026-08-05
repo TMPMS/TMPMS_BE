@@ -206,7 +206,9 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
-        policy => policy.WithOrigins("http://localhost:5173", "https://tmpms.vercel.app", "http://127.0.0.1:5173", "http://localhost", "http://222.255.215.218:8080", "http://222.255.215.218")
+        policy => policy.WithOrigins("http://localhost:5173", "https://tmpms.vercel.app", "http://127.0.0.1:5173", "http://localhost", 
+                                    "http://222.255.215.218:8080", "http://222.255.215.218", 
+                                    "https://tmpms.io.vn", "https://www.tmpms.io.vn")
                         .AllowAnyMethod()
                         .AllowAnyHeader()
                         .AllowCredentials());
