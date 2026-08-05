@@ -27,6 +27,7 @@ namespace TMPMS.Controllers
 
     [ApiController]
     [Route("api/[controller]")]
+    [Route("[controller]")]
     public class MedicinesController : ControllerBase
     {
         private readonly TMPMSDbContext _context;
