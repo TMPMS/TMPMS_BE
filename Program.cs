@@ -16,6 +16,8 @@ using TMPMS.Services.Interfaces;
 using TMPMS.Hubs;
 using TMPMS.Models;
 
+Console.WriteLine("===== API VERSION 2026-08-05 =====");
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
