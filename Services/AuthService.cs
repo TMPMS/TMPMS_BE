@@ -28,6 +28,7 @@ namespace TMPMS.Services
         private readonly IConfiguration _configuration;
         private readonly IMemoryCache _cache;
         private readonly ISmsService _smsService;
+        private readonly IEmailService _emailService;
 
         public AuthService(
             UserManager<User> userManager,
@@ -35,7 +36,8 @@ namespace TMPMS.Services
             IAuthRepository authRepo,
             IConfiguration configuration,
             IMemoryCache cache,
-            ISmsService smsService)
+            ISmsService smsService,
+            IEmailService emailService)
         {
             _userManager = userManager;
             _roleManager = roleManager;
@@ -43,6 +45,7 @@ namespace TMPMS.Services
             _configuration = configuration;
             _cache = cache;
             _smsService = smsService;
+            _emailService = emailService;
         }
 
         // ---------- REGISTER ----------
@@ -339,27 +342,29 @@ namespace TMPMS.Services
         // ---------- FORGOT / RESET PASSWORD ----------
         public async Task<bool> SendPasswordResetOtp(ForgotPasswordRequestDTO dto)
         {
-            if (string.IsNullOrWhiteSpace(dto.Phone))
-                throw new ArgumentException("Vui lòng nhập số điện thoại.");
+            if (string.IsNullOrWhiteSpace(dto.Email))
+                throw new ArgumentException("Vui lòng nhập email.");
 
-            var cooldownKey = $"password_reset_cooldown_{dto.Phone}";
+            var normalizedEmail = dto.Email.Trim().ToUpperInvariant();
+            var cooldownKey = $"password_reset_cooldown_{normalizedEmail}";
             if (_cache.TryGetValue(cooldownKey, out _))
                 throw new InvalidOperationException("Vui lòng chờ 60 giây trước khi gửi lại mã.");
             _cache.Set(cooldownKey, true, TimeSpan.FromSeconds(60));
 
-            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == dto.Phone);
+            var user = await _userManager.FindByEmailAsync(dto.Email.Trim());
             if (user == null || !user.IsActive)
                 return true;
 
             var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
-            _cache.Set($"password_reset_{dto.Phone}", otp, TimeSpan.FromMinutes(2));
-            var sent = await _smsService.SendSmsAsync(
-                dto.Phone,
-                $"[TMPMS Clinic] Ma dat lai mat khau cua ban la: {otp}. Hieu luc 2 phut.");
+            _cache.Set($"password_reset_{normalizedEmail}", otp, TimeSpan.FromMinutes(2));
+            var sent = await _emailService.SendEmailAsync(
+                user.Email!,
+                "Mã đặt lại mật khẩu TMPMS",
+                $"<p>Mã đặt lại mật khẩu của bạn là:</p><h2 style=\"letter-spacing:4px\">{otp}</h2><p>Mã có hiệu lực trong 2 phút. Không chia sẻ mã này với bất kỳ ai.</p>");
 
             if (!sent)
             {
-                _cache.Remove($"password_reset_{dto.Phone}");
+                _cache.Remove($"password_reset_{normalizedEmail}");
                 _cache.Remove(cooldownKey);
                 throw new InvalidOperationException("Không thể gửi mã xác nhận. Vui lòng thử lại.");
             }
@@ -374,12 +379,13 @@ namespace TMPMS.Services
                 !Regex.IsMatch(dto.NewPassword, @"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s])\S{8,}$"))
                 throw new ArgumentException("Mật khẩu phải có ít nhất 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.");
 
-            var cacheKey = $"password_reset_{dto.Phone}";
+            var normalizedEmail = dto.Email.Trim().ToUpperInvariant();
+            var cacheKey = $"password_reset_{normalizedEmail}";
             if (!_cache.TryGetValue(cacheKey, out string? storedOtp) ||
                 string.IsNullOrWhiteSpace(dto.Code) || storedOtp != dto.Code)
                 throw new ArgumentException("Mã xác nhận không đúng hoặc đã hết hạn.");
 
-            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == dto.Phone);
+            var user = await _userManager.FindByEmailAsync(dto.Email.Trim());
             if (user == null || !user.IsActive)
                 throw new ArgumentException("Không thể đặt lại mật khẩu.");
 

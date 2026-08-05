@@ -117,7 +117,7 @@ namespace TMPMS.Controllers
             try
             {
                 await _authService.SendPasswordResetOtp(dto);
-                return Ok(new { message = "Nếu số điện thoại đã đăng ký, mã xác nhận sẽ được gửi trong ít phút." });
+                return Ok(new { message = "Nếu email đã đăng ký, mã xác nhận sẽ được gửi trong ít phút." });
             }
             catch (Exception ex) { return BadRequest(ex.Message); }
         }
