@@ -8,6 +8,7 @@ using TMPMS.Data;
 namespace TMPMS.Controllers
 {
     [ApiController]
+    [Route("api/[controller]")]
     [Authorize]
     public class OrdersController : ControllerBase
     {
