@@ -91,6 +91,7 @@ namespace TMPMS.Controllers
         // ================================================================
         [HttpPost("import/preview")]
         [RequestSizeLimit(50 * 1024 * 1024)]
+        [Consumes("multipart/form-data")]
         [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> PreviewImport([FromForm] IFormFile file)
         {
