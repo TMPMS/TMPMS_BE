@@ -31,7 +31,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            cd ~/deploy
+            cd ~/home/deploy/deploy
             docker compose pull api
             docker compose up -d api
             docker image prune -f
