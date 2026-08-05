@@ -223,14 +223,12 @@ if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
     app.UseSwaggerUI();
 }
 
-// Serve static files (uploads/medicines) với đường dẫn tuyệt đối
-var uploadsPhysicalPath = Path.Combine(
-    Path.GetDirectoryName(typeof(Program).Assembly.Location)!,
-    "wwwroot");
-// Nếu chạy dotnet run thì Assembly.Location nằm trong bin/Debug, cần check source dir
+// Serve static files (uploads/medicines) với đường dẫn tuyệt đối.
+// Ưu tiên source wwwroot vì ảnh upload được ghi vào đó (WebRootPath khi chạy dotnet run).
 var sourceWwwroot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-if (!Directory.Exists(uploadsPhysicalPath) && Directory.Exists(sourceWwwroot))
-    uploadsPhysicalPath = sourceWwwroot;
+var uploadsPhysicalPath = Directory.Exists(sourceWwwroot)
+    ? sourceWwwroot
+    : Path.Combine(Path.GetDirectoryName(typeof(Program).Assembly.Location)!, "wwwroot");
 if (!Directory.Exists(uploadsPhysicalPath))
     Directory.CreateDirectory(uploadsPhysicalPath);
 
