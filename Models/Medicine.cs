@@ -45,20 +45,20 @@ namespace BusinessObjects
         /// <summary>Soft-delete flag: false = ẩn khỏi cửa hàng nhưng giữ lịch sử đơn hàng</summary>
         public bool IsActive { get; set; } = true;
 
-        public Category Category { get; set; }
+        public Category? Category { get; set; }
 
-        public Supplier Supplier { get; set; }
+        public Supplier? Supplier { get; set; }
 
-        public ICollection<CartItem> CartItems { get; set; }
+        public ICollection<CartItem>? CartItems { get; set; }
 
-        public ICollection<OrderItem> OrderItems { get; set; }
+        public ICollection<OrderItem>? OrderItems { get; set; }
 
-        public ICollection<Review> Reviews { get; set; }
+        public ICollection<Review>? Reviews { get; set; }
 
-        public ICollection<MedicineImage> Images { get; set; }
+        public ICollection<MedicineImage>? Images { get; set; }
 
-        public ICollection<PrescriptionItem> PrescriptionItems { get; set; }
+        public ICollection<PrescriptionItem>? PrescriptionItems { get; set; }
 
-        public ICollection<InventoryStock> InventoryStocks { get; set; }
+        public ICollection<InventoryStock>? InventoryStocks { get; set; }
     }
 }

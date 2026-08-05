@@ -14,11 +14,11 @@ namespace BusinessObjects
 
         public decimal TotalAmount { get; set; }
 
-        public string Status { get; set; }
+        public string? Status { get; set; }
 
-        public string ShippingAddress { get; set; }
+        public string? ShippingAddress { get; set; }
 
-        public string PaymentStatus { get; set; }
+        public string? PaymentStatus { get; set; }
 
         public string? DeliveryMethod { get; set; }
 
@@ -28,10 +28,10 @@ namespace BusinessObjects
 
         public string? ReturnReason { get; set; }
 
-        public User User { get; set; }
+        public User? User { get; set; }
 
-        public ICollection<OrderItem> OrderItems { get; set; }
+        public ICollection<OrderItem>? OrderItems { get; set; }
 
-        public ICollection<Payment> Payments { get; set; }
+        public ICollection<Payment>? Payments { get; set; }
     }
 }
