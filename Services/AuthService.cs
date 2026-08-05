@@ -89,10 +89,13 @@ namespace TMPMS.Services
         // ---------- LOGIN ----------
         public async Task<AuthResponseDTO> Login(LoginRequestDTO dto, string ipAddress)
         {
-            if (string.IsNullOrWhiteSpace(dto.UserName) || !Regex.IsMatch(dto.UserName, "^[A-Za-z]+$"))
+            if (string.IsNullOrWhiteSpace(dto.UserName))
                 return null;
 
-            var user = await _userManager.FindByNameAsync(dto.UserName);
+            var input = dto.UserName.Trim();
+            var user = await _userManager.FindByNameAsync(input)
+                    ?? await _userManager.FindByEmailAsync(input);
+
             if (user == null || !user.IsActive)
                 return null;
 
