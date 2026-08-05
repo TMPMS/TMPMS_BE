@@ -149,9 +149,39 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
                         new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json")
                     );
 
-                    if (response.IsSuccessStatusCode)
+                    var responseString = await response.Content.ReadAsStringAsync();
+
+                    if (!response.IsSuccessStatusCode)
                     {
-                        var responseString = await response.Content.ReadAsStringAsync();
+                        var statusCode = (int)response.StatusCode;
+                        var errStatus = "";
+                        try
+                        {
+                            using var errDoc = JsonDocument.Parse(responseString);
+                            if (errDoc.RootElement.TryGetProperty("error", out var errObj) &&
+                                errObj.TryGetProperty("status", out var statusProp))
+                            {
+                                errStatus = statusProp.GetString() ?? "";
+                            }
+                        }
+                        catch { }
+
+                        var truncatedBody = responseString.Length > 500 ? responseString.Substring(0, 500) + "..." : responseString;
+                        Console.WriteLine($"[Gemini Chatbot Error]: HTTP {statusCode} ({response.ReasonPhrase}) status={errStatus} body={truncatedBody}");
+
+                        if (statusCode == 429 || errStatus == "RESOURCE_EXHAUSTED")
+                        {
+                            return Ok(new
+                            {
+                                intent = "GENERAL_CHAT",
+                                text = "Dược sĩ AI đang quá tải, vui lòng thử lại sau ít phút hoặc bấm 'Tư vấn Dược sĩ' để nói chuyện với dược sĩ thật.",
+                                product = (object?)null,
+                                suggestedAction = new { type = "open_pharmacist_chat", label = "💬 Tư vấn Dược sĩ" }
+                            });
+                        }
+                    }
+                    else
+                    {
                         using var doc = JsonDocument.Parse(responseString);
                         var root = doc.RootElement;
 

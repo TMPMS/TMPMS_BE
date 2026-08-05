@@ -146,8 +146,6 @@ namespace TMPMS.Controllers
             // Header: STT(0) | Tên(1) | Danh mục(2) | Nhà CC(3) | Giá(4) | Giá cũ(5) |
             //         Số lượng(6) | Đơn vị(7) | Mô tả(8) | Hình ảnh(9) | Đánh dấu Xóa(10) | ProductId(11)
             var rows = new List<ImportRowPreview>();
-            var httpClient = _httpClientFactory.CreateClient();
-            httpClient.Timeout = TimeSpan.FromSeconds(5);
 
             int dataStartRow = FindDataStartRow(sheet);
 
@@ -296,45 +294,15 @@ namespace TMPMS.Controllers
                 else if (!string.IsNullOrWhiteSpace(imageCell)
                     && (imageCell.StartsWith("http://") || imageCell.StartsWith("https://")))
                 {
-                    // Cách B: link URL
-                    bool looksLikeImage = imageCell.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
-                        || imageCell.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase)
-                        || imageCell.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
-                        || imageCell.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)
-                        || imageCell.EndsWith(".gif", StringComparison.OrdinalIgnoreCase);
-
-                    if (looksLikeImage || true) // luôn thử tải
-                    {
-                        try
-                        {
-                            var resp = await httpClient.GetAsync(imageCell, HttpCompletionOption.ResponseHeadersRead);
-                            resp.EnsureSuccessStatusCode();
-                            var ct = resp.Content.Headers.ContentType?.MediaType ?? "";
-                            if (ct.StartsWith("image/"))
-                            {
-                                var imgBytes = await resp.Content.ReadAsByteArrayAsync();
-                                if (imgBytes.Length <= 5 * 1024 * 1024) // max 5MB
-                                {
-                                    preview.HasImage = true;
-                                    preview.ImageBytesForCache = imgBytes;
-                                    preview.ImageSourceType = "url";
-                                    preview.SourceImageUrl = imageCell;
-                                }
-                                else
-                                {
-                                    preview.Warnings.Add("Ảnh từ link quá lớn (>5MB), sẽ dùng ảnh mặc định");
-                                }
-                            }
-                            else
-                            {
-                                preview.Warnings.Add("Link không trả về ảnh hợp lệ, sẽ dùng ảnh mặc định");
-                            }
-                        }
-                        catch
-                        {
-                            preview.Warnings.Add("Không tải được ảnh từ link, sẽ dùng ảnh mặc định");
-                        }
-                    }
+                    // Cách B: link URL — KHÔNG tải ảnh ở bước xem trước.
+                    // Trước đây tải tuần tự từng URL với timeout 5s → file có hàng trăm URL
+                    // không truy cập được (vd: http://image.local/...) bị kẹt "Đang xử lý..." hàng chục phút.
+                    // Ảnh URL được tải SONG SONG (có giới hạn thời gian) khi bấm Xác nhận nhập.
+                    // Lưu ý: chưa set HasImage=true — chỉ set khi tải URL THÀNH CÔNG,
+                    // để URL hỏng không ghi đè ảnh đang dùng / không gán ảnh vỡ cho sản phẩm mới.
+                    preview.ImageSourceType = "url";
+                    preview.SourceImageUrl = imageCell;
+                    preview.Warnings.Add("Ảnh từ link sẽ được tải về khi bạn bấm Xác nhận nhập");
                 }
                 else if (!string.IsNullOrWhiteSpace(imageCell)
                     && !imageCell.StartsWith("http"))
@@ -431,6 +399,38 @@ namespace TMPMS.Controllers
             var failedRows = new List<object>();
             var confirmedSet = new HashSet<int>(req.ConfirmedRowIndexes ?? new List<int>());
 
+            // ---- Tải ảnh URL về SONG SONG (giới hạn độ đồng thời & timeout) ----
+            // Tránh kẹt khi file có hàng trăm URL không truy cập được (vd: http://image.local/...).
+            // Chỉ khi tải URL THÀNH CÔNG mới gắn ảnh (HasImage=true); URL hỏng sẽ bỏ qua
+            // → không ghi đè ảnh cũ / không gán ảnh vỡ (giữ nguyên hành vi trước đây).
+            var urlRows = cachedRows
+                .Where(r => r.ImageSourceType == "url"
+                    && r.ImageBytesForCache == null && !string.IsNullOrWhiteSpace(r.SourceImageUrl))
+                .ToList();
+            if (urlRows.Count > 0)
+            {
+                using var dlClient = _httpClientFactory.CreateClient();
+                dlClient.Timeout = TimeSpan.FromSeconds(5);
+                using var sem = new System.Threading.SemaphoreSlim(24);
+                var dlTasks = urlRows.Select(async row =>
+                {
+                    await sem.WaitAsync();
+                    try
+                    {
+                        var bytes = await dlClient.GetByteArrayAsync(row.SourceImageUrl!);
+                        if (bytes != null && bytes.Length > 0 && bytes.Length <= 5 * 1024 * 1024
+                            && LooksLikeImage(bytes))
+                        {
+                            row.ImageBytesForCache = bytes;
+                            row.HasImage = true;
+                        }
+                    }
+                    catch { /* không tải được → bỏ qua, không gắn ảnh */ }
+                    finally { sem.Release(); }
+                });
+                await Task.WhenAll(dlTasks);
+            }
+
             foreach (var row in cachedRows)
             {
                 if (!confirmedSet.Contains(row.RowIndex)) continue;
@@ -467,18 +467,11 @@ namespace TMPMS.Controllers
                     }
 
                     // ---- Lưu ảnh ----
-                    string imageUrl = row.SourceImageUrl ?? DefaultImageUrl;
-                    if (row.HasImage && row.ImageBytesForCache != null && row.ImageSourceType == "embedded")
+                    // Chỉ lưu ảnh khi có bytes thật (ảnh nhúng, hoặc URL tải thành công ở bước trên).
+                    // URL hỏng / không có ảnh → dùng ảnh mặc định, KHÔNG gán URL vỡ cho sản phẩm.
+                    string imageUrl = DefaultImageUrl;
+                    if (row.HasImage && row.ImageBytesForCache != null)
                     {
-                        var ext = DetectImageExtension(row.ImageBytesForCache);
-                        var fileName = $"{Guid.NewGuid()}{ext}";
-                        var filePath = Path.Combine(uploadsDir, fileName);
-                        await System.IO.File.WriteAllBytesAsync(filePath, row.ImageBytesForCache);
-                        imageUrl = $"/uploads/medicines/{fileName}";
-                    }
-                    else if (row.HasImage && row.ImageBytesForCache != null && row.ImageSourceType == "url")
-                    {
-                        // Lưu bản sao local cho URL ảnh ngoài
                         var ext = DetectImageExtension(row.ImageBytesForCache);
                         var fileName = $"{Guid.NewGuid()}{ext}";
                         var filePath = Path.Combine(uploadsDir, fileName);
@@ -787,6 +780,17 @@ namespace TMPMS.Controllers
                 style.FillPattern = FillPattern.SolidForeground;
             }
             return style;
+        }
+
+        private static bool LooksLikeImage(byte[] data)
+        {
+            if (data.Length < 4) return false;
+            if (data[0] == 0xFF && data[1] == 0xD8) return true;          // JPEG
+            if (data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E) return true; // PNG
+            if (data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46) return true; // GIF
+            if (data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46) return true; // RIFF (WEBP)
+            if (data[0] == 0x42 && data[1] == 0x4D) return true;          // BMP
+            return false;
         }
 
         private static string DetectImageExtension(byte[] data)
