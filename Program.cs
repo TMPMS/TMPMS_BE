@@ -16,8 +16,6 @@ using TMPMS.Services.Interfaces;
 using TMPMS.Hubs;
 using TMPMS.Models;
 
-Console.WriteLine("===== API VERSION 2026-08-05 =====");
-
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
@@ -58,7 +56,9 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ISmsService, TwilioSmsService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddSignalR();
+
 builder.Services.AddSingleton<TrackingSimulationService>();
+
 builder.Services.AddHostedService(provider => provider.GetRequiredService<TrackingSimulationService>());
 builder.Services.AddHostedService<AppointmentStatusBackgroundService>();
 
@@ -208,7 +208,8 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowFrontend",
         policy => policy.WithOrigins("http://localhost:5173", "https://tmpms.vercel.app", "http://127.0.0.1:5173", "http://localhost", 
                                     "http://222.255.215.218:8080", "http://222.255.215.218", 
-                                    "https://tmpms.io.vn", "https://www.tmpms.io.vn")
+                                    "https://tmpms.io.vn", "https://www.tmpms.io.vn",
+                                    "https://localhost:64647")
                         .AllowAnyMethod()
                         .AllowAnyHeader()
                         .AllowCredentials());
