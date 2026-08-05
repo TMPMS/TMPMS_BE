@@ -54,6 +54,7 @@ builder.Services.AddHttpClient();
 
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ISmsService, TwilioSmsService>();
+builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<TrackingSimulationService>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<TrackingSimulationService>());
