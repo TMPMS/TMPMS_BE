@@ -1,3 +1,4 @@
+using BusinessObjects;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -6,8 +7,8 @@ using NPOI.SS.UserModel;
 using NPOI.SS.Util;
 using NPOI.XSSF.UserModel;
 using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Processing;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -16,8 +17,8 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using BusinessObjects;
 using TMPMS.Data;
+using TMPMS.DTOs;
 
 namespace TMPMS.Controllers
 {
@@ -93,12 +94,12 @@ namespace TMPMS.Controllers
         [RequestSizeLimit(50 * 1024 * 1024)]
         [Consumes("multipart/form-data")]
         [Authorize(Roles = "Admin,Staff,Pharmacy")]
-        public async Task<IActionResult> PreviewImport([FromForm] IFormFile file)
+        public async Task<IActionResult> PreviewImport([FromForm] ImportPreviewRequest request)
         {
-            if (file == null || file.Length == 0)
+            if (request.File == null || request.File.Length == 0)
                 return BadRequest(new { error = "Vui lòng chọn file Excel (.xlsx)" });
 
-            if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+            if (!request.File.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
                 return BadRequest(new { error = "Chỉ hỗ trợ file định dạng .xlsx" });
 
             var categories = await _db.Categories.ToListAsync();
@@ -107,7 +108,7 @@ namespace TMPMS.Controllers
                 .Select(m => new { m.Id, m.Name })
                 .ToListAsync();
 
-            using var stream = file.OpenReadStream();
+            using var stream = request.File.OpenReadStream();
             XSSFWorkbook workbook;
             try { workbook = new XSSFWorkbook(stream); }
             catch { return BadRequest(new { error = "File Excel không đọc được, vui lòng kiểm tra lại." }); }
