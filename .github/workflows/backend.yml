@@ -1,16 +1,14 @@
 name: Build and Push Backend
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
+  workflow_dispatch:   # vẫn giữ để có thể chạy tay khi cần
 
 jobs:
-
   docker:
-
     runs-on: ubuntu-latest
-
     steps:
-
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
@@ -24,4 +22,16 @@ jobs:
         with:
           context: .
           push: true
-          tags: angeldhit/tmpms-api:latest
+          tags: angeldhit/tmpms-api:v1
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd ~/deploy
+            docker compose pull api
+            docker compose up -d api
+            docker image prune -f
