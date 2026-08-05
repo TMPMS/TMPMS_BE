@@ -10,7 +10,7 @@ dist-ssr/
 *.local
 .env
 appsettings.json
-appsettings.Development.json
+appsettings.Production.json
 
 # .NET / Backend Build & Outputs
 [Bb]in/
