@@ -46,6 +46,10 @@ namespace TMPMS.Data
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<Appointment> Appointments { get; set; }
+        public DbSet<AppointmentSlotHold> AppointmentSlotHolds { get; set; }
+        public DbSet<AppointmentPayment> AppointmentPayments { get; set; }
+        public DbSet<AppointmentRescheduleRequest> AppointmentRescheduleRequests { get; set; }
+        public DbSet<AppointmentPaymentIntent> AppointmentPaymentIntents { get; set; }
         public DbSet<Voucher> Vouchers { get; set; }
         public DbSet<SymptomQuestion> SymptomQuestions { get; set; }
         public DbSet<AnswerOption> AnswerOptions { get; set; }
@@ -77,6 +81,20 @@ namespace TMPMS.Data
                 .Property(a => a.ConfirmationDeadline).HasConversion(UtcDateTimeValueConverter.Instance);
             modelBuilder.Entity<Appointment>()
                 .Property(a => a.ConfirmedAt).HasConversion(UtcDateTimeValueConverter.Instance);
+
+            modelBuilder.Entity<AppointmentSlotHold>().HasIndex(h => h.Token).IsUnique();
+            modelBuilder.Entity<AppointmentSlotHold>().Property(h => h.Location).HasMaxLength(450);
+            modelBuilder.Entity<Appointment>().Property(a => a.SymptomDescription).HasMaxLength(500);
+            modelBuilder.Entity<AppointmentPaymentIntent>().HasIndex(i => i.OrderCode).IsUnique();
+            modelBuilder.Entity<AppointmentPaymentIntent>()
+                .HasOne(i => i.SlotHold).WithMany().HasForeignKey(i => i.SlotHoldId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<AppointmentSlotHold>().HasIndex(h => new { h.AppointmentDate, h.Location });
+            modelBuilder.Entity<AppointmentPayment>()
+                .HasOne(p => p.Appointment).WithMany(a => a.AppointmentPayments)
+                .HasForeignKey(p => p.AppointmentId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<AppointmentRescheduleRequest>()
+                .HasOne(r => r.Appointment).WithMany(a => a.RescheduleRequests)
+                .HasForeignKey(r => r.AppointmentId).OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<Review>()
                 .Property(r => r.CreatedAt).HasConversion(UtcDateTimeValueConverter.Instance);

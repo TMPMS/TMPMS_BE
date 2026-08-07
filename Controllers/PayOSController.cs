@@ -7,6 +7,8 @@ using PayOS.Models.Webhooks;
 using PayOS.Models.V2.PaymentRequests;
 using TMPMS.Data;
 using System.Security.Claims;
+using BusinessObjects;
+using TMPMS.Models;
 
 namespace TMPMS.Controllers
 {
@@ -111,6 +113,13 @@ namespace TMPMS.Controllers
             try
             {
                 var verified = await CreateClient().Webhooks.VerifyAsync(webhookData);
+                if (verified.OrderCode >= 800000000000L)
+                {
+                    var intent = await _context.AppointmentPaymentIntents.Include(i => i.SlotHold).FirstOrDefaultAsync(i => i.OrderCode == verified.OrderCode);
+                    if (intent == null) return Ok(new { success = true });
+                    if (verified.Code == "00" && verified.Amount == intent.Amount) await FinalizeAppointmentPayment(intent, verified.Reference);
+                    return Ok(new { success = true });
+                }
                 var order = await _context.Orders
                     .Include(o => o.Payments)
                     .FirstOrDefaultAsync(o => o.Id == verified.OrderCode);
@@ -137,6 +146,47 @@ namespace TMPMS.Controllers
             {
                 return BadRequest(new { error = "Webhook PayOS không hợp lệ." });
             }
+        }
+
+        [HttpPost("appointment/verify/{orderCode:long}")]
+        [Authorize]
+        public async Task<IActionResult> VerifyAppointmentPayment(long orderCode)
+        {
+            var intent = await _context.AppointmentPaymentIntents.Include(i => i.SlotHold).FirstOrDefaultAsync(i => i.OrderCode == orderCode);
+            if (intent == null) return NotFound(new { error = "Không tìm thấy giao dịch đặt cọc." });
+            var currentUserId = GetCurrentUserId(); if (currentUserId == null) return Unauthorized();
+            if (!CanProxy() && intent.UserId != currentUserId.Value) return Forbid();
+            try
+            {
+                var link = await CreateClient().PaymentRequests.GetAsync(orderCode);
+                var status = link.Status.ToString().ToUpperInvariant();
+                if (status == "PAID") await FinalizeAppointmentPayment(intent, orderCode.ToString());
+                else if (status is "CANCELLED" or "EXPIRED") { intent.Status = status == "EXPIRED" ? "Expired" : "Cancelled"; intent.SlotHold.IsConsumed = true; await _context.SaveChangesAsync(); }
+                var appointmentId = await _context.AppointmentPayments.Where(p => p.TransactionCode == orderCode.ToString()).Select(p => (int?)p.AppointmentId).FirstOrDefaultAsync();
+                return Ok(new { orderCode, status, intentStatus = intent.Status, appointmentId });
+            }
+            catch (Exception ex) { return BadRequest(new { error = $"Không thể kiểm tra giao dịch PayOS: {ex.Message}" }); }
+        }
+
+        private async Task FinalizeAppointmentPayment(AppointmentPaymentIntent intent, string transactionCode)
+        {
+            if (intent.Status == "Paid") return;
+            if (intent.ExpiresAt < DateTime.UtcNow) { intent.Status = "Expired"; intent.SlotHold.IsConsumed = true; await _context.SaveChangesAsync(); return; }
+            await using var tx = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var occupied = await _context.Appointments.AnyAsync(a => a.Location == intent.SlotHold.Location && a.AppointmentDate == intent.SlotHold.AppointmentDate
+                && new[] { "PendingConfirmation", "Confirmed", "CheckedIn", "AlternativeProposed" }.Contains(a.Status));
+            if (occupied) { intent.Status = "ManualReview"; await _context.SaveChangesAsync(); await tx.CommitAsync(); return; }
+            var appointment = new Appointment
+            {
+                UserId = intent.UserId, AppointmentDate = intent.SlotHold.AppointmentDate, Location = intent.SlotHold.Location,
+                SymptomDescription = intent.SymptomDescription, Reason = intent.SymptomDescription, Note = intent.Note,
+                PrescriptionImageUrl = intent.PrescriptionImageUrl, DepositAmount = intent.Amount, PaymentMethod = "PayOS",
+                PaymentStatus = "Paid", Status = "PendingConfirmation", PolicyAcceptedAt = intent.CreatedAt,
+                CreatedAt = DateTime.UtcNow, ConfirmationDeadline = DateTime.UtcNow.AddHours(24)
+            };
+            _context.Appointments.Add(appointment); await _context.SaveChangesAsync();
+            _context.AppointmentPayments.Add(new AppointmentPayment { AppointmentId = appointment.Id, Amount = intent.Amount, Method = "PayOS", Status = "Paid", TransactionCode = transactionCode, CreatedAt = DateTime.UtcNow, PaidAt = DateTime.UtcNow });
+            intent.Status = "Paid"; intent.SlotHold.IsConsumed = true; await _context.SaveChangesAsync(); await tx.CommitAsync();
         }
 
         [HttpPost("verify/{orderId:int}")]

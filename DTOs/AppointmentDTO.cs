@@ -16,5 +16,13 @@ namespace TMPMS.DTOs
         public DateTime ConfirmationDeadline { get; set; }
         public DateTime? ConfirmedAt { get; set; }
         public string? RejectionReason { get; set; }
+        public string SymptomDescription { get; set; } = "";
+        public string? PrescriptionImageUrl { get; set; }
+        public string Location { get; set; } = "";
+        public decimal DepositAmount { get; set; }
+        public string PaymentStatus { get; set; } = "";
+        public string? PaymentMethod { get; set; }
+        public decimal RefundAmount { get; set; }
+        public DateTime? CheckedInAt { get; set; }
     }
 }
