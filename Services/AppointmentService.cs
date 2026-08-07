@@ -54,16 +54,18 @@ namespace TMPMS.Services
             // các lịch quá hạn (hết hạn chờ xác nhận 24h hoặc đã qua giờ hẹn) sẽ bị Expired.
             await ExpireOverdueAppointmentsAsync();
 
-            // Quy tắc nghiệp vụ: mỗi user chỉ được có tối đa 1 lịch hẹn đang hoạt động
+            // Quy tắc nghiệp vụ: mỗi user chỉ được có tối đa 3 lịch hẹn đang hoạt động
             // (Status = PendingConfirmation | Confirmed và chưa quá hạn). Nếu có lịch đang chặn,
             // trả thông tin chi tiết lịch đó để FE hiển thị cụ thể.
-            var active = await _appointmentRepository.GetActiveAppointmentByUserId(targetUserId);
-            if (active != null)
+            var activeAppointments = (await _appointmentRepository.GetByUserId(targetUserId))
+                .Where(a => a.Status is "PendingConfirmation" or "Pending" or "Confirmed" or "CheckedIn" or "AlternativeProposed" or "RescheduleRequested")
+                .ToList();
+            if (activeAppointments.Count >= 3)
             {
                 return new AppointmentBookingResult
                 {
                     Success = false,
-                    BlockingAppointment = ToDTO(active)
+                    BlockingAppointment = ToDTO(activeAppointments.OrderBy(a => a.AppointmentDate).First())
                 };
             }
 
@@ -136,6 +138,8 @@ namespace TMPMS.Services
             if (appointment == null) throw new Exception("Appointment not found.");
             if (!isStaff && appointment.UserId != currentUserId)
                 throw new Exception("Bạn không có quyền hủy lịch hẹn này.");
+            if (appointment.Status is not ("PendingConfirmation" or "Confirmed" or "AlternativeProposed" or "RescheduleRequested"))
+                throw new Exception("Lịch hẹn ở trạng thái hiện tại không thể hủy.");
             appointment.Status = "Cancelled";
             return await _appointmentRepository.Update(appointment);
         }
@@ -170,7 +174,9 @@ namespace TMPMS.Services
         {
             var appointment = await _appointmentRepository.GetById(id);
             if (appointment == null) throw new Exception("Appointment not found.");
+            if (appointment.Status != "CheckedIn") throw new Exception("Lịch hẹn phải được check-in trước khi hoàn thành.");
             appointment.Status = "Completed";
+            appointment.CompletedAt = DateTime.UtcNow;
             return await _appointmentRepository.Update(appointment);
         }
 
@@ -192,6 +198,14 @@ namespace TMPMS.Services
                 ConfirmationDeadline = a.ConfirmationDeadline,
                 ConfirmedAt = a.ConfirmedAt,
                 RejectionReason = a.RejectionReason
+                ,SymptomDescription = a.SymptomDescription
+                ,PrescriptionImageUrl = a.PrescriptionImageUrl
+                ,Location = a.Location
+                ,DepositAmount = a.DepositAmount
+                ,PaymentStatus = a.PaymentStatus
+                ,PaymentMethod = a.PaymentMethod
+                ,RefundAmount = a.RefundAmount
+                ,CheckedInAt = a.CheckedInAt
             };
         }
     }

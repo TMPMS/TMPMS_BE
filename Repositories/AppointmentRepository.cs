@@ -102,7 +102,7 @@ namespace TMPMS.Repositories
             return await _context.Appointments
                 .Where(x =>
                     (x.Status == "Pending" || x.Status == "Confirmed") && x.AppointmentDate < now ||
-                    x.Status == "PendingConfirmation" && x.ConfirmationDeadline < utcNow)
+                    x.Status == "PendingConfirmation" && (x.ConfirmationDeadline < utcNow || x.AppointmentDate < now))
                 .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Status, "Expired"));
         }
 
