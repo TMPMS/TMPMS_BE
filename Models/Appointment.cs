@@ -1,4 +1,6 @@
-﻿namespace BusinessObjects
+﻿using TMPMS.Models;
+
+namespace BusinessObjects
 {
     public class Appointment
     {
@@ -38,11 +40,28 @@
         // Lý do từ chối (khi Status = Rejected)
         public string? RejectionReason { get; set; }
 
+        // Booking details
+        public string SymptomDescription { get; set; } = string.Empty;
+        public string? PrescriptionImageUrl { get; set; }
+        public string Location { get; set; } = "Nhà thuốc TMPMS";
+        public decimal DepositAmount { get; set; }
+        public string PaymentStatus { get; set; } = "Unpaid";
+        public string? PaymentMethod { get; set; }
+        public DateTime? PolicyAcceptedAt { get; set; }
+        public DateTime? CheckedInAt { get; set; }
+        public DateTime? CompletedAt { get; set; }
+        public DateTime? CancelledAt { get; set; }
+        public decimal RefundAmount { get; set; }
+        public string? ProposedAppointmentDateNote { get; set; }
+
         // Navigation Property
         public User User { get; set; }
 
         public User? Staff { get; set; }
 
         public User? ConfirmedBy { get; set; }
+
+        public ICollection<AppointmentPayment> AppointmentPayments { get; set; } = new List<AppointmentPayment>();
+        public ICollection<AppointmentRescheduleRequest> RescheduleRequests { get; set; } = new List<AppointmentRescheduleRequest>();
     }
 }
