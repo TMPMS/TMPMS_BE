@@ -1,11 +1,14 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NPOI.SS.UserModel;
+using NPOI.XSSF.UserModel;
 using Services.Interfaces;
 using TMPMS.DTOs;
 
 namespace TMPMS.Controllers
 {
     [Route("api/[controller]")]
+    [Route("[controller]")]
     [ApiController]
     [Authorize(Roles = "Admin,Staff,Pharmacy,Accountant")]
     public class ReportController : ControllerBase
@@ -32,5 +35,85 @@ namespace TMPMS.Controllers
 
         [HttpGet("dashboard")]
         public async Task<ActionResult> GetDashboardSummary() => Ok(await _service.GetDashboardSummary());
+
+        [HttpGet("staff-revenue")]
+        public async Task<ActionResult> GetStaffRevenue([FromQuery] DateTime from, [FromQuery] DateTime to)
+            => Ok(await _service.GetStaffRevenue(from, to));
+
+        // GET /api/Report/revenue/export-excel?from=...&to=...&groupBy=Day
+        // Xuất báo cáo doanh thu (theo khoảng ngày) ra file Excel gồm 4 sheet: Doanh thu, Bán chạy,
+        // Theo danh mục, Theo nhân viên.
+        [HttpGet("revenue/export-excel")]
+        public async Task<IActionResult> ExportRevenueExcel(
+            [FromQuery] DateTime from, [FromQuery] DateTime to, [FromQuery] string groupBy = "Day")
+        {
+            var revenue = await _service.GetRevenueReport(new RevenueReportRequestDTO { FromDate = from, ToDate = to, GroupBy = groupBy });
+            var topSelling = await _service.GetTopSellingMedicines(from, to, 20);
+            var categoryRevenue = await _service.GetCategoryRevenue(from, to);
+            var staffRevenue = await _service.GetStaffRevenue(from, to);
+
+            var workbook = new XSSFWorkbook();
+            var headerStyle = CreateStyle(workbook, bold: true, bgColor: NPOI.HSSF.Util.HSSFColor.LightGreen.Index);
+
+            void WriteSheet(string name, string[] headers, IEnumerable<object[]> rows)
+            {
+                var sheet = workbook.CreateSheet(name);
+                var headerRow = sheet.CreateRow(0);
+                for (int c = 0; c < headers.Length; c++)
+                {
+                    var cell = headerRow.CreateCell(c);
+                    cell.SetCellValue(headers[c]);
+                    cell.CellStyle = headerStyle;
+                }
+                int r = 1;
+                foreach (var rowValues in rows)
+                {
+                    var row = sheet.CreateRow(r++);
+                    for (int c = 0; c < rowValues.Length; c++)
+                    {
+                        var cell = row.CreateCell(c);
+                        switch (rowValues[c])
+                        {
+                            case decimal dv: cell.SetCellValue((double)dv); break;
+                            case int iv: cell.SetCellValue(iv); break;
+                            default: cell.SetCellValue(rowValues[c]?.ToString() ?? ""); break;
+                        }
+                    }
+                }
+                for (int c = 0; c < headers.Length; c++) sheet.AutoSizeColumn(c);
+            }
+
+            WriteSheet("Doanh thu", new[] { "Kỳ", "Doanh thu bán hàng", "Doanh thu đặt cọc khám", "Tổng doanh thu", "Số đơn hàng" },
+                revenue.Select(r => new object[] { r.Period, r.ProductRevenue, r.AppointmentDepositRevenue, r.Revenue, r.OrderCount }));
+
+            WriteSheet("Bán chạy", new[] { "Tên thuốc", "Số lượng đã bán", "Doanh thu" },
+                topSelling.Select(t => new object[] { t.MedicineName, t.TotalQuantitySold, t.TotalRevenue }));
+
+            WriteSheet("Theo danh mục", new[] { "Danh mục", "Số lượng đã bán", "Doanh thu" },
+                categoryRevenue.Select(c => new object[] { c.CategoryName, c.TotalQuantitySold, c.TotalRevenue }));
+
+            WriteSheet("Theo nhân viên", new[] { "Nhân viên", "Doanh thu bán hàng", "Doanh thu đặt cọc khám", "Tổng doanh thu" },
+                staffRevenue.Select(s => new object[] { s.StaffName, s.ProductRevenue, s.AppointmentDepositRevenue, s.TotalRevenue }));
+
+            using var ms = new MemoryStream();
+            workbook.Write(ms, false);
+            return File(ms.ToArray(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"bao_cao_doanh_thu_{from:yyyyMMdd}_{to:yyyyMMdd}.xlsx");
+        }
+
+        private static ICellStyle CreateStyle(IWorkbook wb, bool bold = false, short bgColor = 0)
+        {
+            var style = wb.CreateCellStyle();
+            var font = wb.CreateFont();
+            font.IsBold = bold;
+            style.SetFont(font);
+            if (bgColor != 0)
+            {
+                style.FillForegroundColor = bgColor;
+                style.FillPattern = FillPattern.SolidForeground;
+            }
+            return style;
+        }
     }
 }

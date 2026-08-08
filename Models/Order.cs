@@ -28,7 +28,20 @@ namespace BusinessObjects
 
         public string? ReturnReason { get; set; }
 
+        // Nhân viên đã xử lý đơn (gán khi đơn chuyển sang "Delivered") — dùng để thống kê
+        // doanh thu theo nhân viên.
+        public int? ProcessedByStaffId { get; set; }
+
+        // Voucher đã áp dụng cho đơn này (audit trail) — tối đa 1 voucher/loại.
+        public int? ProductVoucherId { get; set; }
+        public int? ShippingVoucherId { get; set; }
+
         public User? User { get; set; }
+
+        public User? ProcessedByStaff { get; set; }
+
+        public Voucher? ProductVoucher { get; set; }
+        public Voucher? ShippingVoucher { get; set; }
 
         public ICollection<OrderItem>? OrderItems { get; set; }
 

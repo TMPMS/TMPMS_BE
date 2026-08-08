@@ -13,6 +13,8 @@ namespace TMPMS.DTOs
         public string TaxCode { get; set; } = string.Empty;
         public string tax_code => TaxCode;
         public string Status { get; set; } = "Active";
+        public int ProductCount { get; set; }
+        public int product_count => ProductCount;
     }
 
     public class SupplierCreateDto

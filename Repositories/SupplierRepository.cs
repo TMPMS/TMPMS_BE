@@ -1,6 +1,7 @@
 using BusinessObjects;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using TMPMS.Data;
 using TMPMS.Repositories.Interfaces;
@@ -33,6 +34,14 @@ namespace TMPMS.Repositories
             _context.Suppliers.Remove(sup);
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        public async Task<Dictionary<int, int>> GetProductCountsAsync()
+        {
+            return await _context.Medicines
+                .Where(m => m.IsActive)
+                .GroupBy(m => m.SupplierId)
+                .ToDictionaryAsync(g => g.Key, g => g.Count());
         }
     }
 }

@@ -97,11 +97,17 @@ namespace TMPMS.Services
 
             foreach (var p in prescriptions)
             {
+                int effectivePatientId = p.PatientId ?? p.UserId;
                 var dto = new PrescriptionResponseDTO
                 {
                     Id = p.Id,
                     UserId = p.UserId,
-                    UserName = p.User?.UserName ?? "",          // hoặc UserName tùy entity
+                    UserName = p.User?.FullName ?? p.User?.UserName ?? "",
+                    PatientId = effectivePatientId,
+                    PatientName = effectivePatientId == p.UserId
+                        ? (p.User?.FullName ?? p.User?.UserName ?? "")
+                        : (p.Patient?.FullName ?? p.Patient?.UserName ?? ""),
+                    IsSubmittedForOther = p.PatientId.HasValue && p.PatientId.Value != p.UserId,
                     DiagnosisId = p.DiagnosisId ,
                     DoctorId = p.DoctorId,
                     DoctorName = p.DoctorName  ,
@@ -123,7 +129,8 @@ namespace TMPMS.Services
                         MedicineId = item.MedicineId,
                         MedicineName = item.Medicine?.Name ?? "",
                         Quantity = item.Quantity,
-                        RequiresPrescription = item.Medicine?.RequiresPrescription ?? false
+                        RequiresPrescription = item.Medicine?.RequiresPrescription ?? false,
+                        Instructions = item.Instructions
                     });
                 }
 

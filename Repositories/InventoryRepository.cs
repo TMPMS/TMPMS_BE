@@ -1,5 +1,6 @@
 using BusinessObjects;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Repositories.Interfaces;
 using TMPMS.Data;
 
@@ -9,6 +10,12 @@ namespace TMPMS.Repositories
     {
         private readonly TMPMSDbContext _context;
         public InventoryRepository(TMPMSDbContext context) => _context = context;
+
+        public async Task<IDbContextTransaction> BeginTransactionAsync()
+        {
+            if (_context.Database.CurrentTransaction != null) return null;
+            return await _context.Database.BeginTransactionAsync();
+        }
 
         public async Task<InventoryStock> GetStock(int medicineId, int warehouseId)
         {
@@ -103,21 +110,189 @@ namespace TMPMS.Repositories
             return await query.OrderByDescending(t => t.CreatedAt).ToListAsync();
         }
 
-        public async Task<List<Medicine>> GetLowStockMedicines(int threshold)
+        public async Task<StockBatch> GetBatchById(int id)
         {
-            return await _context.Medicines
-                .Where(m => m.StockQuantity <= threshold)
-                .OrderBy(m => m.StockQuantity)
+            return await _context.StockBatches
+                .Include(b => b.Medicine)
+                .Include(b => b.Warehouse)
+                .Include(b => b.Supplier)
+                .FirstOrDefaultAsync(b => b.Id == id);
+        }
+
+        public async Task<StockBatch> GetBatchByNumber(int medicineId, int warehouseId, string batchNumber)
+        {
+            return await _context.StockBatches.FirstOrDefaultAsync(b =>
+                b.MedicineId == medicineId && b.WarehouseId == warehouseId && b.BatchNumber == batchNumber);
+        }
+
+        public async Task<List<StockBatch>> GetBatchesByMedicine(int medicineId, int? warehouseId)
+        {
+            var query = _context.StockBatches
+                .Include(b => b.Warehouse)
+                .Include(b => b.Supplier)
+                .Where(b => b.MedicineId == medicineId);
+
+            if (warehouseId.HasValue) query = query.Where(b => b.WarehouseId == warehouseId.Value);
+
+            return await query.OrderBy(b => b.ExpiryDate).ToListAsync();
+        }
+
+        public async Task<List<StockBatch>> GetBatchesByWarehouse(int warehouseId)
+        {
+            return await _context.StockBatches
+                .Include(b => b.Medicine)
+                .Include(b => b.Supplier)
+                .Where(b => b.WarehouseId == warehouseId)
+                .OrderBy(b => b.ExpiryDate)
                 .ToListAsync();
         }
 
-        public async Task<List<Medicine>> GetExpiringMedicines(int daysAhead)
+        // FEFO: lô hết hạn sớm nhất được xuất trước
+        // Dùng .Date (bỏ giờ) để khớp với cách InventoryService tính hạn dùng hiển thị cho người dùng
+        // (Severity/ComputeDisplayStatus) — tránh trường hợp lô hết hạn "hôm nay" bị loại khỏi FEFO
+        // ngay từ 00:00:01 trong khi UI vẫn báo "còn hàng, hết hạn hôm nay".
+        public async Task<List<StockBatch>> GetActiveBatchesForFEFO(int medicineId, int warehouseId)
+        {
+            var today = DateTime.Now.Date;
+            return await _context.StockBatches
+                .Where(b => b.MedicineId == medicineId
+                    && b.WarehouseId == warehouseId
+                    && b.Status == StockBatchStatus.Active
+                    && b.QuantityRemaining > 0
+                    && b.ExpiryDate.Date >= today)
+                .OrderBy(b => b.ExpiryDate)
+                .ToListAsync();
+        }
+
+        // Như GetActiveBatchesForFEFO nhưng khoá dòng bằng UPDLOCK/ROWLOCK trong transaction hiện tại,
+        // để hai request trừ kho đồng thời không cùng đọc số dư cũ rồi cùng ghi đè (tránh bán vượt tồn kho).
+        public async Task<List<StockBatch>> GetActiveBatchesForFEFOForUpdate(int medicineId, int warehouseId)
+        {
+            var today = DateTime.Now.Date;
+            return await _context.StockBatches
+                .FromSqlInterpolated($@"SELECT * FROM StockBatches WITH (UPDLOCK, ROWLOCK)
+                    WHERE MedicineId = {medicineId} AND WarehouseId = {warehouseId}
+                    AND Status = {StockBatchStatus.Active} AND QuantityRemaining > 0 AND CAST(ExpiryDate AS DATE) >= {today}")
+                .OrderBy(b => b.ExpiryDate)
+                .ToListAsync();
+        }
+
+        public async Task<List<StockBatch>> GetBatchesExpiringWithin(int daysAhead)
         {
             var limitDate = DateTime.Now.AddDays(daysAhead);
-            return await _context.Medicines
-                .Where(m => m.ExpiryDate <= limitDate && m.ExpiryDate >= DateTime.Now)
-                .OrderBy(m => m.ExpiryDate)
+            return await _context.StockBatches
+                .Include(b => b.Medicine)
+                .Include(b => b.Warehouse)
+                .Where(b => b.Status != StockBatchStatus.Disposed
+                    && b.Status != StockBatchStatus.Depleted
+                    && b.QuantityRemaining > 0
+                    && b.ExpiryDate <= limitDate)
+                .OrderBy(b => b.ExpiryDate)
                 .ToListAsync();
+        }
+
+        public async Task<StockBatch> AddBatch(StockBatch batch)
+        {
+            _context.StockBatches.Add(batch);
+            await _context.SaveChangesAsync();
+            return batch;
+        }
+
+        public async Task<int> GetTotalRemainingForMedicine(int medicineId)
+        {
+            var today = DateTime.Now.Date;
+            return await _context.StockBatches
+                .Where(b => b.MedicineId == medicineId && b.Status == StockBatchStatus.Active && b.ExpiryDate.Date >= today)
+                .SumAsync(b => (int?)b.QuantityRemaining) ?? 0;
+        }
+
+        // Đồng bộ lại số liệu tồn kho cache (InventoryStock theo kho + StockQuantity tổng trên Medicine)
+        // từ tổng QuantityRemaining của các lô còn hạn — nguồn sự thật luôn là StockBatches.
+        public async Task RecomputeStockCaches(int medicineId, int warehouseId)
+        {
+            var today = DateTime.Now.Date;
+            var warehouseTotal = await _context.StockBatches
+                .Where(b => b.MedicineId == medicineId && b.WarehouseId == warehouseId
+                    && b.Status == StockBatchStatus.Active && b.ExpiryDate.Date >= today)
+                .SumAsync(b => (int?)b.QuantityRemaining) ?? 0;
+
+            var stock = await _context.InventoryStocks
+                .FirstOrDefaultAsync(s => s.MedicineId == medicineId && s.WarehouseId == warehouseId);
+            if (stock == null)
+            {
+                _context.InventoryStocks.Add(new InventoryStock { MedicineId = medicineId, WarehouseId = warehouseId, Quantity = warehouseTotal });
+            }
+            else
+            {
+                stock.Quantity = warehouseTotal;
+            }
+
+            var medicineTotal = await GetTotalRemainingForMedicine(medicineId);
+            var med = await _context.Medicines.FindAsync(medicineId);
+            if (med != null) med.StockQuantity = medicineTotal;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<Medicine> GetMedicineById(int id) => await _context.Medicines.FindAsync(id);
+
+        public async Task<List<InventoryTransaction>> GetExportTransactionsWithBatch()
+        {
+            return await _context.InventoryTransactions
+                .Where(t => t.Type == "Export" && t.StockBatchId != null)
+                .ToListAsync();
+        }
+
+        public async Task<Dictionary<int, (string? Status, string? PaymentStatus)>> GetOrderStatusMap()
+        {
+            var orders = await _context.Orders
+                .Select(o => new { o.Id, o.Status, o.PaymentStatus })
+                .ToListAsync();
+            return orders.ToDictionary(o => o.Id, o => (o.Status, o.PaymentStatus));
+        }
+
+        public async Task<List<StockBatch>> GetBatchesWithCost(int? warehouseId, int? medicineId)
+        {
+            var query = _context.StockBatches
+                .Include(b => b.Medicine)
+                .Include(b => b.Warehouse)
+                .Where(b => b.UnitCostPrice != null)
+                .AsQueryable();
+
+            if (warehouseId.HasValue) query = query.Where(b => b.WarehouseId == warehouseId.Value);
+            if (medicineId.HasValue) query = query.Where(b => b.MedicineId == medicineId.Value);
+
+            return await query.OrderByDescending(b => b.ReceivedAt).ToListAsync();
+        }
+
+        public async Task SaveChangesAsync() => await _context.SaveChangesAsync();
+
+        public async Task<FlashSale> AddFlashSale(FlashSale flashSale)
+        {
+            _context.FlashSales.Add(flashSale);
+            await _context.SaveChangesAsync();
+            return flashSale;
+        }
+
+        public async Task<FlashSale> GetActiveFlashSaleByMedicine(int medicineId)
+        {
+            return await _context.FlashSales
+                .Where(f => f.MedicineId == medicineId && f.IsActive)
+                .OrderByDescending(f => f.AppliedAt)
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<List<FlashSale>> GetFlashSales(bool activeOnly)
+        {
+            var query = _context.FlashSales
+                .Include(f => f.Medicine)
+                .Include(f => f.Batch)
+                .Include(f => f.AppliedByStaff)
+                .AsQueryable();
+
+            if (activeOnly) query = query.Where(f => f.IsActive);
+
+            return await query.OrderByDescending(f => f.AppliedAt).ToListAsync();
         }
     }
 }

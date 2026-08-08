@@ -9,6 +9,7 @@ using TMPMS.DTOs;
 namespace TMPMS.Controllers
 {
     [Route("api/[controller]")]
+    [Route("[controller]")]
     [ApiController]
     [Authorize]
     public class DiagnosisController : ControllerBase

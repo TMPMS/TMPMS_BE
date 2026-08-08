@@ -14,6 +14,7 @@ namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Route("[controller]")]
     [Authorize]
     public class PharmacyChatController : ControllerBase
     {
