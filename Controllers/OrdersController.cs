@@ -3,7 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using BusinessObjects;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using Services.Interfaces;
 using TMPMS.Data;
+using TMPMS.Services;
+using TMPMS.Services.Interfaces;
 
 namespace TMPMS.Controllers
 {
@@ -13,10 +16,20 @@ namespace TMPMS.Controllers
     public class OrdersController : ControllerBase
     {
         private readonly TMPMSDbContext _context;
+        private readonly IInventoryService _inventoryService;
+        private readonly IShippingFeeService _shippingFeeService;
 
-        public OrdersController(TMPMSDbContext context)
+        public OrdersController(TMPMSDbContext context, IInventoryService inventoryService, IShippingFeeService shippingFeeService)
         {
             _context = context;
+            _inventoryService = inventoryService;
+            _shippingFeeService = shippingFeeService;
+        }
+
+        private async Task<int> GetDefaultWarehouseId()
+        {
+            var wh = await _context.Warehouses.FirstOrDefaultAsync();
+            return wh?.Id ?? 1;
         }
 
         public class OrderItemInput
@@ -35,6 +48,9 @@ namespace TMPMS.Controllers
             public List<OrderItemInput> Items { get; set; } = new();
             public string DeliveryMethod { get; set; } = "Giao hàng hỏa tốc (Ship 2 Giờ)";
             public decimal ShippingFee { get; set; }
+            // Tối đa 1 voucher/loại — 1 mã giảm giá sản phẩm + 1 mã giảm phí vận chuyển.
+            public string? ProductVoucherCode { get; set; }
+            public string? ShippingVoucherCode { get; set; }
         }
 
         private int? GetUserId()
@@ -49,6 +65,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPost("orders")]
+        [HttpPost("~/orders")]
         public async Task<IActionResult> CreateOrder([FromBody] CheckoutRequest request)
         {
             var currentUserId = GetUserId();
@@ -72,7 +89,10 @@ namespace TMPMS.Controllers
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // 1. Validate stock quantity & price
+                // 1. Validate stock quantity & lấy giá bán THẬT từ DB — không tin giá do client gửi lên,
+                // vì request có thể bị sửa qua devtools/intercept để đặt hàng với giá tuỳ ý.
+                var medicinesById = new Dictionary<int, Medicine>();
+                decimal subtotal = 0m;
                 foreach (var item in request.Items)
                 {
                     var medicine = await _context.Medicines.FindAsync(item.MedicineId);
@@ -88,38 +108,86 @@ namespace TMPMS.Controllers
                     {
                         return BadRequest(new { error = $"Sản phẩm '{medicine.Name}' hiện đã hết hàng hoặc không đủ số lượng tồn kho (Hiện còn: {medicine.StockQuantity})." });
                     }
+                    medicinesById[item.MedicineId] = medicine;
+                    subtotal += medicine.Price.Value * item.Quantity;
                 }
+
+                // 1.1 Phí ship luôn do SERVER tính lại từ địa chỉ + phương thức giao hàng,
+                // không tin số ShippingFee do client gửi lên (tránh gian lận phí ship qua devtools).
+                var (serverShippingFee, _, _) = _shippingFeeService.Calculate(request.ShippingAddress, request.DeliveryMethod);
+
+                // 1.2 Áp dụng tối đa 1 voucher sản phẩm + 1 voucher ship — số tiền giảm luôn do
+                // SERVER tính lại, không nhận discount do client tự tính. Nếu mã được gửi lên
+                // nhưng không hợp lệ thì báo lỗi rõ ràng (không âm thầm bỏ qua).
+                Voucher? productVoucher = null;
+                Voucher? shippingVoucher = null;
+                decimal productDiscount = 0m;
+                decimal shippingDiscount = 0m;
+
+                if (!string.IsNullOrWhiteSpace(request.ProductVoucherCode))
+                {
+                    var result = await VoucherResolver.ResolveAsync(_context, request.ProductVoucherCode, "product", currentUserId);
+                    if (result.Voucher == null)
+                    {
+                        return BadRequest(new { error = result.Error });
+                    }
+                    if (subtotal < result.Voucher.MinOrderValue)
+                    {
+                        return BadRequest(new { error = $"Đơn hàng tối thiểu {result.Voucher.MinOrderValue:N0}đ để dùng voucher \"{result.Voucher.Code}\"" });
+                    }
+                    productVoucher = result.Voucher;
+                    productDiscount = VoucherResolver.ComputeDiscount(productVoucher, subtotal);
+                    productVoucher.UsedCount += 1;
+                }
+
+                if (!string.IsNullOrWhiteSpace(request.ShippingVoucherCode))
+                {
+                    var result = await VoucherResolver.ResolveAsync(_context, request.ShippingVoucherCode, "shipping", currentUserId);
+                    if (result.Voucher == null)
+                    {
+                        return BadRequest(new { error = result.Error });
+                    }
+                    if (subtotal < result.Voucher.MinOrderValue)
+                    {
+                        return BadRequest(new { error = $"Đơn hàng tối thiểu {result.Voucher.MinOrderValue:N0}đ để dùng voucher \"{result.Voucher.Code}\"" });
+                    }
+                    shippingVoucher = result.Voucher;
+                    shippingDiscount = VoucherResolver.ComputeDiscount(shippingVoucher, serverShippingFee);
+                    shippingVoucher.UsedCount += 1;
+                }
+
+                var finalAmount = Math.Max(0m, subtotal + serverShippingFee - productDiscount - shippingDiscount);
 
                 // 2. Create order
                 var order = new Order
                 {
                     UserId = request.UserId,
-                    TotalAmount = request.TotalAmount,
+                    TotalAmount = finalAmount,
                     Status = "Pending",
                     ShippingAddress = request.ShippingAddress,
                     PaymentStatus = "Unpaid",
                     DeliveryMethod = request.DeliveryMethod,
-                    ShippingFee = request.ShippingFee,
-                    CreatedAt = DateTime.UtcNow
+                    ShippingFee = serverShippingFee,
+                    CreatedAt = DateTime.UtcNow,
+                    ProductVoucherId = productVoucher?.Id,
+                    ShippingVoucherId = shippingVoucher?.Id
                 };
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
 
-                // 3. Add order items & decrement stock quantity
+                // 3. Add order items (giá lấy từ DB, không lấy từ client) & decrement stock quantity
+                // (FEFO — lô hết hạn sớm nhất trừ trước)
+                var warehouseId = await GetDefaultWarehouseId();
                 foreach (var item in request.Items)
                 {
-                    var medicine = await _context.Medicines.FindAsync(item.MedicineId);
-                    if (medicine != null)
-                    {
-                        medicine.StockQuantity -= item.Quantity;
-                    }
+                    await _inventoryService.DeductStockFEFO(item.MedicineId, warehouseId, item.Quantity, $"ORDER-{order.Id}");
 
                     var orderItem = new OrderItem
                     {
                         OrderId = order.Id,
                         MedicineId = item.MedicineId,
                         Quantity = item.Quantity,
-                        Price = item.Price
+                        Price = medicinesById[item.MedicineId].Price.Value
                     };
                     _context.OrderItems.Add(orderItem);
                 }
@@ -134,7 +202,7 @@ namespace TMPMS.Controllers
                     OrderId = order.Id,
                     Method = request.PaymentMethod,
                     TransactionCode = "TXN-" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                    Amount = request.TotalAmount,
+                    Amount = finalAmount,
                     Status = "Pending",
                     PaidAt = null
                 };
@@ -153,6 +221,11 @@ namespace TMPMS.Controllers
 
                 return StatusCode(201, order);
             }
+            catch (DbUpdateConcurrencyException)
+            {
+                await transaction.RollbackAsync();
+                return Conflict(new { error = "Voucher vừa hết lượt sử dụng, vui lòng thử lại." });
+            }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
@@ -161,6 +234,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpGet("user-orders/{userId}")]
+        [HttpGet("~/user-orders/{userId}")]
         public async Task<IActionResult> GetUserOrders(int userId)
         {
             var currentUserId = GetUserId();
@@ -211,6 +285,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpGet("admin/orders")]
+        [HttpGet("~/admin/orders")]
         [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> GetAdminOrders()
         {
@@ -256,17 +331,29 @@ namespace TMPMS.Controllers
         private async Task RestockOrderItemsAsync(int orderId)
         {
             var items = await _context.OrderItems.Where(oi => oi.OrderId == orderId).ToListAsync();
+            var warehouseId = await GetDefaultWarehouseId();
             foreach (var oi in items)
             {
-                var med = await _context.Medicines.FindAsync(oi.MedicineId);
-                if (med != null)
+                await _inventoryService.RestoreStockFEFO(oi.MedicineId, warehouseId, oi.Quantity, $"ORDER-{orderId}-RESTOCK");
+            }
+        }
+
+        // Hoàn tác lượt dùng voucher khi đơn bị hủy/trả — tránh voucher bị "ăn mòn" lượt dùng oan.
+        private async Task RollbackVoucherUsageAsync(Order order)
+        {
+            foreach (var voucherId in new[] { order.ProductVoucherId, order.ShippingVoucherId })
+            {
+                if (voucherId == null) continue;
+                var voucher = await _context.Vouchers.FindAsync(voucherId.Value);
+                if (voucher != null)
                 {
-                    med.StockQuantity += oi.Quantity;
+                    voucher.UsedCount = Math.Max(0, voucher.UsedCount - 1);
                 }
             }
         }
 
         [HttpPost("orders/{id}/cancel")]
+        [HttpPost("~/orders/{id}/cancel")]
         public async Task<IActionResult> CancelOrder(int id)
         {
             var currentUserId = GetUserId();
@@ -282,6 +369,7 @@ namespace TMPMS.Controllers
             }
 
             await RestockOrderItemsAsync(id);
+            await RollbackVoucherUsageAsync(order);
             order.Status = "Cancelled";
             await _context.SaveChangesAsync();
             return Ok(order);
@@ -293,6 +381,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPost("orders/{id}/return-request")]
+        [HttpPost("~/orders/{id}/return-request")]
         public async Task<IActionResult> RequestReturn(int id, [FromBody] ReturnRequestInput input)
         {
             var currentUserId = GetUserId();
@@ -324,6 +413,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPatch("admin/orders/{id}")]
+        [HttpPatch("~/admin/orders/{id}")]
         [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> UpdateOrderStatus(int id, [FromBody] UpdateStatusRequest request)
         {
@@ -335,16 +425,25 @@ namespace TMPMS.Controllers
             {
                 order.Status = request.Status;
             }
+
+            // Ghi nhận nhân viên xử lý đơn tại thời điểm giao hàng thành công, dùng cho thống kê
+            // doanh thu theo nhân viên. Chỉ gán lần đầu (không ghi đè nếu đã có).
+            if (request.Status == "Delivered" && order.ProcessedByStaffId == null)
+            {
+                order.ProcessedByStaffId = GetUserId();
+            }
             if (request.PaymentStatus != null)
             {
                 order.PaymentStatus = request.PaymentStatus;
             }
 
-            // Hoàn kho khi đơn bị hủy hoặc đã duyệt trả hàng (chỉ 1 lần, không double-restock).
+            // Hoàn kho + hoàn lượt dùng voucher khi đơn bị hủy hoặc đã duyệt trả hàng
+            // (chỉ 1 lần, không double-restock/double-rollback).
             if (request.Status is "Cancelled" or "Returned" &&
                 previousStatus != "Cancelled" && previousStatus != "Returned")
             {
                 await RestockOrderItemsAsync(id);
+                await RollbackVoucherUsageAsync(order);
             }
 
             // Duyệt trả hàng: đồng bộ Payment.Status = Refunded + ghi nhận trên đơn.

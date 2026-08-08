@@ -14,6 +14,7 @@ namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Route("[controller]")]
     public class ChatController : ControllerBase
     {
         private readonly TMPMSDbContext _context;
@@ -144,14 +145,45 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
                     };
 
                     using var client = new HttpClient();
-                    var response = await client.PostAsync(
-                        $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={apiKey}",
-                        new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json")
-                    );
 
-                    var responseString = await response.Content.ReadAsStringAsync();
+                    // Thử lần lượt nhiều model — nếu 1 tên model không còn khả dụng/không hợp lệ thì vẫn
+                    // còn cơ hội trả lời bằng AI thật thay vì luôn rơi xuống chatbot rule-based ở BƯỚC 4.
+                    var modelsToTry = new[] { "gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-2.0-flash", "gemini-flash-latest" };
+                    HttpResponseMessage? response = null;
+                    string responseString = "";
 
-                    if (!response.IsSuccessStatusCode)
+                    foreach (var model in modelsToTry)
+                    {
+                        try
+                        {
+                            var res = await client.PostAsync(
+                                $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}",
+                                new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json")
+                            );
+                            var body = await res.Content.ReadAsStringAsync();
+                            if (res.IsSuccessStatusCode)
+                            {
+                                response = res;
+                                responseString = body;
+                                break;
+                            }
+                            else if (response == null)
+                            {
+                                response = res;
+                                responseString = body;
+                            }
+                        }
+                        catch (Exception modelEx)
+                        {
+                            if (response == null) responseString = modelEx.Message;
+                        }
+                    }
+
+                    if (response == null)
+                    {
+                        Console.WriteLine("[Gemini Chatbot Error]: Không gọi được model nào. Falling back to rule-based keyword matching.");
+                    }
+                    else if (!response.IsSuccessStatusCode)
                     {
                         var statusCode = (int)response.StatusCode;
                         var errStatus = "";

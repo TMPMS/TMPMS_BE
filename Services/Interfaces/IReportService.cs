@@ -9,5 +9,6 @@ namespace Services.Interfaces
         Task<List<OrderStatusStatDTO>> GetOrderStatusStatistics();
         Task<List<CategoryRevenueDTO>> GetCategoryRevenue(DateTime from, DateTime to);
         Task<DashboardSummaryDTO> GetDashboardSummary();
+        Task<List<StaffRevenueDTO>> GetStaffRevenue(DateTime from, DateTime to);
     }
 }

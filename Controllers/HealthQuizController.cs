@@ -10,6 +10,7 @@ namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Route("[controller]")]
     public class HealthQuizController : ControllerBase
     {
         private readonly IHealthQuizService _service;

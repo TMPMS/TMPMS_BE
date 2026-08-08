@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using BusinessObjects;
 using PayOS;
 using PayOS.Models;
 using PayOS.Models.Webhooks;
@@ -9,20 +10,47 @@ using TMPMS.Data;
 using System.Security.Claims;
 using BusinessObjects;
 using TMPMS.Models;
+using Services.Interfaces;
 
 namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("api/payos")]
+    [Route("payos")]
     public class PayOSController : ControllerBase
     {
         private readonly TMPMSDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IInventoryService _inventoryService;
 
-        public PayOSController(TMPMSDbContext context, IConfiguration configuration)
+        public PayOSController(TMPMSDbContext context, IConfiguration configuration, IInventoryService inventoryService)
         {
             _context = context;
             _configuration = configuration;
+            _inventoryService = inventoryService;
+        }
+
+        // Khi PayOS báo giao dịch bị hủy/hết hạn, đơn hàng liên quan phải được hủy thật
+        // (hoàn kho, hoàn lượt voucher) — không được để đơn kẹt ở "Chờ duyệt" với hàng đã bị trừ kho.
+        private async Task CancelUnpaidOrderAsync(Order order)
+        {
+            if (order.Status != "Pending") return;
+
+            var warehouseId = (await _context.Warehouses.FirstOrDefaultAsync())?.Id ?? 1;
+            var items = await _context.OrderItems.Where(oi => oi.OrderId == order.Id).ToListAsync();
+            foreach (var oi in items)
+            {
+                await _inventoryService.RestoreStockFEFO(oi.MedicineId, warehouseId, oi.Quantity, $"ORDER-{order.Id}-RESTOCK");
+            }
+
+            foreach (var voucherId in new[] { order.ProductVoucherId, order.ShippingVoucherId })
+            {
+                if (voucherId == null) continue;
+                var voucher = await _context.Vouchers.FindAsync(voucherId.Value);
+                if (voucher != null) voucher.UsedCount = Math.Max(0, voucher.UsedCount - 1);
+            }
+
+            order.Status = "Cancelled";
         }
 
         public class CreatePaymentLinkInput
@@ -127,6 +155,11 @@ namespace TMPMS.Controllers
                 // PayOS gửi một payload mẫu khi xác nhận webhook; vẫn cần trả 2xx.
                 if (order == null) return Ok(new { success = true });
 
+                // Idempotency: PayOS có thể gửi lại cùng 1 webhook nhiều lần (retry khi timeout).
+                // Nếu đơn đã "Paid" rồi thì không xử lý lại (tránh ghi đè PaidAt/TransactionCode
+                // của lần thanh toán gốc bằng dữ liệu của lần gọi lại).
+                if (order.PaymentStatus == "Paid") return Ok(new { success = true });
+
                 var payment = order.Payments.FirstOrDefault(p => p.Method == "PayOS")
                     ?? order.Payments.FirstOrDefault();
 
@@ -225,6 +258,7 @@ namespace TMPMS.Controllers
                 {
                     order.PaymentStatus = "Failed";
                     if (payment != null) payment.Status = "Failed";
+                    await CancelUnpaidOrderAsync(order);
                 }
 
                 await _context.SaveChangesAsync();
@@ -239,6 +273,76 @@ namespace TMPMS.Controllers
             {
                 return BadRequest(new { error = $"Không thể kiểm tra giao dịch PayOS: {ex.Message}" });
             }
+        }
+
+        // Demo thanh toán tiền cọc lịch hẹn — giống demo-pay/{orderId} cho đơn hàng, bỏ qua PayOS thật
+        // để demo/test luồng đặt lịch nhanh, không cần quét VietQR.
+        [HttpPost("appointment/demo-pay/{orderCode:long}")]
+        [Authorize]
+        public async Task<IActionResult> DemoPayAppointment(long orderCode)
+        {
+            var intent = await _context.AppointmentPaymentIntents.Include(i => i.SlotHold).FirstOrDefaultAsync(i => i.OrderCode == orderCode);
+            if (intent == null) return NotFound(new { error = "Không tìm thấy giao dịch đặt cọc." });
+
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null) return Unauthorized();
+            if (!CanProxy() && intent.UserId != currentUserId.Value) return Forbid();
+
+            var demoTransactionCode = "DEMO-PAYOS-" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            await FinalizeAppointmentPayment(intent, demoTransactionCode);
+
+            var appointmentId = await _context.AppointmentPayments
+                .Where(p => p.TransactionCode == demoTransactionCode)
+                .Select(p => (int?)p.AppointmentId)
+                .FirstOrDefaultAsync();
+
+            return Ok(new { success = true, orderCode, intentStatus = intent.Status, appointmentId, message = "Giả lập thanh toán PayOS thành công cho tiền cọc lịch hẹn." });
+        }
+
+        [HttpPost("demo-pay/{orderId:int}")]
+        [Authorize]
+        public async Task<IActionResult> DemoPay(int orderId)
+        {
+            var order = await _context.Orders
+                .Include(o => o.Payments)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order == null) return NotFound(new { error = "Không tìm thấy đơn hàng." });
+
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null) return Unauthorized();
+            if (!CanProxy() && order.UserId != currentUserId.Value) return Forbid();
+
+            order.PaymentStatus = "Paid";
+            var payment = order.Payments.FirstOrDefault();
+            if (payment != null)
+            {
+                payment.Method = "PayOS (Demo)";
+                payment.Status = "Success";
+                payment.PaidAt = DateTime.UtcNow;
+                payment.TransactionCode = "DEMO-PAYOS-" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            }
+            else
+            {
+                order.Payments.Add(new Payment
+                {
+                    OrderId = order.Id,
+                    Method = "PayOS (Demo)",
+                    Amount = order.TotalAmount,
+                    Status = "Success",
+                    TransactionCode = "DEMO-PAYOS-" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                    PaidAt = DateTime.UtcNow
+                });
+            }
+
+            await _context.SaveChangesAsync();
+            return Ok(new
+            {
+                success = true,
+                orderId = order.Id,
+                paymentStatus = "Paid",
+                message = "Giả lập thanh toán PayOS thành công cho đơn hàng #" + order.Id
+            });
         }
 
         private int? GetCurrentUserId()

@@ -17,19 +17,23 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
+using Services.Interfaces;
 using TMPMS.Data;
 using TMPMS.DTOs;
+using TMPMS.Utils;
 
 namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("api/admin/products")]
+    [Route("admin/products")]
     public class ProductImportController : ControllerBase
     {
         private readonly TMPMSDbContext _db;
         private readonly IMemoryCache _cache;
         private readonly IWebHostEnvironment _env;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IInventoryService _inventoryService;
 
         // Placeholder ảnh mặc định — hình ảnh dược phẩm/thảo dược
         private const string DefaultImageUrl =
@@ -39,12 +43,14 @@ namespace TMPMS.Controllers
             TMPMSDbContext db,
             IMemoryCache cache,
             IWebHostEnvironment env,
-            IHttpClientFactory httpClientFactory)
+            IHttpClientFactory httpClientFactory,
+            IInventoryService inventoryService)
         {
             _db = db;
             _cache = cache;
             _env = env;
             _httpClientFactory = httpClientFactory;
+            _inventoryService = inventoryService;
         }
 
         // ================================================================
@@ -170,6 +176,9 @@ namespace TMPMS.Controllers
                 var deleteFlag = CellStr(10);
                 var productIdStr = CellStr(11);
                 var rxStr = CellStr(12);
+                var batchNumberCell = CellStr(13);
+                var mfgDateStr = CellStr(14);
+                var expDateStr = CellStr(15);
 
                 // Bỏ qua hàng hoàn toàn trống
                 if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(priceStr)
@@ -191,6 +200,9 @@ namespace TMPMS.Controllers
                     ProductId = productId,
                     RxCell = rxStr,
                     RequiresPrescription = ParseRxFlag(rxStr),
+                    BatchNumber = batchNumberCell,
+                    ManufactureDate = ParseExcelDate(row, 14, mfgDateStr),
+                    ExpiryDate = ParseExcelDate(row, 15, expDateStr),
                     Status = "New"
                 };
 
@@ -253,6 +265,24 @@ namespace TMPMS.Controllers
                     if (matchedSup == null && !string.IsNullOrWhiteSpace(supplierName))
                         errors.Add($"Nhà cung cấp không tồn tại: '{supplierName}'");
                     preview.SupplierId = matchedSup?.Id ?? 0;
+
+                    // ---- Số lượng tồn kho luôn tạo LÔ HÀNG MỚI (có hạn dùng riêng), không cộng dồn mất hạn dùng cũ ----
+                    int.TryParse(stockStr.Replace(".", "").Replace(",", ""), out int stockQtyCheck);
+                    if (stockQtyCheck > 0)
+                    {
+                        if (preview.ExpiryDate == null)
+                        {
+                            preview.Warnings.Add("Có Số lượng tồn kho nhưng thiếu Hạn sử dụng — số lượng sẽ KHÔNG được nhập kho (chỉ cập nhật thông tin khác). Điền cột Hạn sử dụng hoặc dùng tab Kho Dược liệu để nhập lô.");
+                        }
+                        else if (preview.ExpiryDate.Value.Date < DateTime.Now.Date)
+                        {
+                            errors.Add("Hạn sử dụng đã ở quá khứ — không thể nhập lô hàng đã hết hạn");
+                        }
+                        else if (preview.ManufactureDate != null && preview.ExpiryDate.Value.Date <= preview.ManufactureDate.Value.Date)
+                        {
+                            errors.Add("Hạn sử dụng phải sau Ngày sản xuất");
+                        }
+                    }
 
                     // New vs Update (theo ProductId hoặc tên)
                     if (productId > 0)
@@ -369,7 +399,10 @@ namespace TMPMS.Controllers
                         : null,
                     p.ProductId,
                     p.ExistingId,
-                    requiresPrescription = p.RequiresPrescription
+                    requiresPrescription = p.RequiresPrescription,
+                    p.BatchNumber,
+                    manufactureDate = p.ManufactureDate,
+                    expiryDate = p.ExpiryDate
                 })
             });
         }
@@ -418,6 +451,8 @@ namespace TMPMS.Controllers
                     await sem.WaitAsync();
                     try
                     {
+                        if (SsrfGuard.IsUnsafeFetchTarget(row.SourceImageUrl!)) return;
+
                         var bytes = await dlClient.GetByteArrayAsync(row.SourceImageUrl!);
                         if (bytes != null && bytes.Length > 0 && bytes.Length <= 5 * 1024 * 1024
                             && LooksLikeImage(bytes))
@@ -449,7 +484,8 @@ namespace TMPMS.Controllers
                         bool hasActiveLinks =
                             await _db.OrderItems.AnyAsync(oi => oi.MedicineId == row.ExistingId) ||
                             await _db.CartItems.AnyAsync(ci => ci.MedicineId == row.ExistingId) ||
-                            await _db.PrescriptionItems.AnyAsync(pi => pi.MedicineId == row.ExistingId);
+                            await _db.PrescriptionItems.AnyAsync(pi => pi.MedicineId == row.ExistingId) ||
+                            await _db.StockBatches.AnyAsync(b => b.MedicineId == row.ExistingId);
 
                         if (hasActiveLinks)
                         {
@@ -492,7 +528,8 @@ namespace TMPMS.Controllers
                             SupplierId = row.SupplierId > 0 ? row.SupplierId : 1,
                             Price = row.Price > 0 ? row.Price : null,
                             OldPrice = decimal.TryParse(row.OldPriceStr?.Replace(".", "").Replace(",", ""), out var op) ? op : null,
-                            StockQuantity = stockQty,
+                            // Tồn kho chỉ được cộng qua nhập lô (StockBatch) bên dưới — không set thẳng ở đây
+                            StockQuantity = 0,
                             Unit = row.Unit,
                             Description = row.Description,
                             ImageUrl = imageUrl,
@@ -505,18 +542,20 @@ namespace TMPMS.Controllers
                         _db.Medicines.Add(medicine);
                         await _db.SaveChangesAsync();
 
-                        if (stockQty > 0)
+                        // Có tồn kho + có Hạn dùng hợp lệ → tạo LÔ HÀNG riêng (không cộng dồn mất hạn dùng)
+                        if (stockQty > 0 && row.ExpiryDate.HasValue)
                         {
-                            _db.InventoryTransactions.Add(new InventoryTransaction
+                            await _inventoryService.CreateBatch(new StockBatchCreateDTO
                             {
                                 MedicineId = medicine.Id,
                                 WarehouseId = warehouseId,
-                                Type = "Import",
+                                BatchNumber = string.IsNullOrWhiteSpace(row.BatchNumber) ? null : row.BatchNumber,
+                                ManufactureDate = row.ManufactureDate ?? DateTime.Now,
+                                ExpiryDate = row.ExpiryDate.Value,
                                 Quantity = stockQty,
-                                ReferenceId = $"BULK_IMPORT_{req.ImportSessionId[..8]}",
-                                CreatedAt = DateTime.UtcNow
+                                SupplierId = row.SupplierId > 0 ? row.SupplierId : (int?)null,
+                                Note = $"Nhập qua Excel — phiên {req.ImportSessionId[..8]}"
                             });
-                            await _db.SaveChangesAsync();
                         }
                         successCount++;
                     }
@@ -536,21 +575,23 @@ namespace TMPMS.Controllers
                             // Chỉ cập nhật cờ kê đơn khi cột Excel có giá trị — tránh xoá cờ true của dữ liệu cũ khi import file template cũ (cột trống)
                             if (!string.IsNullOrWhiteSpace(row.RxCell)) med.RequiresPrescription = row.RequiresPrescription;
                             med.IsActive = true; // đảm bảo không bị ẩn
+                            await _db.SaveChangesAsync();
 
-                            if (stockQty > 0)
+                            // Có tồn kho + có Hạn dùng hợp lệ → tạo LÔ HÀNG riêng (không cộng dồn mất hạn dùng cũ)
+                            if (stockQty > 0 && row.ExpiryDate.HasValue)
                             {
-                                med.StockQuantity += stockQty;
-                                _db.InventoryTransactions.Add(new InventoryTransaction
+                                await _inventoryService.CreateBatch(new StockBatchCreateDTO
                                 {
                                     MedicineId = med.Id,
                                     WarehouseId = warehouseId,
-                                    Type = "Import",
+                                    BatchNumber = string.IsNullOrWhiteSpace(row.BatchNumber) ? null : row.BatchNumber,
+                                    ManufactureDate = row.ManufactureDate ?? DateTime.Now,
+                                    ExpiryDate = row.ExpiryDate.Value,
                                     Quantity = stockQty,
-                                    ReferenceId = $"BULK_IMPORT_{req.ImportSessionId[..8]}",
-                                    CreatedAt = DateTime.UtcNow
+                                    SupplierId = row.SupplierId > 0 ? row.SupplierId : (int?)null,
+                                    Note = $"Nhập qua Excel — phiên {req.ImportSessionId[..8]}"
                                 });
                             }
-                            await _db.SaveChangesAsync();
                             successCount++;
                         }
                     }
@@ -598,6 +639,12 @@ namespace TMPMS.Controllers
                 "Cột ProductId (cột xám cuối) — KHÔNG XÓA CỘT NÀY",
                 "  • Hệ thống dùng cột này để đối chiếu Update/Delete — xóa đi sẽ mất khả năng cập nhật chính xác",
                 "",
+                "Cột Số lượng tồn kho — MỖI LẦN NHẬP TẠO 1 LÔ HÀNG RIÊNG, không cộng dồn mất hạn dùng cũ:",
+                "  • Nếu điền Số lượng tồn kho > 0, BẮT BUỘC phải điền cột Hạn sử dụng (dd/mm/yyyy)",
+                "  • Thiếu Hạn sử dụng → số lượng sẽ KHÔNG được nhập kho (chỉ cập nhật các thông tin khác)",
+                "  • Cột Số lô để trống → hệ thống tự sinh số lô",
+                "  • Cột Ngày sản xuất để trống → mặc định là ngày nhập",
+                "",
                 "Các trường bắt buộc: Tên sản phẩm, Danh mục, Giá bán lẻ",
                 "Danh mục phải khớp chính xác tên danh mục đã có trong hệ thống",
             };
@@ -619,7 +666,7 @@ namespace TMPMS.Controllers
                 fontColor: NPOI.HSSF.Util.HSSFColor.DarkRed.Index);
 
             // Column widths
-            int[] colWidths = { 2000, 8000, 6000, 7000, 4000, 4000, 4000, 3000, 10000, 8000, 4000, 3000, 4500 };
+            int[] colWidths = { 2000, 8000, 6000, 7000, 4000, 4000, 4000, 3000, 10000, 8000, 4000, 3000, 4500, 4500, 4500, 4500 };
             for (int i = 0; i < colWidths.Length; i++)
                 sheet.SetColumnWidth(i, colWidths[i]);
 
@@ -627,7 +674,8 @@ namespace TMPMS.Controllers
             string[] headers = {
                 "STT", "Tên sản phẩm", "Danh mục", "Nhà cung cấp",
                 "Giá bán lẻ", "Giá niêm yết cũ", "Số lượng tồn kho",
-                "Đơn vị", "Mô tả", "Hình ảnh", "Đánh dấu Xóa", "ProductId", "Yêu cầu kê đơn (Có/Không)"
+                "Đơn vị", "Mô tả", "Hình ảnh", "Đánh dấu Xóa", "ProductId", "Yêu cầu kê đơn (Có/Không)",
+                "Số lô", "Ngày sản xuất", "Hạn sử dụng"
             };
             var headerRow = sheet.CreateRow(0);
             for (int i = 0; i < headers.Length; i++)
@@ -647,6 +695,12 @@ namespace TMPMS.Controllers
             noteRow.GetCell(11).CellStyle = noteStyle;
             noteRow.CreateCell(12).SetCellValue("Có = cần kê đơn, để trống = không");
             noteRow.GetCell(12).CellStyle = noteStyle;
+            noteRow.CreateCell(13).SetCellValue("Để trống sẽ tự sinh");
+            noteRow.GetCell(13).CellStyle = noteStyle;
+            noteRow.CreateCell(14).SetCellValue("dd/mm/yyyy, để trống = ngày nhập");
+            noteRow.GetCell(14).CellStyle = noteStyle;
+            noteRow.CreateCell(15).SetCellValue("dd/mm/yyyy — BẮT BUỘC nếu có Số lượng tồn kho");
+            noteRow.GetCell(15).CellStyle = noteStyle;
 
             if (medicines == null || medicines.Count == 0)
             {
@@ -655,7 +709,8 @@ namespace TMPMS.Controllers
                 string[] example = {
                     "1", "Bạch truật thảo dược", "Thảo dược & Đông Y", "Dược liệu Việt Nam",
                     "85000", "100000", "200", "Túi 100g",
-                    "Bạch truật khô hỗ trợ tiêu hoá, bổ tỳ vị", "", "", "", "Không"
+                    "Bạch truật khô hỗ trợ tiêu hoá, bổ tỳ vị", "", "", "", "Không",
+                    "", DateTime.Now.ToString("dd/MM/yyyy"), DateTime.Now.AddYears(1).ToString("dd/MM/yyyy")
                 };
                 for (int i = 0; i < example.Length; i++)
                     exRow.CreateCell(i).SetCellValue(example[i]);
@@ -683,7 +738,9 @@ namespace TMPMS.Controllers
                     row.CreateCell(3).SetCellValue(med.Supplier?.CompanyName ?? "");
                     row.CreateCell(4).SetCellValue((double)(med.Price ?? 0));
                     row.CreateCell(5).SetCellValue((double)(med.OldPrice ?? 0));
-                    row.CreateCell(6).SetCellValue(med.StockQuantity);
+                    // Để trống Số lượng tồn kho khi xuất — tồn kho quản lý theo lô ở tab Kho Dược liệu,
+                    // xuất ra rồi nhập lại nguyên file sẽ không cộng/xóa nhầm tồn kho hiện có.
+                    // Chỉ điền cột này (kèm Hạn sử dụng) khi THỰC SỰ muốn nhập thêm kho qua Excel.
                     row.CreateCell(7).SetCellValue(med.Unit ?? "");
                     row.CreateCell(8).SetCellValue(med.Description ?? "");
 
@@ -707,9 +764,12 @@ namespace TMPMS.Controllers
                             // Tải ảnh từ URL ngoài — dùng timeout 3s để không chặn quá lâu
                             try
                             {
-                                var client = _httpClientFactory.CreateClient();
-                                client.Timeout = TimeSpan.FromSeconds(3);
-                                imgBytes = await client.GetByteArrayAsync(med.ImageUrl);
+                                if (!SsrfGuard.IsUnsafeFetchTarget(med.ImageUrl))
+                                {
+                                    var client = _httpClientFactory.CreateClient();
+                                    client.Timeout = TimeSpan.FromSeconds(3);
+                                    imgBytes = await client.GetByteArrayAsync(med.ImageUrl);
+                                }
                             }
                             catch { /* bỏ qua, ghi URL */ }
                         }
@@ -757,6 +817,23 @@ namespace TMPMS.Controllers
             }
 
             return workbook;
+        }
+
+        /// <summary>Đọc ngày từ ô Excel — ưu tiên ô định dạng ngày thật, sau đó thử parse chuỗi text (dd/MM/yyyy, ...)</summary>
+        private static DateTime? ParseExcelDate(IRow row, int col, string cellText)
+        {
+            var cell = row.GetCell(col);
+            if (cell != null && cell.CellType == CellType.Numeric && DateUtil.IsCellDateFormatted(cell))
+                return cell.DateCellValue;
+
+            if (string.IsNullOrWhiteSpace(cellText)) return null;
+
+            var formats = new[] { "dd/MM/yyyy", "d/M/yyyy", "yyyy-MM-dd", "MM/dd/yyyy" };
+            if (DateTime.TryParseExact(cellText, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var exact))
+                return exact;
+            if (DateTime.TryParse(cellText, CultureInfo.InvariantCulture, DateTimeStyles.None, out var generic))
+                return generic;
+            return null;
         }
 
         private static int FindDataStartRow(ISheet sheet)
@@ -847,6 +924,9 @@ namespace TMPMS.Controllers
         public int ProductId { get; set; }
         public string RxCell { get; set; } = "";   // giá trị thô cột "Yêu cầu kê đơn"
         public bool RequiresPrescription { get; set; } // đã parse (false nếu cột trống)
+        public string BatchNumber { get; set; } = ""; // số lô — để trống sẽ tự sinh
+        public DateTime? ManufactureDate { get; set; }
+        public DateTime? ExpiryDate { get; set; }
         public string Status { get; set; } = "New"; // New | Update | Delete | Error
         public string? ErrorMessage { get; set; }
         public List<string> Warnings { get; set; } = new();
