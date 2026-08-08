@@ -24,23 +24,39 @@ namespace TMPMS.Data
                 await context.SaveChangesAsync();
             }
 
-            // 2. Ensure Supplier exists
-            var supplier = await context.Suppliers.FirstOrDefaultAsync();
-            if (supplier == null)
+            // 2. Ensure Rich Suppliers exist
+            var suppliersList = await context.Suppliers.ToListAsync();
+            var supplierNamesToEnsure = new[]
             {
-                supplier = new Supplier
+                ("Công ty Cổ phần Traphaco", "Nguyễn Văn A", "traphaco@gmail.com", "0243681161", "75 Yên Ninh, Ba Đình, Hà Nội", "0100108656"),
+                ("Công ty TNHH Dược phẩm OPC", "Trần Thị B", "opc@opcpharma.com", "0283960124", "1017 Hồng Bàng, Quận 6, TP. HCM", "0302560112"),
+                ("Công ty Cổ phần Bách Thảo Dược", "Lê Văn C", "contact@bachthaoduoc.com.vn", "0225381881", "Lô Q-6, KCN Tràng Duệ, Hải Phòng", "0201882654"),
+                ("Nhà sâm KGC Hàn Quốc (Cheong Kwan Jang)", "Kim Min Woo", "kgc_global@kgc.co.kr", "+82-2-2189-6100", "Seoul, Hàn Quốc", "FOREIGN-001"),
+                ("Công ty Cổ phần Dược phẩm Thái Minh", "Phạm Văn D", "contact@thaiminh.com.vn", "02432003300", "Cầu Giấy, Hà Nội", "0108119922"),
+                ("Công ty Cổ phần Dược Hậu Giang (DHG Pharma)", "Nguyễn Thị E", "dhgpharma@dhgpharma.com.vn", "02923891433", "Cần Thơ, Việt Nam", "1800156711"),
+                ("Công ty Cổ phần Dược phẩm Imexpharm", "Hoàng Văn F", "imexpharm@imexpharm.com", "02773851941", "Đồng Tháp, Việt Nam", "1400101928"),
+                ("Tập đoàn Dược phẩm Sanofi (Pháp)", "Jean Dupont", "contact@sanofi.fr", "+33-1-53774000", "Paris, Pháp", "FOREIGN-002")
+            };
+
+            foreach (var supData in supplierNamesToEnsure)
+            {
+                if (!suppliersList.Any(s => s.CompanyName == supData.Item1))
                 {
-                    CompanyName = "Công ty Dược Liệu Trung Ương 1",
-                    ContactPerson = "Nguyễn Văn Hùng",
-                    Email = "lh@duoclieutw1.vn",
-                    Phone = "02438254123",
-                    Address = "Số 138 Giảng Võ, Ba Đình, Hà Nội",
-                    TaxCode = "0100108921",
-                    Status = "Active"
-                };
-                context.Suppliers.Add(supplier);
-                await context.SaveChangesAsync();
+                    var newSup = new Supplier
+                    {
+                        CompanyName = supData.Item1,
+                        ContactPerson = supData.Item2,
+                        Email = supData.Item3,
+                        Phone = supData.Item4,
+                        Address = supData.Item5,
+                        TaxCode = supData.Item6,
+                        Status = "Active"
+                    };
+                    context.Suppliers.Add(newSup);
+                }
             }
+            await context.SaveChangesAsync();
+            suppliersList = await context.Suppliers.ToListAsync();
 
             var herbList = new (string Name, string Tier, decimal PriceGram)[]
             {
@@ -188,27 +204,50 @@ namespace TMPMS.Data
                 ("Nhân Sâm", "Cao cấp / hiếm", 975.0m),
                 ("Kha Tử", "Thông dụng", 130.0m),
                 ("Tang Ký Sinh", "Phổ thông", 115.0m),
+
+                // Bổ sung các vị thuộc nhóm "Thập Bát Phản" (kỵ nhau) phục vụ tính năng
+                // AI cảnh báo tương tác vị thuốc cho Pharmacy khi kê đơn.
+                ("Cam Toại", "Thông dụng", 260.0m),
+                ("Đại Kích", "Thông dụng", 275.0m),
+                ("Nguyên Hoa", "Thông dụng", 270.0m),
+                ("Hải Tảo", "Thông dụng", 180.0m),
+                ("Côn Bố", "Phổ thông", 95.0m),
+                ("Ô Đầu", "Thông dụng", 290.0m),
+                ("Phụ Tử", "Thông dụng", 285.0m),
+                ("Bối Mẫu", "Quý / bổ dưỡng", 360.0m),
+                ("Qua Lâu", "Thông dụng", 175.0m),
+                ("Bạch Liễm", "Thông dụng", 210.0m),
+                ("Bạch Cập", "Thông dụng", 245.0m),
+                ("Lê Lô", "Thông dụng", 160.0m),
             };
 
+            var mainWarehouse = await context.Warehouses.FirstOrDefaultAsync();
+
+            int supplierIdx = 0;
             bool changes = false;
             foreach (var item in herbList)
             {
                 var existingMed = await context.Medicines.FirstOrDefaultAsync(m => m.Name == item.Name);
                 if (existingMed == null)
                 {
+                    var assignedSupplier = suppliersList[supplierIdx % suppliersList.Count];
+                    supplierIdx++;
+
+                    const int initialStockQty = 5000;
+
                     var med = new Medicine
                     {
                         CategoryId = category.Id,
-                        SupplierId = supplier.Id,
+                        SupplierId = assignedSupplier.Id,
                         Name = item.Name,
-                        Description = $"Vị thuốc Đông Y {item.Name} ({item.Tier}) - Thảo dược thiên nhiên đạt chuẩn chất lượng.",
+                        Description = $"Vị thuốc Đông Y {item.Name} ({item.Tier}) - Thảo dược thiên nhiên đạt chuẩn chất lượng từ {assignedSupplier.CompanyName}.",
                         Price = item.PriceGram,
-                        StockQuantity = 0,
+                        StockQuantity = mainWarehouse != null ? initialStockQty : 0,
                         Unit = "gram",
                         ImageUrl = "https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=500",
                         ManufactureDate = DateTime.Now,
                         ExpiryDate = DateTime.Now.AddYears(2),
-                        RequiresPrescription = false,
+                        RequiresPrescription = true,
                         CreatedAt = DateTime.Now
                     };
                     context.Medicines.Add(med);
@@ -227,6 +266,92 @@ namespace TMPMS.Data
                         PreservationMethod = ""
                     };
                     context.HerbalMedicineInfos.Add(info);
+
+                    // Nhập kho ban đầu (StockBatch + InventoryStock) — nếu không, hệ thống quản lý tồn kho
+                    // theo lô sẽ đồng bộ Medicine.StockQuantity về 0 ở lần cập nhật tồn kho kế tiếp.
+                    if (mainWarehouse != null)
+                    {
+                        context.StockBatches.Add(new StockBatch
+                        {
+                            MedicineId = med.Id,
+                            WarehouseId = mainWarehouse.Id,
+                            SupplierId = assignedSupplier.Id,
+                            BatchNumber = $"INIT-{med.Id}",
+                            ManufactureDate = med.ManufactureDate,
+                            ExpiryDate = med.ExpiryDate,
+                            QuantityReceived = initialStockQty,
+                            QuantityRemaining = initialStockQty,
+                            UnitCostPrice = item.PriceGram,
+                            ReceivedAt = DateTime.Now,
+                            Status = StockBatchStatus.Active,
+                            Note = "Lô khởi tạo tự động khi seed vị thuốc mới"
+                        });
+                        context.InventoryStocks.Add(new InventoryStock
+                        {
+                            MedicineId = med.Id,
+                            WarehouseId = mainWarehouse.Id,
+                            Quantity = initialStockQty
+                        });
+                    }
+
+                    changes = true;
+                }
+            }
+
+            // Backfill tồn kho cho các vị thuốc "Thập Bát Phản" đã được tạo ở lần chạy trước đây
+            // (trước khi seeder này có logic tạo StockBatch/InventoryStock) nhưng vẫn còn StockQuantity = 0.
+            if (mainWarehouse != null)
+            {
+                var phanHerbNames = new[] { "Cam Toại", "Đại Kích", "Nguyên Hoa", "Hải Tảo", "Côn Bố", "Ô Đầu", "Phụ Tử", "Bối Mẫu", "Qua Lâu", "Bạch Liễm", "Bạch Cập", "Lê Lô" };
+                var toBackfill = await context.Medicines
+                    .Where(m => phanHerbNames.Contains(m.Name) && m.StockQuantity == 0)
+                    .ToListAsync();
+
+                foreach (var med in toBackfill)
+                {
+                    var hasBatch = await context.StockBatches.AnyAsync(b => b.MedicineId == med.Id);
+                    if (hasBatch) continue;
+
+                    const int backfillQty = 5000;
+                    context.StockBatches.Add(new StockBatch
+                    {
+                        MedicineId = med.Id,
+                        WarehouseId = mainWarehouse.Id,
+                        SupplierId = med.SupplierId,
+                        BatchNumber = $"INIT-{med.Id}",
+                        ManufactureDate = med.ManufactureDate,
+                        ExpiryDate = med.ExpiryDate,
+                        QuantityReceived = backfillQty,
+                        QuantityRemaining = backfillQty,
+                        UnitCostPrice = med.Price,
+                        ReceivedAt = DateTime.Now,
+                        Status = StockBatchStatus.Active,
+                        Note = "Lô backfill tự động cho vị thuốc Thập Bát Phản seed trước đó"
+                    });
+                    context.InventoryStocks.Add(new InventoryStock
+                    {
+                        MedicineId = med.Id,
+                        WarehouseId = mainWarehouse.Id,
+                        Quantity = backfillQty
+                    });
+                    med.StockQuantity = backfillQty;
+                    changes = true;
+                }
+            }
+
+            // Diversify supplier IDs for any existing medicines — nhưng CHỈ khi TẤT CẢ medicine hiện tại
+            // vẫn còn ở supplier mặc định/chưa gán (<=1), tức là chưa từng chạy diversify lần nào.
+            // Trước đây điều kiện này chạy lại mỗi lần khởi động app và ghi đè bất kỳ medicine nào có
+            // SupplierId <= 1 — kể cả khi Dược sĩ/Admin đã CỐ Ý gán lại supplier #1 (nhà cung cấp thật,
+            // hợp lệ) sau lần seed đầu tiên. Chỉ chạy 1 lần cho dữ liệu hoàn toàn mới để tránh ghi đè dữ liệu thật.
+            var allExistingMeds = await context.Medicines.ToListAsync();
+            if (allExistingMeds.Count > 0 && allExistingMeds.All(m => m.SupplierId <= 1))
+            {
+                int supCounter = 0;
+                foreach (var m in allExistingMeds)
+                {
+                    m.SupplierId = suppliersList[supCounter % suppliersList.Count].Id;
+                    supCounter++;
                     changes = true;
                 }
             }

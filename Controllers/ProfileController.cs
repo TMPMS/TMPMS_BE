@@ -14,6 +14,7 @@ namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("api/profile")]
+    [Route("profile")]
     [Authorize]
     public class ProfileController : ControllerBase
     {

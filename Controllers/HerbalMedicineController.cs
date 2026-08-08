@@ -6,6 +6,7 @@ using TMPMS.DTOs;
 namespace TMPMS.Controllers
 {
     [Route("api/[controller]")]
+    [Route("[controller]")]
     [ApiController]
     public class HerbalMedicineController : ControllerBase
     {

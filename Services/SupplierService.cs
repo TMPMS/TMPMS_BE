@@ -16,6 +16,7 @@ namespace TMPMS.Services
         public async Task<List<SupplierDto>> GetAllAsync()
         {
             var list = await _repo.GetAllAsync();
+            var counts = await _repo.GetProductCountsAsync();
             return list.Select(s => new SupplierDto
             {
                 Id = s.Id,
@@ -25,7 +26,8 @@ namespace TMPMS.Services
                 Phone = s.Phone,
                 Address = s.Address,
                 TaxCode = s.TaxCode,
-                Status = s.Status ?? "Active"
+                Status = s.Status ?? "Active",
+                ProductCount = counts.TryGetValue(s.Id, out var count) ? count : 0
             }).ToList();
         }
 

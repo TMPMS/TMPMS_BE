@@ -22,7 +22,7 @@ namespace TMPMS.Controllers
         public async Task<IActionResult> GetCategories()
         {
             var categories = await _context.Categories
-                .Select(c => new { c.Id, c.Name, c.Description })
+                .Select(c => new { c.Id, c.Name, c.Description, ProductCount = c.Medicines.Count(m => m.IsActive) })
                 .ToListAsync();
             return Ok(categories);
         }

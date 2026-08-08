@@ -9,6 +9,7 @@ namespace TMPMS.Controllers
 
     [ApiController]
     [Route("api/patients")]
+    [Route("patients")]
     [Authorize]
     public class PatientController : ControllerBase
     {

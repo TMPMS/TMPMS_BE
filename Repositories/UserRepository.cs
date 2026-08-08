@@ -225,15 +225,6 @@ namespace TMPMS.Repositories
             {
                 address.AddressLine = dto.Address;
             }
-            else if (!string.IsNullOrEmpty(dto.Address))
-            {
-                user.Addresses.Add(new UserAddress
-                {
-                    UserId = userId,
-                    AddressLine = dto.Address,
-                    IsDefault = true
-                });
-            }
 
             await _context.SaveChangesAsync();
 

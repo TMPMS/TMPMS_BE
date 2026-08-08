@@ -41,8 +41,11 @@ namespace TMPMS.Data
         public DbSet<Warehouse> Warehouses { get; set; }
         public DbSet<InventoryStock> InventoryStocks { get; set; }
         public DbSet<InventoryTransaction> InventoryTransactions { get; set; }
+        public DbSet<StockBatch> StockBatches { get; set; }
+        public DbSet<FlashSale> FlashSales { get; set; }
         public DbSet<Diagnosis> Diagnoses { get; set; }
         public DbSet<HerbalMedicineInfo> HerbalMedicineInfos { get; set; }
+        public DbSet<HerbalInteraction> HerbalInteractions { get; set; }
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<Appointment> Appointments { get; set; }
@@ -51,6 +54,7 @@ namespace TMPMS.Data
         public DbSet<AppointmentRescheduleRequest> AppointmentRescheduleRequests { get; set; }
         public DbSet<AppointmentPaymentIntent> AppointmentPaymentIntents { get; set; }
         public DbSet<Voucher> Vouchers { get; set; }
+        public DbSet<WheelSpin> WheelSpins { get; set; }
         public DbSet<SymptomQuestion> SymptomQuestions { get; set; }
         public DbSet<AnswerOption> AnswerOptions { get; set; }
         public DbSet<SyndromeType> SyndromeTypes { get; set; }
@@ -59,6 +63,7 @@ namespace TMPMS.Data
         public DbSet<PharmacyChatSession> PharmacyChatSessions { get; set; }
         public DbSet<PharmacyChatMessage> PharmacyChatMessages { get; set; }
         public DbSet<PharmacyStore> Stores { get; set; }
+        public DbSet<NewsArticle> NewsArticles { get; set; }
 
         public DbSet<HealthQuiz> HealthQuizzes { get; set; }
         public DbSet<QuizQuestion> QuizQuestions { get; set; }
@@ -104,6 +109,50 @@ namespace TMPMS.Data
 
             modelBuilder.Entity<Voucher>()
                 .Property(v => v.CreatedAt).HasConversion(UtcDateTimeValueConverter.Instance);
+
+            modelBuilder.Entity<Voucher>()
+                .HasIndex(v => v.Code)
+                .IsUnique();
+
+            modelBuilder.Entity<Voucher>()
+                .Property(v => v.RowVersion)
+                .IsRowVersion();
+
+            modelBuilder.Entity<WheelSpin>()
+                .Property(w => w.SpinDate).HasConversion(UtcDateTimeValueConverter.Instance);
+            modelBuilder.Entity<WheelSpin>()
+                .Property(w => w.CreatedAt).HasConversion(UtcDateTimeValueConverter.Instance);
+
+            modelBuilder.Entity<WheelSpin>()
+                .HasIndex(w => new { w.UserId, w.SpinDate })
+                .IsUnique();
+
+            modelBuilder.Entity<WheelSpin>()
+                .HasOne(w => w.User)
+                .WithMany()
+                .HasForeignKey(w => w.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<WheelSpin>()
+                .HasOne(w => w.Voucher)
+                .WithMany()
+                .HasForeignKey(w => w.VoucherId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Order -> Voucher: dùng Restrict (không SetNull) cho cả 2 FK vì SQL Server chặn
+            // "multiple cascade paths" khi 2 cột cùng trỏ về 1 bảng với hành vi cascade/setnull
+            // (giống lý do HerbalInteraction dùng Restrict ở trên).
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.ProductVoucher)
+                .WithMany()
+                .HasForeignKey(o => o.ProductVoucherId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.ShippingVoucher)
+                .WithMany()
+                .HasForeignKey(o => o.ShippingVoucherId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<Medicine>()
                 .Property(m => m.CreatedAt).HasConversion(UtcDateTimeValueConverter.Instance);
@@ -158,6 +207,12 @@ namespace TMPMS.Data
                 .WithMany(u => u.Orders)
                 .HasForeignKey(o => o.UserId);
 
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.ProcessedByStaff)
+                .WithMany()
+                .HasForeignKey(o => o.ProcessedByStaffId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             // OrderItem
             modelBuilder.Entity<OrderItem>()
                 .HasOne(oi => oi.Order)
@@ -180,6 +235,12 @@ namespace TMPMS.Data
                 .HasOne(p => p.User)
                 .WithMany(u => u.Prescriptions)
                 .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Prescription>()
+                .HasOne(p => p.Patient)
+                .WithMany()
+                .HasForeignKey(p => p.PatientId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<Prescription>()
@@ -266,6 +327,36 @@ namespace TMPMS.Data
                 .WithOne()
                 .HasForeignKey<HerbalMedicineInfo>(h => h.MedicineId);
 
+            // HerbalInteraction — dùng Restrict cho mọi FK để tránh lỗi "multiple cascade paths"
+            // (4 FK đều trỏ về Medicine).
+            modelBuilder.Entity<HerbalInteraction>()
+                .HasOne(hi => hi.HerbA)
+                .WithMany()
+                .HasForeignKey(hi => hi.HerbAId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<HerbalInteraction>()
+                .HasOne(hi => hi.HerbB)
+                .WithMany()
+                .HasForeignKey(hi => hi.HerbBId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<HerbalInteraction>()
+                .HasOne(hi => hi.SuggestedReplacementForA)
+                .WithMany()
+                .HasForeignKey(hi => hi.SuggestedReplacementForAId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<HerbalInteraction>()
+                .HasOne(hi => hi.SuggestedReplacementForB)
+                .WithMany()
+                .HasForeignKey(hi => hi.SuggestedReplacementForBId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<HerbalInteraction>()
+                .HasIndex(hi => new { hi.HerbAId, hi.HerbBId })
+                .IsUnique();
+
             // PrescriptionItem
             modelBuilder.Entity<PrescriptionItem>()
                 .HasOne(pi => pi.Prescription)
@@ -327,6 +418,68 @@ namespace TMPMS.Data
                 .HasOne(x => x.Warehouse)
                 .WithMany(x => x.InventoryStocks)
                 .HasForeignKey(x => x.WarehouseId);
+
+            // StockBatch (lô hàng nhập kho — mỗi lô có hạn dùng/giá nhập riêng)
+            // Dùng Restrict cho các FK để tránh lỗi "multiple cascade paths" của SQL Server
+            // (Medicine/Warehouse/Supplier đều có thể dẫn tới cùng một StockBatch).
+            modelBuilder.Entity<StockBatch>()
+                .HasOne(b => b.Medicine)
+                .WithMany(m => m.StockBatches)
+                .HasForeignKey(b => b.MedicineId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<StockBatch>()
+                .HasOne(b => b.Warehouse)
+                .WithMany(w => w.StockBatches)
+                .HasForeignKey(b => b.WarehouseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<StockBatch>()
+                .HasOne(b => b.Supplier)
+                .WithMany()
+                .HasForeignKey(b => b.SupplierId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<StockBatch>()
+                .HasIndex(b => new { b.MedicineId, b.WarehouseId, b.BatchNumber })
+                .IsUnique();
+
+            modelBuilder.Entity<StockBatch>()
+                .HasIndex(b => new { b.MedicineId, b.WarehouseId, b.ExpiryDate });
+
+            modelBuilder.Entity<InventoryTransaction>()
+                .HasOne(t => t.StockBatch)
+                .WithMany(b => b.InventoryTransactions)
+                .HasForeignKey(t => t.StockBatchId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // FlashSale — bảng quản lý lịch sử áp dụng/gỡ giảm giá hàng gần hết hạn.
+            modelBuilder.Entity<FlashSale>()
+                .HasOne(f => f.Medicine)
+                .WithMany()
+                .HasForeignKey(f => f.MedicineId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<FlashSale>()
+                .HasOne(f => f.Batch)
+                .WithMany()
+                .HasForeignKey(f => f.BatchId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<FlashSale>()
+                .HasOne(f => f.AppliedByStaff)
+                .WithMany()
+                .HasForeignKey(f => f.AppliedByStaffId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<FlashSale>()
+                .HasOne(f => f.RemovedByStaff)
+                .WithMany()
+                .HasForeignKey(f => f.RemovedByStaffId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<FlashSale>()
+                .HasIndex(f => new { f.MedicineId, f.IsActive });
 
             //modelBuilder.Entity<SupplierMedicine>()
             //    .HasOne(x => x.Supplier)

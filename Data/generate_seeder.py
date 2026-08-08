@@ -86,7 +86,7 @@ csharp_code += '''            };
                         ImageUrl = "https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=500",
                         ManufactureDate = DateTime.Now,
                         ExpiryDate = DateTime.Now.AddYears(2),
-                        RequiresPrescription = false,
+                        RequiresPrescription = true,
                         CreatedAt = DateTime.Now
                     };
                     context.Medicines.Add(med);

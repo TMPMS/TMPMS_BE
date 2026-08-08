@@ -12,6 +12,7 @@ namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Route("[controller]")]
     public class ReviewsController : ControllerBase
     {
         private readonly TMPMSDbContext _context;
@@ -30,7 +31,7 @@ namespace TMPMS.Controllers
                 .Select(r => new {
                     r.Id,
                     r.UserId,
-                    Username = _context.Users.Where(u => u.Id == r.UserId).Select(u => u.UserName).FirstOrDefault() ?? "Người dùng",
+                    Username = _context.Users.Where(u => u.Id == r.UserId).Select(u => !string.IsNullOrEmpty(u.FullName) ? u.FullName : u.UserName).FirstOrDefault() ?? "Khách hàng",
                     r.Rating,
                     r.Comment,
                     r.CreatedAt
