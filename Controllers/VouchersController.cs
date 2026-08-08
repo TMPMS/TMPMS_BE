@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using BusinessObjects;
 using TMPMS.Data;
+using TMPMS.Services;
 using System;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace TMPMS.Controllers
@@ -19,12 +21,36 @@ namespace TMPMS.Controllers
             _context = context;
         }
 
-        // GET /vouchers
+        private int? GetUserId()
+        {
+            var claim = User.FindFirst(ClaimTypes.NameIdentifier);
+            return claim != null && int.TryParse(claim.Value, out var id) ? id : (int?)null;
+        }
+
+        // GET /vouchers — danh sách voucher công khai (không gồm voucher cá nhân/mẫu vòng quay)
         [HttpGet("vouchers")]
         public async Task<IActionResult> GetVouchers()
         {
             var vouchers = await _context.Vouchers
-                .Where(v => v.IsActive && (v.EndDate == null || v.EndDate > DateTime.UtcNow))
+                .Where(v => v.IsActive && !v.IsWheelPrize && v.OwnerUserId == null &&
+                    (v.EndDate == null || v.EndDate > DateTime.UtcNow))
+                .OrderByDescending(v => v.CreatedAt)
+                .ToListAsync();
+            return Ok(vouchers);
+        }
+
+        // GET /vouchers/mine — voucher cá nhân của user hiện tại (VD trúng từ vòng quay may mắn)
+        [HttpGet("vouchers/mine")]
+        [Authorize]
+        public async Task<IActionResult> GetMyVouchers()
+        {
+            var currentUserId = GetUserId();
+            if (currentUserId == null) return Unauthorized();
+
+            var vouchers = await _context.Vouchers
+                .Where(v => v.OwnerUserId == currentUserId && v.IsActive &&
+                    v.UsedCount < v.UsageLimit &&
+                    (v.EndDate == null || v.EndDate > DateTime.UtcNow))
                 .OrderByDescending(v => v.CreatedAt)
                 .ToListAsync();
             return Ok(vouchers);
@@ -53,6 +79,9 @@ namespace TMPMS.Controllers
             public DateTime? EndDate { get; set; }
             public int UsageLimit { get; set; } = 100;
             public bool IsActive { get; set; } = true;
+            public string Type { get; set; } = "product";
+            public bool IsWheelPrize { get; set; } = false;
+            public int Weight { get; set; } = 0;
         }
 
         // POST /admin/vouchers
@@ -72,7 +101,13 @@ namespace TMPMS.Controllers
                 EndDate = input.EndDate,
                 UsageLimit = input.UsageLimit,
                 IsActive = input.IsActive,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                Type = input.Type,
+                IsWheelPrize = input.IsWheelPrize,
+                Weight = input.Weight,
+                // OwnerUserId luôn do server quản lý (voucher cá nhân chỉ được tạo qua vòng quay),
+                // không nhận từ input của Admin.
+                OwnerUserId = null
             };
 
             _context.Vouchers.Add(voucher);
@@ -92,6 +127,9 @@ namespace TMPMS.Controllers
             public DateTime? EndDate { get; set; }
             public int? UsageLimit { get; set; }
             public bool? IsActive { get; set; }
+            public string? Type { get; set; }
+            public bool? IsWheelPrize { get; set; }
+            public int? Weight { get; set; }
         }
 
         // PATCH /admin/vouchers/{id}
@@ -112,6 +150,9 @@ namespace TMPMS.Controllers
             if (input.EndDate != null) voucher.EndDate = input.EndDate;
             if (input.UsageLimit != null) voucher.UsageLimit = input.UsageLimit.Value;
             if (input.IsActive != null) voucher.IsActive = input.IsActive.Value;
+            if (input.Type != null) voucher.Type = input.Type;
+            if (input.IsWheelPrize != null) voucher.IsWheelPrize = input.IsWheelPrize.Value;
+            if (input.Weight != null) voucher.Weight = input.Weight.Value;
 
             await _context.SaveChangesAsync();
             return Ok(voucher);
@@ -134,38 +175,33 @@ namespace TMPMS.Controllers
         {
             public string Code { get; set; } = "";
             public decimal Order_Total { get; set; }
+            public string Type { get; set; } = "product";
+            // Chỉ dùng khi Type == "shipping", để cap số tiền giảm không vượt phí ship thực tế.
+            public decimal? ShippingFee { get; set; }
         }
 
-        // POST /vouchers/validate
+        // POST /vouchers/validate — preview mức giảm cho 1 mã, dùng chung logic với lúc checkout thật.
         [HttpPost("vouchers/validate")]
+        [Authorize]
         public async Task<IActionResult> ValidateVoucher([FromBody] ValidateVoucherRequest request)
         {
-            var voucher = await _context.Vouchers
-                .FirstOrDefaultAsync(v => v.Code == request.Code && v.IsActive && (v.EndDate == null || v.EndDate > DateTime.UtcNow) && v.UsedCount < v.UsageLimit);
+            var currentUserId = GetUserId();
+            if (currentUserId == null) return Unauthorized();
 
-            if (voucher == null)
+            var result = await VoucherResolver.ResolveAsync(_context, request.Code, request.Type, currentUserId);
+            if (result.Voucher == null)
             {
-                return NotFound(new { error = "Mã voucher không hợp lệ hoặc đã hết hạn" });
+                return NotFound(new { error = result.Error ?? "Mã voucher không hợp lệ hoặc đã hết hạn" });
             }
 
+            var voucher = result.Voucher;
             if (request.Order_Total < voucher.MinOrderValue)
             {
                 return BadRequest(new { error = $"Đơn hàng tối thiểu {voucher.MinOrderValue:N0}đ để dùng voucher này" });
             }
 
-            decimal discount = 0;
-            if (voucher.DiscountType == "percent")
-            {
-                discount = request.Order_Total * voucher.DiscountValue / 100;
-                if (voucher.MaxDiscount.HasValue)
-                {
-                    discount = Math.Min(discount, voucher.MaxDiscount.Value);
-                }
-            }
-            else
-            {
-                discount = voucher.DiscountValue;
-            }
+            var baseAmount = request.Type == "shipping" ? (request.ShippingFee ?? request.Order_Total) : request.Order_Total;
+            var discount = VoucherResolver.ComputeDiscount(voucher, baseAmount);
 
             return Ok(new { valid = true, voucher = voucher, discount = discount });
         }

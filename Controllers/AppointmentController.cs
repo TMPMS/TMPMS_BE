@@ -15,6 +15,7 @@ using TMPMS.Services.Interfaces;
 namespace TMPMS.Controllers
 {
     [Route("api/[controller]")]
+    [Route("[controller]")]
     [ApiController]
     public class AppointmentController : ControllerBase
     {

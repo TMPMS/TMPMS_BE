@@ -10,5 +10,8 @@ namespace Repositories.Interfaces
         Task<int> CountPendingPrescriptions();
         Task<int> CountLowStockMedicines(int threshold);
         Task<List<Order>> GetAllOrders();
+        Task<List<Appointment>> GetAppointmentsInRange(DateTime from, DateTime to);
+        Task<List<Appointment>> GetAllAppointments();
+        Task<Dictionary<int, string>> GetStaffNames(IEnumerable<int> staffIds);
     }
 }

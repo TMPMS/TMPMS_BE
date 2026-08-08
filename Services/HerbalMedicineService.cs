@@ -22,7 +22,7 @@ namespace TMPMS.Services
                 StockQuantity = dto.StockQuantity,
                 ManufactureDate = dto.ManufactureDate,
                 ExpiryDate = dto.ExpiryDate,
-                RequiresPrescription = false,
+                RequiresPrescription = true,
                 ImageUrl = dto.ImageUrl,
                 CreatedAt = DateTime.Now
             };

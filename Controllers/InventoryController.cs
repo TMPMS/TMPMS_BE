@@ -1,17 +1,24 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Services.Interfaces;
+using System.Security.Claims;
 using TMPMS.DTOs;
 
 namespace TMPMS.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "Admin,Warehouse")]
+    [Authorize(Roles = "Admin,Warehouse,Pharmacy")]
     public class InventoryController : ControllerBase
     {
         private readonly IInventoryService _service;
         public InventoryController(IInventoryService service) => _service = service;
+
+        private int? GetUserId()
+        {
+            var claim = User.FindFirst(ClaimTypes.NameIdentifier);
+            return claim != null && int.TryParse(claim.Value, out var id) ? id : (int?)null;
+        }
 
         [HttpPost("transactions")]
         public async Task<ActionResult> CreateTransaction([FromBody] StockTransactionCreateDTO dto)
@@ -46,5 +53,88 @@ namespace TMPMS.Controllers
         [HttpGet("alerts/expiry")]
         public async Task<ActionResult> GetExpiryAlerts([FromQuery] int daysAhead = 30)
             => Ok(await _service.GetExpiryAlerts(daysAhead));
+
+        // ==== Quản lý theo lô (batch/lot) ====
+
+        [HttpPost("batches")]
+        public async Task<ActionResult> CreateBatch([FromBody] StockBatchCreateDTO dto)
+        {
+            try
+            {
+                var result = await _service.CreateBatch(dto);
+                return Ok(result);
+            }
+            catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
+        [HttpGet("batches/medicine/{medicineId}")]
+        public async Task<ActionResult> GetBatchesByMedicine(int medicineId, [FromQuery] int? warehouseId)
+            => Ok(await _service.GetBatchesByMedicine(medicineId, warehouseId));
+
+        [HttpGet("batches/warehouse/{warehouseId}")]
+        public async Task<ActionResult> GetBatchesByWarehouse(int warehouseId)
+            => Ok(await _service.GetBatchesByWarehouse(warehouseId));
+
+        [HttpPost("batches/{id}/dispose")]
+        public async Task<ActionResult> DisposeBatch(int id, [FromBody] BatchDisposeDTO dto)
+        {
+            try
+            {
+                var result = await _service.DisposeBatch(id, dto);
+                return Ok(result);
+            }
+            catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
+        [HttpPatch("batches/{id}/adjust")]
+        public async Task<ActionResult> AdjustBatch(int id, [FromBody] BatchAdjustDTO dto)
+        {
+            try
+            {
+                var result = await _service.AdjustBatch(id, dto);
+                return Ok(result);
+            }
+            catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
+        // ==== Flash Sale cho hàng gần hết hạn ====
+
+        [HttpGet("flash-sale/candidates")]
+        [AllowAnonymous]
+        public async Task<ActionResult> GetFlashSaleCandidates([FromQuery] int daysThreshold = 30)
+            => Ok(await _service.GetFlashSaleCandidates(daysThreshold));
+
+        [HttpPost("flash-sale/{medicineId}/apply")]
+        public async Task<ActionResult> ApplyFlashSale(int medicineId, [FromBody] ApplyFlashSaleDTO dto)
+        {
+            try
+            {
+                var result = await _service.ApplyFlashSale(medicineId, dto, GetUserId());
+                return Ok(result);
+            }
+            catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
+        [HttpPost("flash-sale/{medicineId}/remove")]
+        public async Task<ActionResult> RemoveFlashSale(int medicineId)
+        {
+            try
+            {
+                await _service.RemoveFlashSale(medicineId, GetUserId());
+                return Ok(new { message = "Đã gỡ Flash Sale." });
+            }
+            catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
+        // Bảng quản lý Flash Sale cho Admin — lịch sử áp dụng (mặc định chỉ các bản ghi đang bật).
+        [HttpGet("flash-sale/list")]
+        public async Task<ActionResult> GetFlashSaleList([FromQuery] bool activeOnly = true)
+            => Ok(await _service.GetFlashSales(activeOnly));
+
+        // ==== Báo cáo lãi gộp ước tính theo lô ====
+
+        [HttpGet("reports/profit")]
+        public async Task<ActionResult> GetBatchProfitReport([FromQuery] int? warehouseId, [FromQuery] int? medicineId)
+            => Ok(await _service.GetBatchProfitReport(warehouseId, medicineId));
     }
 }

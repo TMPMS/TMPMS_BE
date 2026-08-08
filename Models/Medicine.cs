@@ -60,5 +60,7 @@ namespace BusinessObjects
         public ICollection<PrescriptionItem>? PrescriptionItems { get; set; }
 
         public ICollection<InventoryStock>? InventoryStocks { get; set; }
+
+        public ICollection<StockBatch>? StockBatches { get; set; }
     }
 }

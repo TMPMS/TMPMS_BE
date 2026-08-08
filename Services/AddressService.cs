@@ -1,4 +1,4 @@
-﻿using BusinessObjects;
+using BusinessObjects;
 using TMPMS.DTOs;
 using TMPMS.Repositories;
 using TMPMS.Repositories.Interfaces;
@@ -20,6 +20,11 @@ namespace TMPMS.Services
             return await _addressRepository.GetByUserIdAsync(userId);
         }
 
+        public async Task<UserAddress?> GetByIdAsync(int addressId)
+        {
+            return await _addressRepository.GetByIdAsync(addressId);
+        }
+
         public async Task<bool> AddAddressAsync(int userId, AddressDto dto)
         {
             return await _addressRepository.AddAddressAsync(userId, dto);
@@ -33,6 +38,11 @@ namespace TMPMS.Services
         public async Task<bool> DeleteAddressAsync(int addressId)
         {
             return await _addressRepository.DeleteAddressAsync(addressId);
+        }
+
+        public async Task<bool> SetDefaultAsync(int userId, int addressId)
+        {
+            return await _addressRepository.SetDefaultAsync(userId, addressId);
         }
     }
 }

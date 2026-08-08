@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 namespace TMPMS.Controllers
 {
     [Route("api/[controller]")]
+    [Route("[controller]")]
     [ApiController]
     [Authorize]
     public class InvoiceController : ControllerBase

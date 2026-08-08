@@ -22,6 +22,7 @@ builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IDiagnosisRepository, DiagnosisRepository>();
 builder.Services.AddScoped<IPrescriptionRepository, PrescriptionRepository>();
 builder.Services.AddScoped<IHerbalMedicineRepository, HerbalMedicineRepository>();
+builder.Services.AddScoped<IHerbalInteractionRepository, HerbalInteractionRepository>();
 builder.Services.AddScoped<IWarehouseRepository, WarehouseRepository>();
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
@@ -33,11 +34,13 @@ builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
 builder.Services.AddScoped<IAddressRepository, AddressRepository>();
 builder.Services.AddScoped<IPrescriptionItemRepository, PrescriptionItemRepository>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
+builder.Services.AddScoped<INewsArticleRepository, NewsArticleRepository>();
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IDiagnosisService, DiagnosisService>();
 builder.Services.AddScoped<IPrescriptionService, PrescriptionService>();
 builder.Services.AddScoped<IHerbalMedicineService, HerbalMedicineService>();
+builder.Services.AddScoped<IHerbalInteractionService, HerbalInteractionService>();
 builder.Services.AddScoped<IWarehouseService, WarehouseService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
@@ -49,7 +52,12 @@ builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<IAddressService, AddressService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
+builder.Services.AddScoped<INewsArticleService, NewsArticleService>();
 builder.Services.AddScoped<IHealthReelsService, HealthReelsService>();
+builder.Services.AddScoped<IShippingFeeService, ShippingFeeService>();
+builder.Services.AddScoped<IMeridianAnalysisService, MeridianAnalysisService>();
+builder.Services.AddScoped<IPrescriptionOcrService, PrescriptionOcrService>();
+builder.Services.AddScoped<IMedicineImageSearchService, MedicineImageSearchService>();
 builder.Services.AddHttpClient();
 
 builder.Services.AddMemoryCache();
@@ -206,8 +214,8 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
-        policy => policy.WithOrigins("http://localhost:5173", "https://tmpms.vercel.app", "http://127.0.0.1:5173", "http://localhost", 
-                                    "http://222.255.215.218:8080", "http://222.255.215.218", 
+        policy => policy.WithOrigins("http://localhost:5173", "https://tmpms.vercel.app", "http://127.0.0.1:5173", "http://localhost",
+                                    "http://222.255.215.218:8080", "http://222.255.215.218",
                                     "https://tmpms.io.vn", "https://www.tmpms.io.vn",
                                     "https://localhost:64647")
                         .AllowAnyMethod()
@@ -437,6 +445,74 @@ using (var scope = app.Services.CreateScope())
         await context.SaveChangesAsync();
     }
 
+    // News articles
+    if (!context.NewsArticles.Any())
+    {
+        context.NewsArticles.AddRange(
+            new NewsArticle
+            {
+                Title = "5 loại dược liệu tăng đề kháng mùa giao mùa",
+                Excerpt = "Đông trùng hạ thảo, linh chi, nhân sâm... giúp cơ thể thích nghi tốt hơn khi thời tiết thay đổi.",
+                Content = "Mùa giao mùa là thời điểm hệ miễn dịch dễ suy yếu. Các dược liệu như đông trùng hạ thảo, linh chi đỏ, nhân sâm Hàn Quốc từ lâu đã được y học cổ truyền sử dụng để bồi bổ nguyên khí, tăng cường sức đề kháng. Nên dùng đều đặn, đúng liều lượng và tham khảo ý kiến thầy thuốc trước khi kết hợp nhiều loại dược liệu cùng lúc.",
+                Tag = "Dinh dưỡng",
+                ImageUrl = "",
+                PublishedDate = DateTime.UtcNow.AddDays(-3),
+                IsActive = true
+            },
+            new NewsArticle
+            {
+                Title = "Chế độ ăn hỗ trợ người mới ốm dậy",
+                Excerpt = "Ưu tiên món dễ tiêu, bổ sung đạm và vi chất để cơ thể phục hồi nhanh hơn.",
+                Content = "Sau khi ốm dậy, hệ tiêu hoá còn yếu nên ưu tiên cháo, súp, canh hầm dễ tiêu. Bổ sung đạm từ thịt nạc, trứng, đậu; kết hợp rau củ giàu vitamin để tăng sức đề kháng. Nên chia nhỏ bữa ăn trong ngày thay vì ăn quá no một lúc.",
+                Tag = "Dinh dưỡng",
+                ImageUrl = "",
+                PublishedDate = DateTime.UtcNow.AddDays(-7),
+                IsActive = true
+            },
+            new NewsArticle
+            {
+                Title = "Phòng ngừa cảm cúm khi thời tiết chuyển lạnh",
+                Excerpt = "Giữ ấm cơ thể, bổ sung vitamin C và tiêm phòng đầy đủ là cách phòng bệnh hiệu quả.",
+                Content = "Thời tiết chuyển lạnh là điều kiện thuận lợi cho virus cúm phát triển. Nên giữ ấm cơ thể, đặc biệt vùng cổ và bàn chân, bổ sung vitamin C từ trái cây họ cam quýt, rửa tay thường xuyên và hạn chế tiếp xúc nơi đông người khi có dịch.",
+                Tag = "Phòng chữa bệnh",
+                ImageUrl = "",
+                PublishedDate = DateTime.UtcNow.AddDays(-2),
+                IsActive = true
+            },
+            new NewsArticle
+            {
+                Title = "Dấu hiệu cảnh báo cần đi khám sớm",
+                Excerpt = "Sốt kéo dài, đau ngực, khó thở là những triệu chứng không nên chủ quan.",
+                Content = "Nhiều bệnh lý nguy hiểm khởi phát âm thầm. Khi có các dấu hiệu như sốt kéo dài trên 3 ngày, đau tức ngực, khó thở, sụt cân không rõ nguyên nhân, người bệnh nên đi khám sớm thay vì tự điều trị tại nhà để tránh biến chứng.",
+                Tag = "Phòng chữa bệnh",
+                ImageUrl = "",
+                PublishedDate = DateTime.UtcNow.AddDays(-10),
+                IsActive = true
+            },
+            new NewsArticle
+            {
+                Title = "Chăm sóc da mùa hanh khô bằng thảo dược",
+                Excerpt = "Mật ong, tinh dầu tràm, lô hội là những nguyên liệu tự nhiên giúp da mềm mịn.",
+                Content = "Mùa hanh khô khiến da dễ mất nước, nứt nẻ. Các nguyên liệu tự nhiên như mật ong rừng, lô hội, tinh dầu tràm có tác dụng dưỡng ẩm, làm dịu da. Nên kết hợp uống đủ nước và dưỡng ẩm đều đặn mỗi ngày.",
+                Tag = "Khỏe đẹp",
+                ImageUrl = "",
+                PublishedDate = DateTime.UtcNow.AddDays(-5),
+                IsActive = true
+            },
+            new NewsArticle
+            {
+                Title = "Ngủ đủ giấc — bí quyết trẻ hoá từ bên trong",
+                Excerpt = "Giấc ngủ chất lượng giúp cơ thể tái tạo tế bào và cải thiện sắc vóc tự nhiên.",
+                Content = "Ngủ đủ 7-8 tiếng mỗi đêm giúp cơ thể sản sinh collagen tự nhiên, cải thiện làn da và tinh thần. Nên hạn chế dùng thiết bị điện tử trước khi ngủ và giữ phòng ngủ thoáng mát để có giấc ngủ sâu.",
+                Tag = "Khỏe đẹp",
+                ImageUrl = "",
+                PublishedDate = DateTime.UtcNow.AddDays(-1),
+                IsActive = true
+            }
+        );
+        await context.SaveChangesAsync();
+    }
+
     if (!context.Warehouses.Any())
     {
         context.Warehouses.Add(new Warehouse
@@ -450,6 +526,9 @@ using (var scope = app.Services.CreateScope())
     await DiagnosisSeeder.SeedAsync(context);
     await TMPMS.Database.HealthQuizSeeder.SeedAsync(context);
     await HerbalMedicineSeeder.SeedAsync(context);
+    await HerbalInteractionSeeder.SeedAsync(context);
+    await DiverseProductSeeder.SeedAsync(context);
+    await SampleDataSeeder.SeedAsync(context);
 }
 app.MapHub<TrackingHub>("/trackingHub");
 app.MapHub<TMPMS.Hubs.PharmacyChatHub>("/hubs/pharmacy-chat");

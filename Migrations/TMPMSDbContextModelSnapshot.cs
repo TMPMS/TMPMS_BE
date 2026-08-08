@@ -84,6 +84,15 @@ namespace TMPMS.Migrations
                     b.Property<DateTime>("AppointmentDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("CheckedInAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime>("ConfirmationDeadline")
                         .HasColumnType("datetime2");
 
@@ -96,12 +105,38 @@ namespace TMPMS.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal>("DepositAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Note")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PaymentStatus")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("PolicyAcceptedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PrescriptionImageUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProposedAppointmentDateNote")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Reason")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("RefundAmount")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("RejectionReason")
                         .HasColumnType("nvarchar(max)");
@@ -112,6 +147,11 @@ namespace TMPMS.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SymptomDescription")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<int>("UserId")
                         .HasColumnType("int");
@@ -278,6 +318,112 @@ namespace TMPMS.Migrations
                     b.ToTable("DiagnosisAnswers");
                 });
 
+            modelBuilder.Entity("BusinessObjects.FlashSale", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AppliedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("AppliedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("BatchExpiryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("BatchId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DaysUntilExpiryAtApply")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DiscountPercent")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MedicineId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("OriginalPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("RemovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("RemovedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("SalePrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppliedByStaffId");
+
+                    b.HasIndex("BatchId");
+
+                    b.HasIndex("RemovedByStaffId");
+
+                    b.HasIndex("MedicineId", "IsActive");
+
+                    b.ToTable("FlashSales");
+                });
+
+            modelBuilder.Entity("BusinessObjects.HerbalInteraction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("HerbAId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("HerbBId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("InteractionType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("MechanismDescription")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("SuggestedReplacementForAId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SuggestedReplacementForBId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HerbBId");
+
+                    b.HasIndex("SuggestedReplacementForAId");
+
+                    b.HasIndex("SuggestedReplacementForBId");
+
+                    b.HasIndex("HerbAId", "HerbBId")
+                        .IsUnique();
+
+                    b.ToTable("HerbalInteractions");
+                });
+
             modelBuilder.Entity("BusinessObjects.HerbalMedicineInfo", b =>
                 {
                     b.Property<int>("Id")
@@ -369,6 +515,9 @@ namespace TMPMS.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("StockBatchId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -379,6 +528,8 @@ namespace TMPMS.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("MedicineId");
+
+                    b.HasIndex("StockBatchId");
 
                     b.HasIndex("WarehouseId");
 
@@ -506,6 +657,45 @@ namespace TMPMS.Migrations
                     b.ToTable("MedicineImages");
                 });
 
+            modelBuilder.Entity("BusinessObjects.NewsArticle", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Excerpt")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ImageUrl")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("PublishedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Tag")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("NewsArticles");
+                });
+
             modelBuilder.Entity("BusinessObjects.Order", b =>
                 {
                     b.Property<int>("Id")
@@ -521,21 +711,27 @@ namespace TMPMS.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PaymentStatus")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("ProcessedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ProductVoucherId")
+                        .HasColumnType("int");
 
                     b.Property<string>("ReturnReason")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ShippingAddress")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal?>("ShippingFee")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int?>("ShippingVoucherId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Status")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("TotalAmount")
@@ -545,6 +741,12 @@ namespace TMPMS.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ProcessedByStaffId");
+
+                    b.HasIndex("ProductVoucherId");
+
+                    b.HasIndex("ShippingVoucherId");
 
                     b.HasIndex("UserId");
 
@@ -648,6 +850,9 @@ namespace TMPMS.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("PatientId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("PrescriptionDate")
                         .HasColumnType("datetime2");
 
@@ -666,6 +871,8 @@ namespace TMPMS.Migrations
 
                     b.HasIndex("DoctorId");
 
+                    b.HasIndex("PatientId");
+
                     b.HasIndex("UserId");
 
                     b.ToTable("Prescriptions");
@@ -678,6 +885,9 @@ namespace TMPMS.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Instructions")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("MedicineId")
                         .HasColumnType("int");
@@ -761,6 +971,66 @@ namespace TMPMS.Migrations
                         .HasFilter("[NormalizedName] IS NOT NULL");
 
                     b.ToTable("AspNetRoles", (string)null);
+                });
+
+            modelBuilder.Entity("BusinessObjects.StockBatch", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BatchNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("ExpiryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ManufactureDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MedicineId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("QuantityReceived")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QuantityRemaining")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("UnitCostPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("WarehouseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierId");
+
+                    b.HasIndex("WarehouseId");
+
+                    b.HasIndex("MedicineId", "WarehouseId", "BatchNumber")
+                        .IsUnique();
+
+                    b.HasIndex("MedicineId", "WarehouseId", "ExpiryDate");
+
+                    b.ToTable("StockBatches");
                 });
 
             modelBuilder.Entity("BusinessObjects.Supplier", b =>
@@ -1012,7 +1282,7 @@ namespace TMPMS.Migrations
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -1030,6 +1300,9 @@ namespace TMPMS.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsWheelPrize")
+                        .HasColumnType("bit");
+
                     b.Property<decimal?>("MaxDiscount")
                         .HasColumnType("decimal(18,2)");
 
@@ -1040,8 +1313,20 @@ namespace TMPMS.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("OwnerUserId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("UsageLimit")
                         .HasColumnType("int");
@@ -1049,7 +1334,13 @@ namespace TMPMS.Migrations
                     b.Property<int>("UsedCount")
                         .HasColumnType("int");
 
+                    b.Property<int>("Weight")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
 
                     b.ToTable("Vouchers");
                 });
@@ -1073,6 +1364,36 @@ namespace TMPMS.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Warehouses");
+                });
+
+            modelBuilder.Entity("BusinessObjects.WheelSpin", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("SpinDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("VoucherId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VoucherId");
+
+                    b.HasIndex("UserId", "SpinDate")
+                        .IsUnique();
+
+                    b.ToTable("WheelSpins");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
@@ -1176,6 +1497,194 @@ namespace TMPMS.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("TMPMS.Models.AppointmentPayment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("AppointmentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("RefundAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("RefundStatus")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TransactionCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppointmentId");
+
+                    b.ToTable("AppointmentPayments");
+                });
+
+            modelBuilder.Entity("TMPMS.Models.AppointmentPaymentIntent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("OrderCode")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PaymentLinkId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PrescriptionImageUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SlotHoldId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SymptomDescription")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderCode")
+                        .IsUnique();
+
+                    b.HasIndex("SlotHoldId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("AppointmentPaymentIntents");
+                });
+
+            modelBuilder.Entity("TMPMS.Models.AppointmentRescheduleRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AppointmentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("OldAppointmentDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("RequestedAppointmentDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ResolvedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppointmentId");
+
+                    b.ToTable("AppointmentRescheduleRequests");
+                });
+
+            modelBuilder.Entity("TMPMS.Models.AppointmentSlotHold", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AppointmentDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsConsumed")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int?>("StaffId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("AppointmentDate", "Location");
+
+                    b.ToTable("AppointmentSlotHolds");
                 });
 
             modelBuilder.Entity("TMPMS.Models.HealthQuiz", b =>
@@ -1649,6 +2158,71 @@ namespace TMPMS.Migrations
                     b.Navigation("Question");
                 });
 
+            modelBuilder.Entity("BusinessObjects.FlashSale", b =>
+                {
+                    b.HasOne("BusinessObjects.User", "AppliedByStaff")
+                        .WithMany()
+                        .HasForeignKey("AppliedByStaffId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BusinessObjects.StockBatch", "Batch")
+                        .WithMany()
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BusinessObjects.Medicine", "Medicine")
+                        .WithMany()
+                        .HasForeignKey("MedicineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BusinessObjects.User", "RemovedByStaff")
+                        .WithMany()
+                        .HasForeignKey("RemovedByStaffId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("AppliedByStaff");
+
+                    b.Navigation("Batch");
+
+                    b.Navigation("Medicine");
+
+                    b.Navigation("RemovedByStaff");
+                });
+
+            modelBuilder.Entity("BusinessObjects.HerbalInteraction", b =>
+                {
+                    b.HasOne("BusinessObjects.Medicine", "HerbA")
+                        .WithMany()
+                        .HasForeignKey("HerbAId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BusinessObjects.Medicine", "HerbB")
+                        .WithMany()
+                        .HasForeignKey("HerbBId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BusinessObjects.Medicine", "SuggestedReplacementForA")
+                        .WithMany()
+                        .HasForeignKey("SuggestedReplacementForAId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BusinessObjects.Medicine", "SuggestedReplacementForB")
+                        .WithMany()
+                        .HasForeignKey("SuggestedReplacementForBId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("HerbA");
+
+                    b.Navigation("HerbB");
+
+                    b.Navigation("SuggestedReplacementForA");
+
+                    b.Navigation("SuggestedReplacementForB");
+                });
+
             modelBuilder.Entity("BusinessObjects.HerbalMedicineInfo", b =>
                 {
                     b.HasOne("BusinessObjects.Medicine", "Medicine")
@@ -1685,6 +2259,11 @@ namespace TMPMS.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("BusinessObjects.StockBatch", "StockBatch")
+                        .WithMany("InventoryTransactions")
+                        .HasForeignKey("StockBatchId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("BusinessObjects.Warehouse", "Warehouse")
                         .WithMany()
                         .HasForeignKey("WarehouseId")
@@ -1692,6 +2271,8 @@ namespace TMPMS.Migrations
                         .IsRequired();
 
                     b.Navigation("Medicine");
+
+                    b.Navigation("StockBatch");
 
                     b.Navigation("Warehouse");
                 });
@@ -1739,11 +2320,32 @@ namespace TMPMS.Migrations
 
             modelBuilder.Entity("BusinessObjects.Order", b =>
                 {
+                    b.HasOne("BusinessObjects.User", "ProcessedByStaff")
+                        .WithMany()
+                        .HasForeignKey("ProcessedByStaffId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BusinessObjects.Voucher", "ProductVoucher")
+                        .WithMany()
+                        .HasForeignKey("ProductVoucherId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BusinessObjects.Voucher", "ShippingVoucher")
+                        .WithMany()
+                        .HasForeignKey("ShippingVoucherId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("BusinessObjects.User", "User")
                         .WithMany("Orders")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("ProcessedByStaff");
+
+                    b.Navigation("ProductVoucher");
+
+                    b.Navigation("ShippingVoucher");
 
                     b.Navigation("User");
                 });
@@ -1795,6 +2397,11 @@ namespace TMPMS.Migrations
                         .HasForeignKey("DoctorId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("BusinessObjects.User", "Patient")
+                        .WithMany()
+                        .HasForeignKey("PatientId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("BusinessObjects.User", "User")
                         .WithMany("Prescriptions")
                         .HasForeignKey("UserId")
@@ -1806,6 +2413,8 @@ namespace TMPMS.Migrations
                     b.Navigation("Diagnosis");
 
                     b.Navigation("Doctor");
+
+                    b.Navigation("Patient");
 
                     b.Navigation("User");
                 });
@@ -1848,6 +2457,32 @@ namespace TMPMS.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("BusinessObjects.StockBatch", b =>
+                {
+                    b.HasOne("BusinessObjects.Medicine", "Medicine")
+                        .WithMany("StockBatches")
+                        .HasForeignKey("MedicineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BusinessObjects.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BusinessObjects.Warehouse", "Warehouse")
+                        .WithMany("StockBatches")
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Medicine");
+
+                    b.Navigation("Supplier");
+
+                    b.Navigation("Warehouse");
+                });
+
             modelBuilder.Entity("BusinessObjects.SupplierMedicine", b =>
                 {
                     b.HasOne("BusinessObjects.Medicine", "Medicine")
@@ -1876,6 +2511,24 @@ namespace TMPMS.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("BusinessObjects.WheelSpin", b =>
+                {
+                    b.HasOne("BusinessObjects.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BusinessObjects.Voucher", "Voucher")
+                        .WithMany()
+                        .HasForeignKey("VoucherId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("User");
+
+                    b.Navigation("Voucher");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
@@ -1927,6 +2580,58 @@ namespace TMPMS.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("TMPMS.Models.AppointmentPayment", b =>
+                {
+                    b.HasOne("BusinessObjects.Appointment", "Appointment")
+                        .WithMany("AppointmentPayments")
+                        .HasForeignKey("AppointmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Appointment");
+                });
+
+            modelBuilder.Entity("TMPMS.Models.AppointmentPaymentIntent", b =>
+                {
+                    b.HasOne("TMPMS.Models.AppointmentSlotHold", "SlotHold")
+                        .WithMany()
+                        .HasForeignKey("SlotHoldId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BusinessObjects.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SlotHold");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TMPMS.Models.AppointmentRescheduleRequest", b =>
+                {
+                    b.HasOne("BusinessObjects.Appointment", "Appointment")
+                        .WithMany("RescheduleRequests")
+                        .HasForeignKey("AppointmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Appointment");
+                });
+
+            modelBuilder.Entity("TMPMS.Models.AppointmentSlotHold", b =>
+                {
+                    b.HasOne("BusinessObjects.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("TMPMS.Models.PharmacyChatMessage", b =>
@@ -2038,6 +2743,13 @@ namespace TMPMS.Migrations
                     b.Navigation("ScoreMappings");
                 });
 
+            modelBuilder.Entity("BusinessObjects.Appointment", b =>
+                {
+                    b.Navigation("AppointmentPayments");
+
+                    b.Navigation("RescheduleRequests");
+                });
+
             modelBuilder.Entity("BusinessObjects.Cart", b =>
                 {
                     b.Navigation("CartItems");
@@ -2068,6 +2780,8 @@ namespace TMPMS.Migrations
                     b.Navigation("PrescriptionItems");
 
                     b.Navigation("Reviews");
+
+                    b.Navigation("StockBatches");
                 });
 
             modelBuilder.Entity("BusinessObjects.Order", b =>
@@ -2080,6 +2794,11 @@ namespace TMPMS.Migrations
             modelBuilder.Entity("BusinessObjects.Prescription", b =>
                 {
                     b.Navigation("PrescriptionItems");
+                });
+
+            modelBuilder.Entity("BusinessObjects.StockBatch", b =>
+                {
+                    b.Navigation("InventoryTransactions");
                 });
 
             modelBuilder.Entity("BusinessObjects.Supplier", b =>
@@ -2110,6 +2829,8 @@ namespace TMPMS.Migrations
             modelBuilder.Entity("BusinessObjects.Warehouse", b =>
                 {
                     b.Navigation("InventoryStocks");
+
+                    b.Navigation("StockBatches");
                 });
 
             modelBuilder.Entity("TMPMS.Models.HealthQuiz", b =>

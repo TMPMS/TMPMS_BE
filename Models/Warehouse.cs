@@ -15,5 +15,7 @@ namespace BusinessObjects
         public string Address { get; set; }
 
         public ICollection<InventoryStock> InventoryStocks { get; set; }
+
+        public ICollection<StockBatch> StockBatches { get; set; }
     }
 }

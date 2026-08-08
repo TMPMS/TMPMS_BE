@@ -22,8 +22,13 @@ namespace BusinessObjects
 
         public DateTime CreatedAt { get; set; }
 
+        /// <summary>Lô hàng liên quan đến giao dịch này (null cho các giao dịch cũ trước khi có quản lý theo lô).</summary>
+        public int? StockBatchId { get; set; }
+
         public Medicine Medicine { get; set; }
 
         public Warehouse Warehouse { get; set; }
+
+        public StockBatch StockBatch { get; set; }
     }
 }
