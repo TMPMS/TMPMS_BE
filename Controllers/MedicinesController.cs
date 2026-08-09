@@ -154,7 +154,23 @@ namespace TMPMS.Controllers
                     .Replace("*", "")
                     .Trim();
 
-                query = query.Where(m => m.Name.Contains(searchTerm) || (m.Description != null && m.Description.Contains(searchTerm)));
+                // Khớp theo từng từ thay vì cả cụm nguyên văn: tên do AI đọc từ ảnh (hoặc gõ tay)
+                // thường khác thứ tự/thêm bớt từ so với tên lưu trong danh mục (vd "Mật Ong Rừng
+                // Tây Nguyên" khi tên thật là "Mật ong hoa rừng nguyên chất Tây Nguyên"), nên yêu
+                // cầu khớp nguyên cụm sẽ bỏ sót sản phẩm dù đọc đúng nhãn hàng.
+                var words = searchTerm.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                if (words.Length > 1)
+                {
+                    foreach (var word in words)
+                    {
+                        var w = word;
+                        query = query.Where(m => m.Name.Contains(w) || (m.Description != null && m.Description.Contains(w)));
+                    }
+                }
+                else
+                {
+                    query = query.Where(m => m.Name.Contains(searchTerm) || (m.Description != null && m.Description.Contains(searchTerm)));
+                }
             }
 
             if (inStock == true)
