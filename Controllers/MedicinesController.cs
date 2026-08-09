@@ -41,12 +41,14 @@ namespace TMPMS.Controllers
         private readonly TMPMSDbContext _context;
         private readonly IConfiguration _config;
         private readonly IMedicineImageSearchService _imageSearchService;
+        private readonly IWebHostEnvironment _env;
 
-        public MedicinesController(TMPMSDbContext context, IConfiguration config, IMedicineImageSearchService imageSearchService)
+        public MedicinesController(TMPMSDbContext context, IConfiguration config, IMedicineImageSearchService imageSearchService, IWebHostEnvironment env)
         {
             _context = context;
             _config = config;
             _imageSearchService = imageSearchService;
+            _env = env;
         }
 
         // Khách hàng dán/tải ảnh vỏ thuốc ở ô tìm kiếm bằng hình ảnh — AI đọc tên sản phẩm trên bao
@@ -347,7 +349,21 @@ namespace TMPMS.Controllers
             if (!string.IsNullOrWhiteSpace(dto.Unit)) med.Unit = dto.Unit;
             if (!string.IsNullOrWhiteSpace(dto.Origin)) med.Origin = dto.Origin;
             if (!string.IsNullOrWhiteSpace(dto.Packaging)) med.Packaging = dto.Packaging;
-            if (!string.IsNullOrWhiteSpace(dto.ImageUrl)) med.ImageUrl = dto.ImageUrl;
+            if (!string.IsNullOrWhiteSpace(dto.ImageUrl))
+            {
+                // Nếu là ảnh local (/uploads/...), xác minh file thật sự tồn tại trước khi lưu
+                if (dto.ImageUrl.StartsWith("/api/uploads/") || dto.ImageUrl.StartsWith("/uploads/"))
+                {
+                    var relative = dto.ImageUrl.Replace("/api/uploads/", "").Replace("/uploads/", "");
+                    var root = _env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+                    var fullPath = Path.Combine(root, "uploads", relative.Replace('/', Path.DirectorySeparatorChar));
+                    if (!System.IO.File.Exists(fullPath))
+                    {
+                        return BadRequest(new { error = "Ảnh không tồn tại trên server, vui lòng tải ảnh lại." });
+                    }
+                }
+                med.ImageUrl = dto.ImageUrl;
+            }
             if (dto.RequiresPrescription != null) med.RequiresPrescription = dto.RequiresPrescription.Value;
             if (dto.CategoryId != null && dto.CategoryId > 0) med.CategoryId = dto.CategoryId.Value;
             if (dto.SupplierId != null && dto.SupplierId > 0) med.SupplierId = dto.SupplierId.Value;
