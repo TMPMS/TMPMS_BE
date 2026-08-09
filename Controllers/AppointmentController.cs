@@ -96,7 +96,7 @@ namespace TMPMS.Controllers
             var name = $"{Guid.NewGuid():N}{ext}";
             await using var stream = System.IO.File.Create(Path.Combine(folder, name));
             await file.CopyToAsync(stream);
-            return Ok(new { url = $"/uploads/appointments/{name}" });
+            return Ok(new { url = $"/api/uploads/appointments/{name}" });
         }
 
         [HttpPost("checkout")]
