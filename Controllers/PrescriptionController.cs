@@ -41,7 +41,7 @@ namespace TMPMS.Controllers
 
         // Đọc ảnh toa thuốc bằng AI và gợi ý khớp với danh mục dược phẩm — chỉ Dược sĩ/Admin xem để duyệt đơn.
         [HttpPost("{id}/scan-image")]
-        [Authorize(Roles = "Pharmacy,Pharmacist,Admin")]
+        [Authorize(Roles = "Pharmacy,Admin")]
         public async Task<ActionResult> ScanImage(int id)
         {
             try { return Ok(await _service.ScanImage(id)); }
@@ -50,7 +50,7 @@ namespace TMPMS.Controllers
 
         // Dược sĩ hoàn thiện (kê đơn) một đơn thuốc "Pending" gửi kèm ảnh: gắn thuốc + trừ kho + duyệt.
         [HttpPut("{id}/finalize")]
-        [Authorize(Roles = "Pharmacy,Pharmacist,Admin")]
+        [Authorize(Roles = "Pharmacy,Admin")]
         public async Task<ActionResult> Finalize(int id, [FromBody] PrescriptionFinalizeDTO dto)
         {
             try { return Ok(await _service.Finalize(id, dto)); }
@@ -81,22 +81,27 @@ namespace TMPMS.Controllers
         {
             var result = await _service.GetById(id);
             if (result == null) return NotFound();
+            if (!CanProxy() && result.UserId != GetCurrentUserId()) return Forbid();
             return Ok(result);
         }
 
         [HttpGet("user/{userId}")]
-        public async Task<ActionResult> GetByUser(int userId) => Ok(await _service.GetByUser(userId));
+        public async Task<ActionResult> GetByUser(int userId)
+        {
+            if (!CanProxy() && userId != GetCurrentUserId()) return Forbid();
+            return Ok(await _service.GetByUser(userId));
+        }
 
         [HttpGet("status/{status}")]
-        [Authorize(Roles = "Pharmacy,Pharmacist,Admin")]
+        [Authorize(Roles = "Pharmacy,Admin")]
         public async Task<ActionResult> GetByStatus(string status) => Ok(await _service.GetByStatus(status));
 
         [HttpGet]
-        [Authorize(Roles = "Pharmacy,Pharmacist,Admin")]
+        [Authorize(Roles = "Pharmacy,Admin")]
         public async Task<ActionResult> GetAll() => Ok(await _service.GetAll());
 
         [HttpPut("{id}/status")]
-        [Authorize(Roles = "Pharmacy,Pharmacist,Admin")]
+        [Authorize(Roles = "Pharmacy,Admin")]
         public async Task<ActionResult> UpdateStatus(int id, [FromBody] PrescriptionStatusUpdateDTO dto)
         {
             try
@@ -126,7 +131,7 @@ namespace TMPMS.Controllers
 
         private bool CanProxy()
         {
-            return User.IsInRole("Admin") || User.IsInRole("Staff") || User.IsInRole("Pharmacy") || User.IsInRole("Pharmacist");
+            return User.IsInRole("Admin") || User.IsInRole("Staff") || User.IsInRole("Pharmacy");
         }
     }
 }

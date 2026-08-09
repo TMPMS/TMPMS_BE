@@ -9,6 +9,7 @@ namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Route("[controller]")]
     public class StoresController : ControllerBase
     {
         private readonly TMPMSDbContext _context;

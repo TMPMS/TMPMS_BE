@@ -39,6 +39,7 @@ namespace TMPMS.Controllers
 
         // GET /vouchers/wheel/prizes
         [HttpGet("vouchers/wheel/prizes")]
+        [HttpGet("api/vouchers/wheel/prizes")]
         public async Task<IActionResult> GetPrizes()
         {
             var templates = await GetPrizeTemplatesAsync();
@@ -57,6 +58,7 @@ namespace TMPMS.Controllers
 
         // GET /vouchers/wheel/status
         [HttpGet("vouchers/wheel/status")]
+        [HttpGet("api/vouchers/wheel/status")]
         [Authorize]
         public async Task<IActionResult> GetStatus()
         {
@@ -86,6 +88,7 @@ namespace TMPMS.Controllers
 
         // POST /vouchers/wheel/spin
         [HttpPost("vouchers/wheel/spin")]
+        [HttpPost("api/vouchers/wheel/spin")]
         [Authorize]
         public async Task<IActionResult> Spin()
         {

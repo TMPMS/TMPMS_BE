@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Services.Interfaces;
 
 namespace TMPMS.Services
@@ -14,13 +15,15 @@ namespace TMPMS.Services
     {
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<MedicineImageSearchService> _logger;
 
         private static readonly string[] ModelsToTry = { "gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-2.0-flash", "gemini-flash-latest" };
 
-        public MedicineImageSearchService(HttpClient httpClient, IConfiguration configuration)
+        public MedicineImageSearchService(HttpClient httpClient, IConfiguration configuration, ILogger<MedicineImageSearchService> logger)
         {
             _httpClient = httpClient;
             _configuration = configuration;
+            _logger = logger;
         }
 
         public async Task<string?> IdentifyAsync(byte[] imageBytes, string mimeType)
@@ -63,10 +66,12 @@ Trả về CHỈ một JSON theo đúng schema sau, không thêm giải thích, 
                 {
                     try
                     {
-                        var res = await _httpClient.PostAsync(
-                            $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}",
-                            new StringContent(body, System.Text.Encoding.UTF8, "application/json")
-                        );
+                        var req = new HttpRequestMessage(HttpMethod.Post, $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent")
+                        {
+                            Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json")
+                        };
+                        req.Headers.Add("x-goog-api-key", apiKey);
+                        var res = await _httpClient.SendAsync(req);
                         var resBody = await res.Content.ReadAsStringAsync();
                         if (res.IsSuccessStatusCode)
                         {
@@ -89,7 +94,7 @@ Trả về CHỈ một JSON theo đúng schema sau, không thêm giải thích, 
                 if (response == null || !response.IsSuccessStatusCode)
                 {
                     var truncated = responseString.Length > 500 ? responseString.Substring(0, 500) + "..." : responseString;
-                    Console.WriteLine($"[MedicineImageSearch Gemini Error]: {truncated}");
+                    _logger.LogWarning("MedicineImageSearch Gemini error: {Body}", truncated);
                     return null;
                 }
 
@@ -114,7 +119,7 @@ Trả về CHỈ một JSON theo đúng schema sau, không thêm giải thích, 
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[MedicineImageSearch Gemini Error]: {ex.Message}");
+                _logger.LogError(ex, "MedicineImageSearch Gemini call failed");
                 return null;
             }
         }

@@ -11,6 +11,7 @@ namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("cart_items")]
+    [Route("api/cart_items")]
     [Authorize]
     public class CartItemsController : ControllerBase
     {
@@ -196,6 +197,7 @@ namespace TMPMS.Controllers
 
         [HttpPost]
         [Route("~/rpc/sync_cart_items")]
+        [Route("~/api/rpc/sync_cart_items")]
         public async Task<IActionResult> SyncCartItems([FromBody] SyncInput input)
         {
             var currentUserId = GetCurrentUserId();

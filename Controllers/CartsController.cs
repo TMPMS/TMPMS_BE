@@ -9,6 +9,7 @@ namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("carts")]
+    [Route("api/carts")]
     [Authorize]
     public class CartsController : ControllerBase
     {

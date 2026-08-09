@@ -29,6 +29,7 @@ namespace TMPMS.Controllers
 
         // GET /vouchers — danh sách voucher công khai (không gồm voucher cá nhân/mẫu vòng quay)
         [HttpGet("vouchers")]
+        [HttpGet("api/vouchers")]
         public async Task<IActionResult> GetVouchers()
         {
             var vouchers = await _context.Vouchers
@@ -41,6 +42,7 @@ namespace TMPMS.Controllers
 
         // GET /vouchers/mine — voucher cá nhân của user hiện tại (VD trúng từ vòng quay may mắn)
         [HttpGet("vouchers/mine")]
+        [HttpGet("api/vouchers/mine")]
         [Authorize]
         public async Task<IActionResult> GetMyVouchers()
         {
@@ -58,6 +60,7 @@ namespace TMPMS.Controllers
 
         // GET /admin/vouchers
         [HttpGet("admin/vouchers")]
+        [HttpGet("api/admin/vouchers")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetAdminVouchers()
         {
@@ -86,6 +89,7 @@ namespace TMPMS.Controllers
 
         // POST /admin/vouchers
         [HttpPost("admin/vouchers")]
+        [HttpPost("api/admin/vouchers")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateVoucher([FromBody] CreateVoucherInput input)
         {
@@ -134,6 +138,7 @@ namespace TMPMS.Controllers
 
         // PATCH /admin/vouchers/{id}
         [HttpPatch("admin/vouchers/{id}")]
+        [HttpPatch("api/admin/vouchers/{id}")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateVoucher(int id, [FromBody] UpdateVoucherInput input)
         {
@@ -160,6 +165,7 @@ namespace TMPMS.Controllers
 
         // DELETE /admin/vouchers/{id}
         [HttpDelete("admin/vouchers/{id}")]
+        [HttpDelete("api/admin/vouchers/{id}")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteVoucher(int id)
         {
@@ -182,6 +188,7 @@ namespace TMPMS.Controllers
 
         // POST /vouchers/validate — preview mức giảm cho 1 mã, dùng chung logic với lúc checkout thật.
         [HttpPost("vouchers/validate")]
+        [HttpPost("api/vouchers/validate")]
         [Authorize]
         public async Task<IActionResult> ValidateVoucher([FromBody] ValidateVoucherRequest request)
         {

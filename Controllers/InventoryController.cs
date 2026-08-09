@@ -7,6 +7,7 @@ using TMPMS.DTOs;
 namespace TMPMS.Controllers
 {
     [Route("api/[controller]")]
+    [Route("[controller]")]
     [ApiController]
     [Authorize(Roles = "Admin,Warehouse,Pharmacy")]
     public class InventoryController : ControllerBase
