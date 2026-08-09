@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using BusinessObjects;
 using TMPMS.Data;
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -17,6 +18,27 @@ using TMPMS.Utils;
 
 namespace TMPMS.Controllers
 {
+    public class MedicineCreateDto
+    {
+        [Required]
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        [Required]
+        public int CategoryId { get; set; }
+        [Required]
+        public int SupplierId { get; set; }
+        public decimal? Price { get; set; }
+        public decimal? OldPrice { get; set; }
+        public int? Discount { get; set; }
+        public bool RequiresPrescription { get; set; }
+        public string? ImageUrl { get; set; }
+        public string? Unit { get; set; }
+        public string? Origin { get; set; }
+        public string? Packaging { get; set; }
+        public DateTime? ManufactureDate { get; set; }
+        public DateTime? ExpiryDate { get; set; }
+    }
+
     public class MedicineUpdateDto
     {
         public string? Name { get; set; }
@@ -318,15 +340,32 @@ namespace TMPMS.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin,Staff,Pharmacy")]
-        public async Task<IActionResult> AddMedicine([FromBody] Medicine medicine)
+        public async Task<IActionResult> AddMedicine([FromBody] MedicineCreateDto dto)
         {
-            medicine.CreatedAt = DateTime.UtcNow;
-            medicine.IsActive = true;
-            if (medicine.ManufactureDate == default) medicine.ManufactureDate = DateTime.UtcNow;
-            if (medicine.ExpiryDate == default) medicine.ExpiryDate = DateTime.UtcNow.AddYears(1);
-            // Tồn kho chỉ được cộng qua nhập lô (StockBatch) — sản phẩm mới luôn bắt đầu từ 0
-            // và cần nhập lô đầu tiên (số lô, NSX, HSD thật) trong tab Nhập kho.
-            medicine.StockQuantity = 0;
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            var medicine = new Medicine
+            {
+                Name = dto.Name,
+                Description = dto.Description,
+                CategoryId = dto.CategoryId,
+                SupplierId = dto.SupplierId,
+                Price = dto.Price,
+                OldPrice = dto.OldPrice,
+                Discount = dto.Discount,
+                RequiresPrescription = dto.RequiresPrescription,
+                ImageUrl = dto.ImageUrl,
+                Unit = dto.Unit,
+                Origin = dto.Origin,
+                Packaging = dto.Packaging,
+                ManufactureDate = dto.ManufactureDate ?? DateTime.UtcNow,
+                ExpiryDate = dto.ExpiryDate ?? DateTime.UtcNow.AddYears(1),
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true,
+                // Tồn kho chỉ được cộng qua nhập lô (StockBatch) — sản phẩm mới luôn bắt đầu từ 0
+                // và cần nhập lô đầu tiên (số lô, NSX, HSD thật) trong tab Nhập kho.
+                StockQuantity = 0
+            };
 
             _context.Medicines.Add(medicine);
             await _context.SaveChangesAsync();
@@ -580,10 +619,12 @@ BẮT BUỘC trả về đúng định dạng JSON chuẩn theo schema:
                 {
                     try
                     {
-                        var res = await client.PostAsync(
-                            $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}",
-                            new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json")
-                        );
+                        var req = new HttpRequestMessage(HttpMethod.Post, $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent")
+                        {
+                            Content = new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json")
+                        };
+                        req.Headers.Add("x-goog-api-key", apiKey);
+                        var res = await client.SendAsync(req);
                         var body = await res.Content.ReadAsStringAsync();
                         if (res.IsSuccessStatusCode)
                         {

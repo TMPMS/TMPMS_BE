@@ -12,9 +12,46 @@ namespace TMPMS.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
-        public AuthController(IAuthService authService) => _authService = authService;
+        private readonly IConfiguration _configuration;
+        public AuthController(IAuthService authService, IConfiguration configuration)
+        {
+            _authService = authService;
+            _configuration = configuration;
+        }
 
         private string GetIp() => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        // Đặt token vào httpOnly cookie thay vì chỉ trả trong JSON body — JS phía client không
+        // đọc được nữa, giảm hẳn rủi ro XSS đánh cắp token. SameSite=Lax vì FE/BE cùng origin
+        // (xem Program.cs CORS) nên đã đủ chặn CSRF cho các request state-changing, không cần
+        // thêm cơ chế CSRF-token riêng.
+        private void SetAuthCookies(AuthResponseDTO result)
+        {
+            Response.Cookies.Append("access_token", result.AccessToken, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Lax,
+                Expires = result.AccessTokenExpiresAt,
+                Path = "/"
+            });
+
+            var refreshTokenDays = int.TryParse(_configuration["JWT:RefreshTokenExpiryDays"], out var d) ? d : 7;
+            Response.Cookies.Append("refresh_token", result.RefreshToken, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Lax,
+                Expires = DateTimeOffset.UtcNow.AddDays(refreshTokenDays),
+                Path = "/"
+            });
+        }
+
+        private void ClearAuthCookies()
+        {
+            Response.Cookies.Delete("access_token", new CookieOptions { Path = "/" });
+            Response.Cookies.Delete("refresh_token", new CookieOptions { Path = "/" });
+        }
 
         [HttpPost("register")]
         public async Task<ActionResult> Register([FromBody] RegisterRequestDTO dto)
@@ -35,6 +72,7 @@ namespace TMPMS.Controllers
             {
                 var result = await _authService.Login(dto, GetIp());
                 if (result == null) return Unauthorized("Email hoặc mật khẩu không đúng.");
+                SetAuthCookies(result);
                 return Ok(result);
             }
             catch (InvalidOperationException ex) { return StatusCode(423, ex.Message); } // Locked
@@ -47,6 +85,7 @@ namespace TMPMS.Controllers
             try
             {
                 var result = await _authService.GoogleLogin(dto, GetIp());
+                SetAuthCookies(result);
                 return Ok(result);
             }
             catch (UnauthorizedAccessException ex) { return Unauthorized(ex.Message); } // ID token giả/hết hạn
@@ -55,11 +94,15 @@ namespace TMPMS.Controllers
         }
 
         [HttpPost("refresh-token")]
-        public async Task<ActionResult> RefreshToken([FromBody] RefreshTokenRequestDTO dto)
+        public async Task<ActionResult> RefreshToken([FromBody] RefreshTokenRequestDTO? dto = null)
         {
+            var refreshToken = !string.IsNullOrEmpty(dto?.RefreshToken) ? dto.RefreshToken : Request.Cookies["refresh_token"];
+            if (string.IsNullOrEmpty(refreshToken)) return Unauthorized("Không có refresh token.");
+
             try
             {
-                var result = await _authService.RefreshToken(dto.RefreshToken, GetIp());
+                var result = await _authService.RefreshToken(refreshToken, GetIp());
+                SetAuthCookies(result);
                 return Ok(result);
             }
             catch (UnauthorizedAccessException ex) { return Unauthorized(ex.Message); }
@@ -68,9 +111,13 @@ namespace TMPMS.Controllers
 
         [HttpPost("revoke-token")]
         [Authorize]
-        public async Task<ActionResult> RevokeToken([FromBody] RevokeTokenRequestDTO dto)
+        public async Task<ActionResult> RevokeToken([FromBody] RevokeTokenRequestDTO? dto = null)
         {
-            var ok = await _authService.RevokeToken(dto.RefreshToken, GetIp());
+            var refreshToken = !string.IsNullOrEmpty(dto?.RefreshToken) ? dto.RefreshToken : Request.Cookies["refresh_token"];
+            ClearAuthCookies();
+            if (string.IsNullOrEmpty(refreshToken)) return Ok(new { message = "Đăng xuất thành công." });
+
+            var ok = await _authService.RevokeToken(refreshToken, GetIp());
             if (!ok) return NotFound("Token không tồn tại hoặc đã bị thu hồi.");
             return Ok(new { message = "Đăng xuất thành công." });
         }
