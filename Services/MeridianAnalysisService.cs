@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Services.Interfaces;
 using TMPMS.Data;
 using TMPMS.DTOs;
@@ -19,6 +20,7 @@ namespace TMPMS.Services
         private readonly HttpClient _httpClient;
         private readonly IMemoryCache _cache;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<MeridianAnalysisService> _logger;
 
         private const int AiCacheDurationDays = 30;
         private const int FallbackCacheDurationHours = 1;
@@ -26,12 +28,13 @@ namespace TMPMS.Services
         private static readonly string[] MeridianCodes = { "PHE", "THAN", "TY", "CAN", "TAM", "VI" };
         private static readonly string[] ModelsToTry = { "gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-2.0-flash", "gemini-flash-latest" };
 
-        public MeridianAnalysisService(TMPMSDbContext context, HttpClient httpClient, IMemoryCache cache, IConfiguration configuration)
+        public MeridianAnalysisService(TMPMSDbContext context, HttpClient httpClient, IMemoryCache cache, IConfiguration configuration, ILogger<MeridianAnalysisService> logger)
         {
             _context = context;
             _httpClient = httpClient;
             _cache = cache;
             _configuration = configuration;
+            _logger = logger;
         }
 
         public async Task<MeridianAnalysisResponseDto> GetAsync(int medicineId)
@@ -114,10 +117,12 @@ Trả lời CHỈ bằng JSON theo đúng schema sau, không thêm giải thích
                 {
                     try
                     {
-                        var res = await _httpClient.PostAsync(
-                            $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}",
-                            new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json")
-                        );
+                        var req = new HttpRequestMessage(HttpMethod.Post, $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent")
+                        {
+                            Content = new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json")
+                        };
+                        req.Headers.Add("x-goog-api-key", apiKey);
+                        var res = await _httpClient.SendAsync(req);
                         var body = await res.Content.ReadAsStringAsync();
                         if (res.IsSuccessStatusCode)
                         {
@@ -140,7 +145,7 @@ Trả lời CHỈ bằng JSON theo đúng schema sau, không thêm giải thích
                 if (response == null || !response.IsSuccessStatusCode)
                 {
                     var truncated = responseString.Length > 500 ? responseString.Substring(0, 500) + "..." : responseString;
-                    Console.WriteLine($"[MeridianAnalysis Gemini Error]: {truncated}");
+                    _logger.LogWarning("MeridianAnalysis Gemini error: {Body}", truncated);
                     return null;
                 }
 
@@ -197,7 +202,7 @@ Trả lời CHỈ bằng JSON theo đúng schema sau, không thêm giải thích
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[MeridianAnalysis Gemini Error]: {ex.Message}");
+                _logger.LogError(ex, "MeridianAnalysis Gemini call failed");
                 return null;
             }
         }

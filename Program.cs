@@ -89,7 +89,8 @@ builder.Services.AddIdentity<User, Role>(options =>
 .AddDefaultTokenProviders();
 
 // JWT & Authentication
-var jwtKey = builder.Configuration["JWT:SecretKey"] ?? "TMPMS_SecretKey_For_JWT_Authentication_Secret_123456789";
+var jwtKey = builder.Configuration["JWT:SecretKey"]
+    ?? throw new InvalidOperationException("JWT:SecretKey is not configured.");
 var authBuilder = builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -113,9 +114,19 @@ var authBuilder = builder.Services.AddAuthentication(options =>
         {
             var accessToken = context.Request.Query["access_token"];
             var path = context.HttpContext.Request.Path;
-            if (!string.IsNullOrEmpty(accessToken) && (path.StartsWithSegments("/hubs") || path.StartsWithSegments("/trackingHub")))
+            if (!string.IsNullOrEmpty(accessToken) && (path.StartsWithSegments("/hubs") || path.StartsWithSegments("/trackingHub") || path.StartsWithSegments("/api/hubs") || path.StartsWithSegments("/api/trackingHub")))
             {
                 context.Token = accessToken;
+            }
+            // Nếu không có Authorization header (client cũ dùng Bearer header vẫn hoạt động bình
+            // thường), thử lấy token từ httpOnly cookie do AuthController phát ra khi đăng nhập.
+            else if (string.IsNullOrEmpty(context.Token) && context.Request.Headers.Authorization.Count == 0)
+            {
+                var cookieToken = context.Request.Cookies["access_token"];
+                if (!string.IsNullOrEmpty(cookieToken))
+                {
+                    context.Token = cookieToken;
+                }
             }
             return Task.CompletedTask;
         }
@@ -215,7 +226,6 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
         policy => policy.WithOrigins("http://localhost:5173", "https://tmpms.vercel.app", "http://127.0.0.1:5173", "http://localhost",
-                                    "http://222.255.215.218:8080", "http://222.255.215.218",
                                     "https://tmpms.io.vn", "https://www.tmpms.io.vn",
                                     "https://localhost:64647")
                         .AllowAnyMethod()
@@ -225,8 +235,37 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Global exception handler: log the full exception server-side, return a sanitized message to the client.
+app.UseExceptionHandler(errApp =>
+{
+    errApp.Run(async context =>
+    {
+        var feature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        if (feature?.Error is Exception ex)
+        {
+            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogError(ex, "Unhandled exception for {Path}", context.Request.Path);
+        }
+        context.Response.ContentType = "application/json";
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new { message = "Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau." });
+    });
+});
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    await next();
+});
+
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
+if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
@@ -245,6 +284,13 @@ app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPhysicalPath),
     RequestPath = ""
+});
+
+// Bản dưới /api/uploads cho các reverse proxy chỉ chuyển tiếp tiền tố /api/* sang backend.
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPhysicalPath),
+    RequestPath = "/api"
 });
 
 // Disabled for free local hosting behind Cloudflare tunnel (HTTP upstream).
@@ -284,49 +330,54 @@ using (var scope = app.Services.CreateScope())
         }
     }
 
-    // Admin
-    if (await userManager.FindByEmailAsync("admin@tmpms.com") == null)
+    // Default demo accounts (weak, well-known passwords) — Development only.
+    // On production these must be created/rotated manually with real credentials.
+    if (app.Environment.IsDevelopment())
     {
-        var admin = new User
+        // Admin
+        if (await userManager.FindByEmailAsync("admin@tmpms.com") == null)
         {
-            UserName = "admin",
-            Email = "admin@tmpms.com",
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow
-        };
+            var admin = new User
+            {
+                UserName = "admin",
+                Email = "admin@tmpms.com",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
 
-        await userManager.CreateAsync(admin, "Admin@123");
-        await userManager.AddToRoleAsync(admin, "Admin");
-    }
+            await userManager.CreateAsync(admin, "Admin@123");
+            await userManager.AddToRoleAsync(admin, "Admin");
+        }
 
-    // Pharmacy
-    if (await userManager.FindByEmailAsync("pharmacy@tmpms.com") == null)
-    {
-        var pharmacy = new User
+        // Pharmacy
+        if (await userManager.FindByEmailAsync("pharmacy@tmpms.com") == null)
         {
-            UserName = "pharmacy",
-            Email = "pharmacy@tmpms.com",
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow
-        };
+            var pharmacy = new User
+            {
+                UserName = "pharmacy",
+                Email = "pharmacy@tmpms.com",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
 
-        await userManager.CreateAsync(pharmacy, "Pharmacy@123");
-        await userManager.AddToRoleAsync(pharmacy, "Pharmacy");
-    }
+            await userManager.CreateAsync(pharmacy, "Pharmacy@123");
+            await userManager.AddToRoleAsync(pharmacy, "Pharmacy");
+        }
 
-    // User
-    if (await userManager.FindByEmailAsync("user@tmpms.com") == null)
-    {
-        var user = new User
+        // User
+        if (await userManager.FindByEmailAsync("user@tmpms.com") == null)
         {
-            UserName = "user",
-            Email = "user@tmpms.com",
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow
-        };
+            var user = new User
+            {
+                UserName = "user",
+                Email = "user@tmpms.com",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
 
-        await userManager.CreateAsync(user, "User@123");
-        await userManager.AddToRoleAsync(user, "User");
+            await userManager.CreateAsync(user, "User@123");
+            await userManager.AddToRoleAsync(user, "User");
+        }
     }
 
     // Vouchers
@@ -530,8 +581,12 @@ using (var scope = app.Services.CreateScope())
     await DiverseProductSeeder.SeedAsync(context);
     await SampleDataSeeder.SeedAsync(context);
 }
+// Map ở cả 2 dạng đường dẫn (có và không /api) — reverse proxy production chỉ forward
+// /api/* sang backend, dev local lại gọi không /api. Xem comment ở UseStaticFiles phía trên.
 app.MapHub<TrackingHub>("/trackingHub");
+app.MapHub<TrackingHub>("/api/trackingHub");
 app.MapHub<TMPMS.Hubs.PharmacyChatHub>("/hubs/pharmacy-chat");
+app.MapHub<TMPMS.Hubs.PharmacyChatHub>("/api/hubs/pharmacy-chat");
 app.MapControllers();
 
 // SPA fallback: serve index.html for client-side routes served from wwwroot.

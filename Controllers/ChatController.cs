@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Net.Http;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace TMPMS.Controllers
 {
@@ -19,11 +20,13 @@ namespace TMPMS.Controllers
     {
         private readonly TMPMSDbContext _context;
         private readonly IConfiguration _config;
+        private readonly ILogger<ChatController> _logger;
 
-        public ChatController(TMPMSDbContext context, IConfiguration config)
+        public ChatController(TMPMSDbContext context, IConfiguration config, ILogger<ChatController> logger)
         {
             _context = context;
             _config = config;
+            _logger = logger;
         }
 
         public class ChatMessageItem
@@ -156,10 +159,12 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
                     {
                         try
                         {
-                            var res = await client.PostAsync(
-                                $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}",
-                                new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json")
-                            );
+                            var req = new HttpRequestMessage(HttpMethod.Post, $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent")
+                            {
+                                Content = new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json")
+                            };
+                            req.Headers.Add("x-goog-api-key", apiKey);
+                            var res = await client.SendAsync(req);
                             var body = await res.Content.ReadAsStringAsync();
                             if (res.IsSuccessStatusCode)
                             {
@@ -181,7 +186,7 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
 
                     if (response == null)
                     {
-                        Console.WriteLine("[Gemini Chatbot Error]: Không gọi được model nào. Falling back to rule-based keyword matching.");
+                        _logger.LogWarning("Gemini Chatbot: no model responded, falling back to rule-based keyword matching");
                     }
                     else if (!response.IsSuccessStatusCode)
                     {
@@ -199,7 +204,7 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
                         catch { }
 
                         var truncatedBody = responseString.Length > 500 ? responseString.Substring(0, 500) + "..." : responseString;
-                        Console.WriteLine($"[Gemini Chatbot Error]: HTTP {statusCode} ({response.ReasonPhrase}) status={errStatus} body={truncatedBody}");
+                        _logger.LogWarning("Gemini Chatbot error: HTTP {StatusCode} ({Reason}) status={ErrStatus} body={Body}", statusCode, response.ReasonPhrase, errStatus, truncatedBody);
 
                         if (statusCode == 429 || errStatus == "RESOURCE_EXHAUSTED")
                         {
@@ -287,7 +292,7 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Gemini Chatbot Error]: {ex.Message}. Falling back to rule-based keyword matching.");
+                    _logger.LogError(ex, "Gemini Chatbot call failed, falling back to rule-based keyword matching");
                 }
             }
 
