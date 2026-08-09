@@ -244,7 +244,7 @@ if (!Directory.Exists(uploadsPhysicalPath))
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPhysicalPath),
-    RequestPath = ""
+    RequestPath = "/api"
 });
 
 // Disabled for free local hosting behind Cloudflare tunnel (HTTP upstream).
