@@ -113,7 +113,7 @@ var authBuilder = builder.Services.AddAuthentication(options =>
         {
             var accessToken = context.Request.Query["access_token"];
             var path = context.HttpContext.Request.Path;
-            if (!string.IsNullOrEmpty(accessToken) && (path.StartsWithSegments("/hubs") || path.StartsWithSegments("/trackingHub")))
+            if (!string.IsNullOrEmpty(accessToken) && (path.StartsWithSegments("/hubs") || path.StartsWithSegments("/trackingHub") || path.StartsWithSegments("/api/hubs") || path.StartsWithSegments("/api/trackingHub")))
             {
                 context.Token = accessToken;
             }
@@ -540,8 +540,12 @@ using (var scope = app.Services.CreateScope())
     await DiverseProductSeeder.SeedAsync(context);
     await SampleDataSeeder.SeedAsync(context);
 }
+// Map ở cả 2 dạng đường dẫn (có và không /api) — reverse proxy production chỉ forward
+// /api/* sang backend, dev local lại gọi không /api.
 app.MapHub<TrackingHub>("/trackingHub");
+app.MapHub<TrackingHub>("/api/trackingHub");
 app.MapHub<TMPMS.Hubs.PharmacyChatHub>("/hubs/pharmacy-chat");
+app.MapHub<TMPMS.Hubs.PharmacyChatHub>("/api/hubs/pharmacy-chat");
 app.MapControllers();
 
 // SPA fallback: serve index.html for client-side routes served from wwwroot.
