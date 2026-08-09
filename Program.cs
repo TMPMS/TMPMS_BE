@@ -241,10 +241,20 @@ var uploadsPhysicalPath = Directory.Exists(sourceWwwroot)
 if (!Directory.Exists(uploadsPhysicalPath))
     Directory.CreateDirectory(uploadsPhysicalPath);
 
+// Serve ở CẢ HAI dạng đường dẫn (có và không /api) — reverse proxy production chỉ
+// forward /api/* sang backend, còn dev local/khác lại gọi không /api. Đừng đổi RequestPath
+// của 1 trong 2 block dưới đây; nếu cần đổi, hãy thêm block mới, không sửa/xoá cái cũ,
+// để tránh vòng lặp "sửa rồi bị đổi ngược" đã xảy ra nhiều lần.
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPhysicalPath),
     RequestPath = ""
+});
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPhysicalPath),
+    RequestPath = "/api"
 });
 
 // Disabled for free local hosting behind Cloudflare tunnel (HTTP upstream).
