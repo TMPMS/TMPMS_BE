@@ -1,11 +1,18 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace TMPMS.DTOs
 {
     public class RegisterRequestDTO
     {
+        [Required, StringLength(50, MinimumLength = 3)]
         public string UserName { get; set; }
+        [Required, EmailAddress]
         public string Email { get; set; }
+        [Required, StringLength(100, MinimumLength = 6)]
         public string Password { get; set; }
+        [Required, Compare(nameof(Password))]
         public string ConfirmPassword { get; set; }
+        [Phone]
         public string Phone { get; set; }
         // Mặc định user tự đăng ký là Customer; Admin muốn tạo Doctor/Pharmacist... thì dùng AssignRole
         public string RoleName { get; set; } = "Customer";
@@ -13,7 +20,9 @@ namespace TMPMS.DTOs
 
     public class LoginRequestDTO
     {
+        [Required]
         public string UserName { get; set; }
+        [Required]
         public string Password { get; set; }
     }
 
@@ -51,20 +60,27 @@ namespace TMPMS.DTOs
 
     public class ChangePasswordRequestDTO
     {
+        [Required]
         public string CurrentPassword { get; set; }
+        [Required, StringLength(100, MinimumLength = 6)]
         public string NewPassword { get; set; }
     }
 
     public class ForgotPasswordRequestDTO
     {
+        [Required, EmailAddress]
         public string Email { get; set; }
     }
 
     public class ResetPasswordRequestDTO
     {
+        [Required, EmailAddress]
         public string Email { get; set; }
+        [Required]
         public string Code { get; set; }
+        [Required, StringLength(100, MinimumLength = 6)]
         public string NewPassword { get; set; }
+        [Required, Compare(nameof(NewPassword))]
         public string ConfirmPassword { get; set; }
     }
 

@@ -127,9 +127,20 @@ namespace TMPMS.Controllers
 
         // GET: api/patients/5/diagnosis-history
         [HttpGet("{patientId}/diagnosis-history")]
-        [Authorize(Roles = "Admin,Staff,Patient")]
+        [Authorize(Roles = "Admin,Staff,User")]
         public async Task<IActionResult> GetDiagnosisHistory(int patientId)
         {
+            // Nếu là User (bệnh nhân tự đăng nhập), chỉ cho phép xem lịch sử chẩn đoán của chính mình.
+            var userRoleClaim = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            if (userRoleClaim == "User")
+            {
+                var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int loggedInUserId) || loggedInUserId != patientId)
+                {
+                    return Forbid();
+                }
+            }
+
             var result = await _patientService.GetDiagnosisHistoryAsync(patientId);
 
             return Ok(result);
@@ -137,14 +148,14 @@ namespace TMPMS.Controllers
 
         // GET: api/patients/{patientId}/prescription-history
         [HttpGet("{patientId}/prescription-history")]
-        [Authorize(Roles = "Admin,Staff,Patient")]
+        [Authorize(Roles = "Admin,Staff,User")]
         public async Task<IActionResult> GetPrescriptionHistory(int patientId)
         {
-            // 1. Kiểm tra bảo mật: Nếu là Patient, chỉ cho phép xem đơn thuốc của chính mình
+            // 1. Kiểm tra bảo mật: Nếu là User (bệnh nhân), chỉ cho phép xem đơn thuốc của chính mình
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             var userRoleClaim = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
 
-            if (userRoleClaim == "Patient")
+            if (userRoleClaim == "User")
             {
                 if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int loggedInUserId) || loggedInUserId != patientId)
                 {
