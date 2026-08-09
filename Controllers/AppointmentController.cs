@@ -90,13 +90,20 @@ namespace TMPMS.Controllers
             var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp" };
             var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
             if (!allowed.Contains(ext)) return BadRequest(new { message = "Chỉ hỗ trợ JPG, PNG hoặc WEBP." });
-            var root = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-            var folder = Path.Combine(root, "uploads", "appointments");
-            Directory.CreateDirectory(folder);
-            var name = $"{Guid.NewGuid():N}{ext}";
-            await using var stream = System.IO.File.Create(Path.Combine(folder, name));
-            await file.CopyToAsync(stream);
-            return Ok(new { url = $"/api/uploads/appointments/{name}" });
+            try
+            {
+                var root = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+                var folder = Path.Combine(root, "uploads", "appointments");
+                Directory.CreateDirectory(folder);
+                var name = $"{Guid.NewGuid():N}{ext}";
+                await using var stream = System.IO.File.Create(Path.Combine(folder, name));
+                await file.CopyToAsync(stream);
+                return Ok(new { url = $"/api/uploads/appointments/{name}" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Không thể lưu ảnh, vui lòng thử lại." });
+            }
         }
 
         [HttpPost("checkout")]
