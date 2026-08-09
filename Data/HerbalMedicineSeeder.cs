@@ -9,6 +9,12 @@ namespace TMPMS.Data
 {
     public static class HerbalMedicineSeeder
     {
+        // Icon lá thảo dược vẽ tay (SVG nhúng trực tiếp) — dùng thay cho ảnh Unsplash hotlink cũ
+        // (vốn vô tình là ảnh đồng hồ thông minh, không liên quan tới dược liệu).
+        private static readonly string DefaultHerbImage = "data:image/svg+xml;utf8," + Uri.EscapeDataString(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 200 200\"><rect width=\"200\" height=\"200\" rx=\"12\" fill=\"#f0fdf4\"/><path d=\"M100 58c-20 10-32 30-32 50 0 14 10 24 22 24h20c12 0 22-10 22-24 0-20-12-40-32-50z\" fill=\"#059669\" opacity=\"0.35\"/><path d=\"M100 66v66\" stroke=\"#059669\" stroke-width=\"4\" opacity=\"0.5\" stroke-linecap=\"round\"/><rect x=\"62\" y=\"146\" width=\"76\" height=\"12\" rx=\"6\" fill=\"#059669\" opacity=\"0.2\"/></svg>"
+        );
+
         public static async Task SeedAsync(TMPMSDbContext context)
         {
             // 1. Ensure Category 'Thuốc Đông Y - Thảo dược' exists
