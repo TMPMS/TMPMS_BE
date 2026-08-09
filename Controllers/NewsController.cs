@@ -25,6 +25,7 @@ namespace TMPMS.Controllers
             return Ok(res);
         }
 
+        [HttpPost("~/News")]
         [HttpPost("api/[controller]")]
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Create([FromBody] NewsArticleCreateDto dto)
@@ -33,6 +34,7 @@ namespace TMPMS.Controllers
             return CreatedAtAction(nameof(GetById), new { id = res.Id }, res);
         }
 
+        [HttpPut("~/News/{id}")]
         [HttpPut("api/[controller]/{id}")]
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Update(int id, [FromBody] NewsArticleCreateDto dto)
@@ -42,6 +44,7 @@ namespace TMPMS.Controllers
             return Ok(res);
         }
 
+        [HttpDelete("~/News/{id}")]
         [HttpDelete("api/[controller]/{id}")]
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Delete(int id)

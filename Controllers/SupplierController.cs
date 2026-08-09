@@ -13,10 +13,12 @@ namespace TMPMS.Controllers
         public SupplierController(ISupplierService service) => _service = service;
 
         [HttpGet("~/suppliers")]
+        [HttpGet("~/api/suppliers")]
         [HttpGet("api/[controller]")]
         public async Task<IActionResult> GetAll() => Ok(await _service.GetAllAsync());
 
         [HttpGet("~/suppliers/{id}")]
+        [HttpGet("~/api/suppliers/{id}")]
         [HttpGet("api/[controller]/{id}")]
         public async Task<IActionResult> GetById(int id)
         {
@@ -25,6 +27,7 @@ namespace TMPMS.Controllers
             return Ok(res);
         }
 
+        [HttpPost("~/Supplier")]
         [HttpPost("api/[controller]")]
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Create([FromBody] SupplierCreateDto dto)
@@ -33,6 +36,7 @@ namespace TMPMS.Controllers
             return CreatedAtAction(nameof(GetById), new { id = res.Id }, res);
         }
 
+        [HttpPut("~/Supplier/{id}")]
         [HttpPut("api/[controller]/{id}")]
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Update(int id, [FromBody] SupplierCreateDto dto)
@@ -42,6 +46,7 @@ namespace TMPMS.Controllers
             return Ok(res);
         }
 
+        [HttpDelete("~/Supplier/{id}")]
         [HttpDelete("api/[controller]/{id}")]
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Delete(int id)

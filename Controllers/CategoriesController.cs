@@ -9,6 +9,7 @@ namespace TMPMS.Controllers
 {
     [ApiController]
     [Route("categories")]
+    [Route("api/categories")]
     public class CategoriesController : ControllerBase
     {
         private readonly TMPMSDbContext _context;
