@@ -117,16 +117,16 @@ namespace TMPMS.Services
         // ---------- OTP LOGIN ----------
         public async Task<AuthResponseDTO> OtpLogin(OtpLoginRequestDTO dto, string ipAddress)
         {
+            if (string.IsNullOrWhiteSpace(dto.Phone) || string.IsNullOrWhiteSpace(dto.Code))
+                throw new ArgumentException("Vui lòng nhập số điện thoại và mã OTP.");
+
             var cacheKey = $"otp_{dto.Phone}";
             if (!_cache.TryGetValue(cacheKey, out string? storedOtp))
-            {
-                if (dto.Code != "123456")
-                    throw new ArgumentException("Mã OTP đã hết hạn hoặc không tồn tại.");
-            }
-            else if (storedOtp != dto.Code && dto.Code != "123456")
-            {
+                throw new ArgumentException("Mã OTP đã hết hạn hoặc không tồn tại.");
+            if (storedOtp != dto.Code)
                 throw new ArgumentException("Mã OTP không chính xác.");
-            }
+
+            _cache.Remove(cacheKey); // OTP chỉ dùng được một lần.
 
             var user = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == dto.Phone);
             if (user == null)
@@ -230,18 +230,32 @@ namespace TMPMS.Services
         // ---------- SEND OTP ----------
         public async Task<bool> SendOtp(string phone)
         {
-            if (string.IsNullOrEmpty(phone)) return false;
+            if (string.IsNullOrWhiteSpace(phone) || !Regex.IsMatch(phone.Trim(), @"^(0|\+84)\d{9}$"))
+                throw new ArgumentException("Số điện thoại không hợp lệ. Vui lòng nhập đúng số điện thoại Việt Nam.");
+            phone = phone.Trim();
+
+            // Chống spam gửi OTP liên tục (cũng là chống tốn phí ZNS): 60 giây mới được gửi lại.
+            var cooldownKey = $"otp_cooldown_{phone}";
+            if (_cache.TryGetValue(cooldownKey, out _))
+                throw new InvalidOperationException("Vui lòng chờ 60 giây trước khi gửi lại mã OTP.");
+            _cache.Set(cooldownKey, true, TimeSpan.FromSeconds(60));
 
             // Generate random 6-digit OTP code
-            var otp = Random.Shared.Next(100000, 999999).ToString();
-            
+            var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+
             // Store in memory cache for 3 minutes
             var cacheKey = $"otp_{phone}";
             _cache.Set(cacheKey, otp, TimeSpan.FromMinutes(3));
 
-            // Send actual message via SmsService
+            // Send actual message via SmsService (Zalo ZNS)
             var message = $"[TMPMS Clinic] Ma OTP cua ban la: {otp}. Hieu luc 3 phut.";
-            return await _smsService.SendSmsAsync(phone, message);
+            var sent = await _smsService.SendSmsAsync(phone, message);
+            if (!sent)
+            {
+                _cache.Remove(cacheKey);
+                _cache.Remove(cooldownKey);
+            }
+            return sent;
         }
 
         // ---------- REFRESH TOKEN (rotation) ----------

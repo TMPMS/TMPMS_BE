@@ -79,6 +79,34 @@ namespace TMPMS.Controllers
             catch (Exception ex) { return BadRequest(ex.Message); }
         }
 
+        [HttpPost("send-otp")]
+        public async Task<ActionResult> SendOtp([FromBody] SendOtpRequestDTO dto)
+        {
+            try
+            {
+                var ok = await _authService.SendOtp(dto.Phone);
+                if (!ok) return BadRequest("Không thể gửi mã OTP. Vui lòng thử lại.");
+                return Ok(new { message = "Mã OTP đã được gửi qua SMS." });
+            }
+            catch (ArgumentException ex) { return BadRequest(ex.Message); }
+            catch (InvalidOperationException ex) { return BadRequest(ex.Message); }
+            catch (Exception ex) { return BadRequest(ex.Message); }
+        }
+
+        [HttpPost("otp-login")]
+        public async Task<ActionResult> OtpLogin([FromBody] OtpLoginRequestDTO dto)
+        {
+            try
+            {
+                var result = await _authService.OtpLogin(dto, GetIp());
+                SetAuthCookies(result);
+                return Ok(result);
+            }
+            catch (ArgumentException ex) { return BadRequest(ex.Message); }
+            catch (InvalidOperationException ex) { return BadRequest(ex.Message); }
+            catch (Exception ex) { return BadRequest(ex.Message); }
+        }
+
         [HttpPost("google-login")]
         public async Task<ActionResult> GoogleLogin([FromBody] GoogleLoginRequestDTO dto)
         {

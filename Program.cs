@@ -225,7 +225,7 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
-        policy => policy.WithOrigins("http://localhost:5173", "https://tmpms.vercel.app", "http://127.0.0.1:5173", "http://localhost",
+        policy => policy.WithOrigins("http://localhost:5173", "http://localhost:5174", "https://tmpms.vercel.app", "http://127.0.0.1:5173", "http://localhost",
                                     "https://tmpms.io.vn", "https://www.tmpms.io.vn",
                                     "https://localhost:64647")
                         .AllowAnyMethod()
