@@ -1,4 +1,5 @@
 using BusinessObjects;
+using Services.Interfaces;
 using TMPMS.DTOs;
 using TMPMS.Models;
 using TMPMS.Repositories.Interfaces;
@@ -9,10 +10,12 @@ namespace TMPMS.Services
     public class AppointmentService : IAppointmentService
     {
         private readonly IAppointmentRepository _appointmentRepository;
+        private readonly IEmailService _emailService;
 
-        public AppointmentService(IAppointmentRepository appointmentRepository)
+        public AppointmentService(IAppointmentRepository appointmentRepository, IEmailService emailService)
         {
             _appointmentRepository = appointmentRepository;
+            _emailService = emailService;
         }
 
         public async Task ExpireOverdueAppointmentsAsync()
@@ -87,6 +90,15 @@ namespace TMPMS.Services
             };
 
             bool created = await _appointmentRepository.Add(appointment);
+            if (created && !string.IsNullOrWhiteSpace(user.Email))
+            {
+                await _emailService.SendEmailAsync(
+                    user.Email,
+                    "Đặt lịch khám thành công - TMPMS",
+                    $"<p>Xin chào {System.Net.WebUtility.HtmlEncode(user.FullName ?? user.UserName)},</p>" +
+                    $"<p>Bạn đã đặt lịch khám vào lúc <b>{appointment.AppointmentDate:HH:mm dd/MM/yyyy}</b> tại {System.Net.WebUtility.HtmlEncode(appointment.Location)}.</p>" +
+                    "<p>Lịch hẹn đang chờ nhà thuốc xác nhận. Chúng tôi sẽ gửi email ngay khi lịch được xác nhận.</p>");
+            }
             return new AppointmentBookingResult { Success = created };
         }
 
@@ -154,7 +166,17 @@ namespace TMPMS.Services
             appointment.ConfirmedAt = DateTime.UtcNow;
             appointment.ConfirmedByStaffId = staffId;
             appointment.RejectionReason = null;
-            return await _appointmentRepository.Update(appointment);
+            var updated = await _appointmentRepository.Update(appointment);
+            if (updated && !string.IsNullOrWhiteSpace(appointment.User?.Email))
+            {
+                await _emailService.SendEmailAsync(
+                    appointment.User.Email,
+                    "Lịch hẹn đã được xác nhận - TMPMS",
+                    $"<p>Xin chào {System.Net.WebUtility.HtmlEncode(appointment.User.FullName ?? appointment.User.UserName)},</p>" +
+                    $"<p>Lịch hẹn khám vào lúc <b>{appointment.AppointmentDate:HH:mm dd/MM/yyyy}</b> của bạn đã được nhà thuốc <b>xác nhận</b>.</p>" +
+                    $"<p>Vui lòng đến đúng giờ tại {System.Net.WebUtility.HtmlEncode(appointment.Location)}.</p>");
+            }
+            return updated;
         }
 
         public async Task<bool> RejectAppointment(int id, int staffId, string reason)
@@ -167,7 +189,18 @@ namespace TMPMS.Services
             appointment.ConfirmedAt = null;
             appointment.ConfirmedByStaffId = staffId;
             appointment.RejectionReason = string.IsNullOrWhiteSpace(reason) ? "Không cung cấp lý do" : reason.Trim();
-            return await _appointmentRepository.Update(appointment);
+            var updated = await _appointmentRepository.Update(appointment);
+            if (updated && !string.IsNullOrWhiteSpace(appointment.User?.Email))
+            {
+                await _emailService.SendEmailAsync(
+                    appointment.User.Email,
+                    "Lịch hẹn không được xác nhận - TMPMS",
+                    $"<p>Xin chào {System.Net.WebUtility.HtmlEncode(appointment.User.FullName ?? appointment.User.UserName)},</p>" +
+                    $"<p>Rất tiếc, lịch hẹn khám vào lúc <b>{appointment.AppointmentDate:HH:mm dd/MM/yyyy}</b> của bạn <b>không được xác nhận</b>.</p>" +
+                    $"<p>Lý do: {System.Net.WebUtility.HtmlEncode(appointment.RejectionReason)}</p>" +
+                    "<p>Vui lòng đặt lại lịch hẹn khác hoặc liên hệ nhà thuốc để được hỗ trợ.</p>");
+            }
+            return updated;
         }
 
         public async Task<bool> CompleteAppointment(int id)

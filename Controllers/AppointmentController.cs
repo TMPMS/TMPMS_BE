@@ -23,14 +23,16 @@ namespace TMPMS.Controllers
         private readonly TMPMSDbContext _context;
         private readonly IWebHostEnvironment _environment;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<AppointmentController> _logger;
         private const decimal DefaultDeposit = 100000m;
 
-        public AppointmentController(IAppointmentService appointmentService, TMPMSDbContext context, IWebHostEnvironment environment, IConfiguration configuration)
+        public AppointmentController(IAppointmentService appointmentService, TMPMSDbContext context, IWebHostEnvironment environment, IConfiguration configuration, ILogger<AppointmentController> logger)
         {
             _appointmentService = appointmentService;
             _context = context;
             _environment = environment;
             _configuration = configuration;
+            _logger = logger;
         }
 
         [HttpGet("availability")]
@@ -102,6 +104,7 @@ namespace TMPMS.Controllers
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Không thể lưu ảnh đơn thuốc cho lịch hẹn.");
                 return StatusCode(500, new { message = "Không thể lưu ảnh, vui lòng thử lại." });
             }
         }

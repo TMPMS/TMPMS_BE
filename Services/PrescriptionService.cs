@@ -17,19 +17,40 @@ namespace TMPMS.Services
         private readonly IInventoryService _inventoryService;
         private readonly IPrescriptionOcrService _ocrService;
         private readonly IWebHostEnvironment _environment;
+        private readonly IEmailService _emailService;
 
         public PrescriptionService(
             IPrescriptionRepository repo,
             TMPMSDbContext context,
             IInventoryService inventoryService,
             IPrescriptionOcrService ocrService,
-            IWebHostEnvironment environment)
+            IWebHostEnvironment environment,
+            IEmailService emailService)
         {
             _repo = repo;
             _context = context;
             _inventoryService = inventoryService;
             _ocrService = ocrService;
             _environment = environment;
+            _emailService = emailService;
+        }
+
+        // Gửi email "đã khám xong & kê đơn" tới bệnh nhân thực sự (Patient nếu người khác gửi hộ, không thì User).
+        private async Task NotifyPrescriptionCreated(BusinessObjects.Prescription full)
+        {
+            var recipientEmail = full.Patient?.Email ?? full.User?.Email;
+            if (string.IsNullOrWhiteSpace(recipientEmail)) return;
+
+            var recipientName = full.Patient?.FullName ?? full.Patient?.UserName ?? full.User?.FullName ?? full.User?.UserName;
+            var itemCount = full.PrescriptionItems?.Count ?? 0;
+
+            await _emailService.SendEmailAsync(
+                recipientEmail,
+                "Kết quả khám và đơn thuốc - TMPMS",
+                $"<p>Xin chào {System.Net.WebUtility.HtmlEncode(recipientName)},</p>" +
+                $"<p>Bạn đã hoàn tất buổi khám ngày <b>{full.PrescriptionDate:dd/MM/yyyy}</b>.</p>" +
+                $"<p>Chẩn đoán: {System.Net.WebUtility.HtmlEncode(full.DiagnosisNote)}</p>" +
+                $"<p>Bác sĩ {System.Net.WebUtility.HtmlEncode(full.DoctorName)} đã kê đơn gồm {itemCount} loại thuốc. Vui lòng đến nhà thuốc để nhận thuốc.</p>");
         }
 
         public async Task<PrescriptionResponseDTO> Create(PrescriptionCreateDTO dto)
@@ -109,6 +130,7 @@ namespace TMPMS.Services
                 await transaction.CommitAsync();
 
                 var full = await _repo.GetById(entity.Id);
+                await NotifyPrescriptionCreated(full);
                 return Map(full);
             }
             catch (Exception)
@@ -302,6 +324,7 @@ namespace TMPMS.Services
                 await transaction.CommitAsync();
 
                 var full = await _repo.GetById(entity.Id);
+                await NotifyPrescriptionCreated(full);
                 return Map(full);
             }
             catch (Exception)
