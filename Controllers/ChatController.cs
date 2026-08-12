@@ -2,9 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using BusinessObjects;
 using TMPMS.Data;
+using TMPMS.Models;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using System.Net.Http;
 using System.Text.Json;
@@ -21,12 +24,19 @@ namespace TMPMS.Controllers
         private readonly TMPMSDbContext _context;
         private readonly IConfiguration _config;
         private readonly ILogger<ChatController> _logger;
+        private const decimal DefaultAppointmentDeposit = 100000m; // Khớp AppointmentController.DefaultDeposit
 
         public ChatController(TMPMSDbContext context, IConfiguration config, ILogger<ChatController> logger)
         {
             _context = context;
             _config = config;
             _logger = logger;
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return int.TryParse(claim, out var id) ? id : (int?)null;
         }
 
         public class ChatMessageItem
@@ -62,8 +72,13 @@ namespace TMPMS.Controllers
                     var medicinesContext = string.Join("\n", medicines.Select(m => $"- ID: {m.Id}, Tên: {m.Name}, Mô tả: {m.Description}"));
 
                     // 2. Build structured prompt with Intent Classification & Multi-turn memory
+                    var nowLocal = DateTime.Now;
                     string systemPrompt = $@"Bạn là trợ lý AI thông minh của hệ thống nhà thuốc/phòng khám y học cổ truyền TMPMS.
 Nhiệm vụ của bạn là phân tích ý định của người dùng (dựa trên câu hỏi HIỆN TẠI và LỊCH SỬ HỘI THOẠI trước đó) và trả về JSON theo đúng cấu trúc yêu cầu.
+
+QUY TẮC BẮT BUỘC (áp dụng cho mọi intent): mọi thông tin bạn trích xuất (triệu chứng, tên sản phẩm, thời gian...) phải dựa trên những gì khách THỰC SỰ đã nói — ở tin nhắn hiện tại HOẶC bất kỳ tin nhắn nào trước đó trong lịch sử hội thoại. TUYỆT ĐỐI KHÔNG được tự bịa đặt/suy đoán thông tin khách chưa từng cung cấp. Nếu thiếu thông tin cần thiết để hoàn tất một hành động, hãy hỏi lại khách trong phần reply thay vì tự giả định.
+
+Thời điểm hiện tại (giờ Việt Nam, dùng để quy đổi ""hôm nay/mai/chiều nay""...): {nowLocal:dddd, dd/MM/yyyy HH:mm} ({nowLocal:yyyy-MM-ddTHH:mm:ss})
 
 Danh sách sản phẩm hiện có trong kho thuốc:
 {medicinesContext}
@@ -99,11 +114,29 @@ Quy tắc phân loại ý định (intent):
    - recommendedMedicineId: null
    - suggestedAction: {{ ""type"": ""none"", ""label"": """" }}
 
+7. ""ORDER_MEDICINE"": Khách hàng ra lệnh MUA hoặc THÊM VÀO GIỎ một sản phẩm cụ thể, có nêu rõ tên sản phẩm (ví dụ: ""mua 2 hộp sâm nhật"", ""thêm 1 chai mật ong vào giỏ""). Chỉ dùng intent này khi xác định được sản phẩm khớp trong danh sách trên.
+   - reply: Xác nhận ngắn gọn đã thêm sản phẩm nào, số lượng bao nhiêu vào giỏ hàng.
+   - recommendedMedicineId: ID sản phẩm khớp nhất trong danh sách (bắt buộc phải có, không được null).
+   - quantity: số lượng khách yêu cầu (số nguyên dương, mặc định 1 nếu khách không nói rõ số lượng).
+   - wantsCheckout: true nếu khách dùng động từ ngụ ý mua ngay/thanh toán ngay (""mua"", ""đặt mua"", ""thanh toán luôn"", ""mua luôn""); false nếu khách chỉ nói ""thêm vào giỏ""/""bỏ vào giỏ"" (chưa muốn thanh toán ngay).
+   - suggestedAction: {{ ""type"": ""none"", ""label"": """" }}
+
+8. ""BOOK_APPOINTMENT_NOW"": Khách hàng muốn đặt lịch khám vào một THỜI ĐIỂM CỤ THỂ đã nêu rõ ngày/giờ (ví dụ: ""đặt lịch lúc 9h mai"", ""khám lúc 2h chiều thứ 6 tuần này""). Khác với intent ""APPOINTMENT"" (dùng khi khách chỉ nói muốn đặt lịch chung chung, CHƯA nêu giờ cụ thể) — nếu khách đã nói rõ thời điểm thì PHẢI dùng intent này để hệ thống tự giữ chỗ ngay lập tức.
+   - reply: Xác nhận đã giữ khung giờ. NẾU đã biết triệu chứng (xem symptomHint bên dưới) thì nhắc lại triệu chứng đó trong câu trả lời để khách xác nhận là đúng ý. NẾU chưa biết triệu chứng, PHẢI hỏi lại khách khám vì lý do/triệu chứng gì (không được im lặng bỏ qua, không được tự bịa ra 1 triệu chứng khách chưa từng nói).
+   - recommendedMedicineId: null
+   - resolvedDateTimeIso: thời điểm khách muốn khám, quy đổi tuyệt đối theo định dạng ""yyyy-MM-ddTHH:mm:ss"" (dựa vào thời điểm hiện tại ở trên). Giờ làm việc 08:00–17:30, chỉ nhận phút :00 hoặc :30 — nếu khách nói giờ lẻ (vd 9h15) thì làm tròn xuống mốc 30 phút gần nhất. Nếu không suy luận được thời điểm cụ thể, để null và dùng intent ""APPOINTMENT"" thay thế.
+   - symptomHint: triệu chứng/lý do khám của khách. BẮT BUỘC phải tìm trong TOÀN BỘ cuộc hội thoại — kể cả những tin nhắn TRƯỚC ĐÓ trong lịch sử, không chỉ câu hiện tại (ví dụ: khách nói ""tôi bị đau đầu"" ở tin nhắn trước, rồi tin nhắn sau chỉ nói ""đặt lịch lúc 10h mai"" — vẫn phải lấy symptomHint = ""đau đầu"" từ tin nhắn trước). CHỈ được để null nếu thực sự không có triệu chứng nào được nhắc tới ở bất kỳ đâu trong hội thoại — TUYỆT ĐỐI KHÔNG được tự bịa/suy đoán một triệu chứng mà khách chưa từng nói.
+   - suggestedAction: {{ ""type"": ""none"", ""label"": """" }}
+
 BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
 {{
-  ""intent"": ""SYMPTOM_CONSULT | APPOINTMENT | LIVE_PHARMACIST | PRESCRIPTION_LOOKUP | STORE_INFO | GENERAL_CHAT"",
+  ""intent"": ""SYMPTOM_CONSULT | APPOINTMENT | LIVE_PHARMACIST | PRESCRIPTION_LOOKUP | STORE_INFO | GENERAL_CHAT | ORDER_MEDICINE | BOOK_APPOINTMENT_NOW"",
   ""reply"": ""Nội dung trả lời..."",
   ""recommendedMedicineId"": 101,
+  ""quantity"": 1,
+  ""wantsCheckout"": false,
+  ""resolvedDateTimeIso"": null,
+  ""symptomHint"": null,
   ""suggestedAction"": {{
     ""type"": ""navigate_to_booking | open_pharmacist_chat | navigate_to_history | none"",
     ""label"": ""Nút gợi ý...""
@@ -249,6 +282,24 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
                                     recommendedId = idProp.GetInt32();
                                 }
 
+                                int quantity = 1;
+                                if (aiRoot.TryGetProperty("quantity", out var qtyProp) && qtyProp.ValueKind == JsonValueKind.Number && qtyProp.GetInt32() > 0)
+                                {
+                                    quantity = qtyProp.GetInt32();
+                                }
+
+                                bool wantsCheckout = aiRoot.TryGetProperty("wantsCheckout", out var checkoutProp) && checkoutProp.ValueKind == JsonValueKind.True;
+
+                                DateTime? resolvedAppointmentDate = null;
+                                if (aiRoot.TryGetProperty("resolvedDateTimeIso", out var dtProp) && dtProp.ValueKind == JsonValueKind.String
+                                    && DateTime.TryParse(dtProp.GetString(), null, System.Globalization.DateTimeStyles.None, out var parsedDt))
+                                {
+                                    resolvedAppointmentDate = parsedDt;
+                                }
+
+                                string? symptomHint = aiRoot.TryGetProperty("symptomHint", out var symProp) && symProp.ValueKind == JsonValueKind.String
+                                    ? symProp.GetString() : null;
+
                                 string actionType = "none";
                                 string actionLabel = "";
                                 if (aiRoot.TryGetProperty("suggestedAction", out var actObj) && actObj.ValueKind == JsonValueKind.Object)
@@ -275,11 +326,53 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
                                     }
                                 }
 
+                                // ORDER_MEDICINE: sản phẩm đã xác định — server tự quyết định action (không tin
+                                // suggestedAction do Gemini trả, vì FE cần đúng 1 trong 2 giá trị cố định dưới đây
+                                // để biết có tự thêm vào giỏ hàng hay không).
+                                if (intent == "ORDER_MEDICINE" && recommendedProduct != null)
+                                {
+                                    actionType = wantsCheckout ? "add_to_cart_checkout" : "add_to_cart";
+                                    actionLabel = wantsCheckout ? "🛒 Xem giỏ hàng & Thanh toán" : "🛒 Xem giỏ hàng";
+                                }
+
+                                // BOOK_APPOINTMENT_NOW: giữ chỗ ngay (không cần đợi khách bấm nút) — việc giữ chỗ
+                                // không tốn tiền/không cam kết (tự hết hạn sau 15 phút nếu không hoàn tất đặt cọc),
+                                // nên an toàn để thực hiện ngay khi khách nêu rõ thời điểm, đúng như khách yêu cầu.
+                                object? appointmentResult = null;
+                                if (intent == "BOOK_APPOINTMENT_NOW" && resolvedAppointmentDate.HasValue)
+                                {
+                                    var currentUserId = GetCurrentUserId();
+                                    if (currentUserId == null)
+                                    {
+                                        reply = "Bạn cần đăng nhập để đặt lịch khám. Vui lòng đăng nhập rồi thử lại nhé!";
+                                        actionType = "require_login";
+                                        actionLabel = "🔐 Đăng nhập";
+                                    }
+                                    else
+                                    {
+                                        var (holdOk, holdError, holdInfo) = await TryHoldAppointmentSlotAsync(currentUserId.Value, resolvedAppointmentDate.Value, symptomHint);
+                                        if (holdOk)
+                                        {
+                                            appointmentResult = holdInfo;
+                                            actionType = "navigate_to_booking_checkout";
+                                            actionLabel = "✅ Xác nhận & Đặt cọc lịch hẹn";
+                                        }
+                                        else
+                                        {
+                                            reply = holdError ?? reply;
+                                            actionType = "navigate_to_booking";
+                                            actionLabel = "📅 Chọn giờ khám khác";
+                                        }
+                                    }
+                                }
+
                                 return Ok(new
                                 {
                                     intent = intent,
                                     text = reply,
                                     product = recommendedProduct,
+                                    quantity = quantity,
+                                    appointment = appointmentResult,
                                     suggestedAction = new
                                     {
                                         type = actionType,
@@ -466,6 +559,50 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
                 text = replyText,
                 product = recommendedProductFallback,
                 suggestedAction = new { type = "none", label = "" }
+            });
+        }
+
+        // Giữ 1 khung giờ khám cho trợ lý AI — cố ý mirror logic của AppointmentController.HoldSlot
+        // (khung giờ hợp lệ, giới hạn 3 lịch đang hoạt động, transaction Serializable chống double-booking)
+        // thay vì gọi chéo sang controller khác, để không đụng vào luồng thanh toán/đặt lịch đã ổn định.
+        // Việc giữ chỗ này KHÔNG tốn tiền và tự hết hạn sau 15 phút nếu khách không hoàn tất đặt cọc,
+        // nên an toàn để AI thực hiện ngay mà không cần khách xác nhận thêm.
+        private async Task<(bool Ok, string? Error, object? Hold)> TryHoldAppointmentSlotAsync(int userId, DateTime appointmentDate, string? symptomHint)
+        {
+            const string location = "Nhà thuốc TMPMS";
+
+            if (appointmentDate <= DateTime.Now || appointmentDate > DateTime.Now.AddDays(14))
+                return (false, "Thời điểm bạn nêu không hợp lệ (đã qua hoặc quá xa) — bạn có thể chọn giờ khác qua trang đặt lịch.", null);
+            if (appointmentDate.Minute is not (0 or 30) || appointmentDate.Hour < 8 || appointmentDate.TimeOfDay > TimeSpan.FromHours(17.5))
+                return (false, "Khung giờ đó nằm ngoài giờ làm việc (08:00–17:30, theo mốc 30 phút) — bạn có thể chọn giờ khác qua trang đặt lịch.", null);
+
+            var activeCount = await _context.Appointments.CountAsync(a => a.UserId == userId
+                && new[] { "PendingConfirmation", "Confirmed", "CheckedIn", "AlternativeProposed", "RescheduleRequested" }.Contains(a.Status));
+            if (activeCount >= 3)
+                return (false, "Bạn đã có đủ 3 lịch đang hoạt động. Vui lòng hoàn thành hoặc hủy một lịch trước khi đặt tiếp.", null);
+
+            await using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            await _context.AppointmentSlotHolds.Where(h => !h.IsConsumed && h.ExpiresAt <= DateTime.UtcNow)
+                .ExecuteUpdateAsync(s => s.SetProperty(h => h.IsConsumed, true));
+            var unavailable = await _context.Appointments.AnyAsync(a => a.Location == location && a.AppointmentDate == appointmentDate
+                    && new[] { "PendingConfirmation", "Confirmed", "CheckedIn", "AlternativeProposed" }.Contains(a.Status))
+                || await _context.AppointmentSlotHolds.AnyAsync(h => h.Location == location && h.AppointmentDate == appointmentDate && !h.IsConsumed && h.ExpiresAt > DateTime.UtcNow);
+            if (unavailable)
+                return (false, "Khung giờ đó vừa có người khác giữ chỗ. Bạn có thể chọn giờ khác qua trang đặt lịch.", null);
+
+            var hold = new AppointmentSlotHold { UserId = userId, AppointmentDate = appointmentDate, Location = location, CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddMinutes(15) };
+            _context.AppointmentSlotHolds.Add(hold);
+            await _context.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            return (true, null, new
+            {
+                token = hold.Token,
+                expiresAt = hold.ExpiresAt,
+                appointmentDate = hold.AppointmentDate,
+                location = hold.Location,
+                depositAmount = DefaultAppointmentDeposit,
+                symptomHint
             });
         }
     }
