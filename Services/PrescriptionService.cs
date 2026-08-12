@@ -174,8 +174,14 @@ namespace TMPMS.Services
             if (!allowedStatuses.Contains(dto.Status))
                 throw new ArgumentException("Trạng thái không hợp lệ.");
 
+            var previousStatus = entity.Status;
             entity.Status = dto.Status;
             var updated = await _repo.Update(entity);
+
+            // Duyệt qua nút "Duyệt đơn thuốc" (không đi qua Create/Finalize) cũng cần báo bệnh nhân.
+            if (dto.Status == "Approved" && previousStatus != "Approved")
+                await NotifyPrescriptionCreated(updated);
+
             return Map(updated);
         }
 
