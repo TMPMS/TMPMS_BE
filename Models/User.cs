@@ -23,6 +23,11 @@ namespace BusinessObjects
         // Liên kết tài khoản Google (sub từ ID token đã xác thực) — NULL nếu đăng ký thường
         public string? GoogleId { get; set; }
 
+        // Điểm tích lũy hiện có — cộng khi đơn hàng chuyển "Delivered", trừ khi đổi điểm lấy voucher.
+        public int LoyaltyPoints { get; set; } = 0;
+
+        public ICollection<LoyaltyPointTransaction> LoyaltyPointTransactions { get; set; }
+
         public ICollection<Order> Orders { get; set; }
         public ICollection<Cart> Carts { get; set; }
         public ICollection<Review> Reviews { get; set; }

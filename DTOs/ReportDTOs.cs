@@ -86,4 +86,12 @@ namespace TMPMS.DTOs
         public string Period { get; set; }
         public int NewUsers { get; set; }
     }
+
+    public class InventoryValueDTO
+    {
+        public int WarehouseId { get; set; }
+        public string WarehouseName { get; set; }
+        public int TotalUnits { get; set; }
+        public decimal TotalValue { get; set; }
+    }
 }

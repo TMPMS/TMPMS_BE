@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Services.Interfaces;
 using System.Security.Claims;
 using TMPMS.DTOs;
+using TMPMS.Services.Interfaces;
+using TMPMS.Utils;
 
 namespace TMPMS.Controllers
 {
@@ -13,13 +15,19 @@ namespace TMPMS.Controllers
     public class InventoryController : ControllerBase
     {
         private readonly IInventoryService _service;
-        public InventoryController(IInventoryService service) => _service = service;
+        private readonly IAuditLogService _auditLogService;
+        public InventoryController(IInventoryService service, IAuditLogService auditLogService)
+        {
+            _service = service;
+            _auditLogService = auditLogService;
+        }
 
         private int? GetUserId()
         {
             var claim = User.FindFirst(ClaimTypes.NameIdentifier);
             return claim != null && int.TryParse(claim.Value, out var id) ? id : (int?)null;
         }
+
 
         [HttpPost("transactions")]
         public async Task<ActionResult> CreateTransaction([FromBody] StockTransactionCreateDTO dto)
@@ -82,6 +90,7 @@ namespace TMPMS.Controllers
             try
             {
                 var result = await _service.DisposeBatch(id, dto);
+                await this.LogAuditAsync(_auditLogService, "StockBatch", "Dispose", id.ToString(), $"Huỷ lô hàng #{id} — lý do: {dto.Reason}");
                 return Ok(result);
             }
             catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
@@ -93,6 +102,7 @@ namespace TMPMS.Controllers
             try
             {
                 var result = await _service.AdjustBatch(id, dto);
+                await this.LogAuditAsync(_auditLogService, "StockBatch", "Adjust", id.ToString(), $"Điều chỉnh lô hàng #{id} — số lượng còn lại mới: {dto.QuantityRemaining} — lý do: {dto.Reason}");
                 return Ok(result);
             }
             catch (Exception ex) { return BadRequest(new { error = ex.Message }); }

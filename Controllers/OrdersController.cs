@@ -18,12 +18,14 @@ namespace TMPMS.Controllers
         private readonly TMPMSDbContext _context;
         private readonly IInventoryService _inventoryService;
         private readonly IShippingFeeService _shippingFeeService;
+        private readonly ILoyaltyService _loyaltyService;
 
-        public OrdersController(TMPMSDbContext context, IInventoryService inventoryService, IShippingFeeService shippingFeeService)
+        public OrdersController(TMPMSDbContext context, IInventoryService inventoryService, IShippingFeeService shippingFeeService, ILoyaltyService loyaltyService)
         {
             _context = context;
             _inventoryService = inventoryService;
             _shippingFeeService = shippingFeeService;
+            _loyaltyService = loyaltyService;
         }
 
         private async Task<int> GetDefaultWarehouseId()
@@ -451,6 +453,13 @@ namespace TMPMS.Controllers
             {
                 await RestockOrderItemsAsync(id);
                 await RollbackVoucherUsageAsync(order);
+                await _loyaltyService.ReverseForReturnedOrderAsync(id);
+            }
+
+            // Tích điểm loyalty khi đơn giao thành công (không cộng lại nếu đã từng Delivered trước đó).
+            if (request.Status == "Delivered" && previousStatus != "Delivered")
+            {
+                await _loyaltyService.AwardForOrderAsync(id);
             }
 
             // Duyệt trả hàng: đồng bộ Payment.Status = Refunded + ghi nhận trên đơn.

@@ -70,6 +70,8 @@ namespace TMPMS.Data
         public DbSet<QuizAnswerOption> QuizAnswerOptions { get; set; }
         public DbSet<QuizResultBand> QuizResultBands { get; set; }
         public DbSet<QuizSession> QuizSessions { get; set; }
+        public DbSet<AuditLog> AuditLogs { get; set; }
+        public DbSet<LoyaltyPointTransaction> LoyaltyPointTransactions { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -446,6 +448,40 @@ namespace TMPMS.Data
 
             modelBuilder.Entity<StockBatch>()
                 .HasIndex(b => new { b.MedicineId, b.WarehouseId, b.ExpiryDate });
+
+            // SetNull (không phải Restrict): AuditLog.UserId đã là int? — nếu tài khoản thực hiện
+            // hành động đó bị xoá sau này, log vẫn giữ lại (UserName/UserRole đã snapshot sẵn),
+            // chỉ mất liên kết tới bản ghi User. Restrict sẽ chặn xoá bất kỳ ai từng có 1 hành động
+            // được audit — gần như mọi tài khoản Admin/Staff sau một thời gian sử dụng.
+            modelBuilder.Entity<AuditLog>()
+                .HasOne(a => a.User)
+                .WithMany()
+                .HasForeignKey(a => a.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(a => a.EntityName);
+
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(a => a.CreatedAt);
+
+            modelBuilder.Entity<LoyaltyPointTransaction>()
+                .HasOne(t => t.User)
+                .WithMany(u => u.LoyaltyPointTransactions)
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<LoyaltyPointTransaction>()
+                .HasOne(t => t.Order)
+                .WithMany()
+                .HasForeignKey(t => t.OrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<LoyaltyPointTransaction>()
+                .HasOne(t => t.Voucher)
+                .WithMany()
+                .HasForeignKey(t => t.VoucherId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<InventoryTransaction>()
                 .HasOne(t => t.StockBatch)

@@ -15,5 +15,6 @@ namespace Repositories.Interfaces
         Task<Dictionary<int, string>> GetStaffNames(IEnumerable<int> staffIds);
         Task<List<string>> GetAllPrescriptionStatuses();
         Task<List<DateTime>> GetUserRegistrationDatesInRange(DateTime from, DateTime to);
+        Task<List<(int WarehouseId, string WarehouseName, int TotalUnits, decimal TotalValue)>> GetInventoryValueByWarehouse();
     }
 }

@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using BusinessObjects;
 using TMPMS.Data;
 using TMPMS.Services;
+using TMPMS.Services.Interfaces;
+using TMPMS.Utils;
 using System;
 using System.Linq;
 using System.Security.Claims;
@@ -15,10 +17,12 @@ namespace TMPMS.Controllers
     public class VouchersController : ControllerBase
     {
         private readonly TMPMSDbContext _context;
+        private readonly IAuditLogService _auditLogService;
 
-        public VouchersController(TMPMSDbContext context)
+        public VouchersController(TMPMSDbContext context, IAuditLogService auditLogService)
         {
             _context = context;
+            _auditLogService = auditLogService;
         }
 
         private int? GetUserId()
@@ -116,6 +120,7 @@ namespace TMPMS.Controllers
 
             _context.Vouchers.Add(voucher);
             await _context.SaveChangesAsync();
+            await this.LogAuditAsync(_auditLogService, "Voucher", "Create", voucher.Id.ToString(), $"Tạo voucher '{voucher.Code}' ({voucher.Name})");
             return StatusCode(201, voucher);
         }
 
@@ -160,6 +165,7 @@ namespace TMPMS.Controllers
             if (input.Weight != null) voucher.Weight = input.Weight.Value;
 
             await _context.SaveChangesAsync();
+            await this.LogAuditAsync(_auditLogService, "Voucher", "Update", id.ToString(), $"Cập nhật voucher #{id} ('{voucher.Code}')");
             return Ok(voucher);
         }
 
@@ -174,6 +180,7 @@ namespace TMPMS.Controllers
 
             _context.Vouchers.Remove(voucher);
             await _context.SaveChangesAsync();
+            await this.LogAuditAsync(_auditLogService, "Voucher", "Delete", id.ToString(), $"Xóa voucher #{id} ('{voucher.Code}')");
             return Ok(voucher);
         }
 

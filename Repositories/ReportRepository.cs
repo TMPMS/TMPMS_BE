@@ -83,5 +83,24 @@ namespace TMPMS.Repositories
                 .Select(u => u.CreatedAt)
                 .ToListAsync();
         }
+
+        // Giá trị tồn kho hiện tại theo kho — chỉ tính lô còn hàng ("Active") và có giá vốn ghi nhận.
+        public async Task<List<(int WarehouseId, string WarehouseName, int TotalUnits, decimal TotalValue)>> GetInventoryValueByWarehouse()
+        {
+            var grouped = await _context.StockBatches
+                .Include(b => b.Warehouse)
+                .Where(b => b.Status == StockBatchStatus.Active && b.QuantityRemaining > 0)
+                .GroupBy(b => new { b.WarehouseId, b.Warehouse.Name })
+                .Select(g => new
+                {
+                    g.Key.WarehouseId,
+                    WarehouseName = g.Key.Name,
+                    TotalUnits = g.Sum(b => b.QuantityRemaining),
+                    TotalValue = g.Sum(b => b.QuantityRemaining * (b.UnitCostPrice ?? 0))
+                })
+                .ToListAsync();
+
+            return grouped.Select(g => (g.WarehouseId, g.WarehouseName, g.TotalUnits, g.TotalValue)).ToList();
+        }
     }
 }

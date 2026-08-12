@@ -36,6 +36,8 @@ namespace BusinessObjects
 
         public string? Packaging { get; set; }
 
+        public string? Barcode { get; set; }
+
         public decimal? OldPrice { get; set; }
 
         public int? Discount { get; set; }

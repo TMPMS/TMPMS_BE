@@ -226,5 +226,17 @@ namespace TMPMS.Services
                 .OrderBy(p => p.Period)
                 .ToList();
         }
+
+        public async Task<List<InventoryValueDTO>> GetInventoryValueByWarehouse()
+        {
+            var rows = await _repo.GetInventoryValueByWarehouse();
+            return rows.Select(r => new InventoryValueDTO
+            {
+                WarehouseId = r.WarehouseId,
+                WarehouseName = r.WarehouseName,
+                TotalUnits = r.TotalUnits,
+                TotalValue = r.TotalValue
+            }).OrderByDescending(r => r.TotalValue).ToList();
+        }
     }
 }
