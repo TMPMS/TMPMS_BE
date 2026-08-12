@@ -201,5 +201,30 @@ namespace TMPMS.Services
 
             return result.Values.OrderByDescending(d => d.TotalRevenue).ToList();
         }
+
+        public async Task<List<AppointmentStatusStatDTO>> GetAppointmentStatusStatistics()
+        {
+            var appointments = await _repo.GetAllAppointments();
+            return appointments.GroupBy(a => a.Status)
+                .Select(g => new AppointmentStatusStatDTO { Status = g.Key, Count = g.Count() })
+                .ToList();
+        }
+
+        public async Task<List<PrescriptionStatusStatDTO>> GetPrescriptionStatusStatistics()
+        {
+            var statuses = await _repo.GetAllPrescriptionStatuses();
+            return statuses.GroupBy(s => s)
+                .Select(g => new PrescriptionStatusStatDTO { Status = g.Key, Count = g.Count() })
+                .ToList();
+        }
+
+        public async Task<List<UserGrowthPointDTO>> GetUserGrowth(DateTime from, DateTime to, string groupBy)
+        {
+            var dates = await _repo.GetUserRegistrationDatesInRange(from, to);
+            return dates.GroupBy(d => DateKey(d, groupBy))
+                .Select(g => new UserGrowthPointDTO { Period = g.Key, NewUsers = g.Count() })
+                .OrderBy(p => p.Period)
+                .ToList();
+        }
     }
 }

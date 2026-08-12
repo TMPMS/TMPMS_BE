@@ -13,5 +13,7 @@ namespace Repositories.Interfaces
         Task<List<Appointment>> GetAppointmentsInRange(DateTime from, DateTime to);
         Task<List<Appointment>> GetAllAppointments();
         Task<Dictionary<int, string>> GetStaffNames(IEnumerable<int> staffIds);
+        Task<List<string>> GetAllPrescriptionStatuses();
+        Task<List<DateTime>> GetUserRegistrationDatesInRange(DateTime from, DateTime to);
     }
 }

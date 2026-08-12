@@ -40,6 +40,19 @@ namespace TMPMS.Controllers
         public async Task<ActionResult> GetStaffRevenue([FromQuery] DateTime from, [FromQuery] DateTime to)
             => Ok(await _service.GetStaffRevenue(from, to));
 
+        [HttpGet("appointment-status")]
+        public async Task<ActionResult> GetAppointmentStatusStatistics()
+            => Ok(await _service.GetAppointmentStatusStatistics());
+
+        [HttpGet("prescription-status")]
+        public async Task<ActionResult> GetPrescriptionStatusStatistics()
+            => Ok(await _service.GetPrescriptionStatusStatistics());
+
+        [HttpGet("user-growth")]
+        public async Task<ActionResult> GetUserGrowth(
+            [FromQuery] DateTime from, [FromQuery] DateTime to, [FromQuery] string groupBy = "Day")
+            => Ok(await _service.GetUserGrowth(from, to, groupBy));
+
         // GET /api/Report/revenue/export-excel?from=...&to=...&groupBy=Day
         // Xuất báo cáo doanh thu (theo khoảng ngày) ra file Excel gồm 4 sheet: Doanh thu, Bán chạy,
         // Theo danh mục, Theo nhân viên.

@@ -10,5 +10,8 @@ namespace Services.Interfaces
         Task<List<CategoryRevenueDTO>> GetCategoryRevenue(DateTime from, DateTime to);
         Task<DashboardSummaryDTO> GetDashboardSummary();
         Task<List<StaffRevenueDTO>> GetStaffRevenue(DateTime from, DateTime to);
+        Task<List<AppointmentStatusStatDTO>> GetAppointmentStatusStatistics();
+        Task<List<PrescriptionStatusStatDTO>> GetPrescriptionStatusStatistics();
+        Task<List<UserGrowthPointDTO>> GetUserGrowth(DateTime from, DateTime to, string groupBy);
     }
 }

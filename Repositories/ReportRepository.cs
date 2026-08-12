@@ -70,5 +70,18 @@ namespace TMPMS.Repositories
                 .Where(u => ids.Contains(u.Id))
                 .ToDictionaryAsync(u => u.Id, u => u.FullName ?? u.UserName ?? $"NV #{u.Id}");
         }
+
+        public async Task<List<string>> GetAllPrescriptionStatuses()
+        {
+            return await _context.Prescriptions.Select(p => p.Status).ToListAsync();
+        }
+
+        public async Task<List<DateTime>> GetUserRegistrationDatesInRange(DateTime from, DateTime to)
+        {
+            return await _context.Users
+                .Where(u => u.CreatedAt >= from && u.CreatedAt <= to)
+                .Select(u => u.CreatedAt)
+                .ToListAsync();
+        }
     }
 }

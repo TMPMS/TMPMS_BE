@@ -64,6 +64,8 @@ namespace TMPMS.Controllers
         {
             var currentUserId = GetUserId();
             if (currentUserId == null) return Unauthorized();
+            if (User.IsInRole("Admin") || User.IsInRole("Pharmacy"))
+                return Ok(new { canSpinToday = false, nextResetAtUtc = (DateTime?)null, lastSpin = (object)null, blocked = true });
 
             var today = DateTime.UtcNow.Date;
             var lastSpin = await _context.WheelSpins
@@ -94,6 +96,8 @@ namespace TMPMS.Controllers
         {
             var currentUserId = GetUserId();
             if (currentUserId == null) return Unauthorized();
+            if (User.IsInRole("Admin") || User.IsInRole("Pharmacy"))
+                return Forbid();
 
             var today = DateTime.UtcNow.Date;
             var alreadySpun = await _context.WheelSpins

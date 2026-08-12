@@ -86,6 +86,13 @@ namespace TMPMS.Controllers
                 request.UserId = currentUserId.Value;
             }
 
+            // Admin/Pharmacy vẫn được tạo đơn THAY MẶT khách hàng (proxy, xem CanProxyOrder ở trên),
+            // nhưng không được tự mua hàng cho chính tài khoản nhân viên của mình.
+            if (request.UserId == currentUserId.Value && (User.IsInRole("Admin") || User.IsInRole("Pharmacy")))
+            {
+                return BadRequest(new { message = "Tài khoản Admin/Nhân viên Nhà thuốc không thể tự mua hàng." });
+            }
+
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {

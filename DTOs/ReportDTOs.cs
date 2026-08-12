@@ -68,4 +68,22 @@ namespace TMPMS.DTOs
         public decimal AppointmentDepositRevenue { get; set; }
         public decimal TotalRevenue { get; set; }
     }
+
+    public class AppointmentStatusStatDTO
+    {
+        public string Status { get; set; }
+        public int Count { get; set; }
+    }
+
+    public class PrescriptionStatusStatDTO
+    {
+        public string Status { get; set; }
+        public int Count { get; set; }
+    }
+
+    public class UserGrowthPointDTO
+    {
+        public string Period { get; set; }
+        public int NewUsers { get; set; }
+    }
 }
