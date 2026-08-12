@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using TMPMS.DTOs;
 using TMPMS.Services.Interfaces;
+using TMPMS.Utils;
 
 namespace TMPMS.Controllers
 {
@@ -10,7 +11,12 @@ namespace TMPMS.Controllers
     public class SupplierController : ControllerBase
     {
         private readonly ISupplierService _service;
-        public SupplierController(ISupplierService service) => _service = service;
+        private readonly IAuditLogService _auditLogService;
+        public SupplierController(ISupplierService service, IAuditLogService auditLogService)
+        {
+            _service = service;
+            _auditLogService = auditLogService;
+        }
 
         [HttpGet("~/suppliers")]
         [HttpGet("~/api/suppliers")]
@@ -33,6 +39,7 @@ namespace TMPMS.Controllers
         public async Task<IActionResult> Create([FromBody] SupplierCreateDto dto)
         {
             var res = await _service.CreateAsync(dto);
+            await this.LogAuditAsync(_auditLogService, "Supplier", "Create", res.Id.ToString(), $"Tạo nhà cung cấp '{res.CompanyName}'");
             return CreatedAtAction(nameof(GetById), new { id = res.Id }, res);
         }
 
@@ -43,6 +50,7 @@ namespace TMPMS.Controllers
         {
             var res = await _service.UpdateAsync(id, dto);
             if (res == null) return NotFound();
+            await this.LogAuditAsync(_auditLogService, "Supplier", "Update", id.ToString(), $"Cập nhật nhà cung cấp #{id} ('{res.CompanyName}')");
             return Ok(res);
         }
 
@@ -53,6 +61,7 @@ namespace TMPMS.Controllers
         {
             var ok = await _service.DeleteAsync(id);
             if (!ok) return NotFound();
+            await this.LogAuditAsync(_auditLogService, "Supplier", "Delete", id.ToString(), $"Xóa nhà cung cấp #{id}");
             return NoContent();
         }
     }

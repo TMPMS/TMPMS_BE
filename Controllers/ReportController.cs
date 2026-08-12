@@ -53,6 +53,11 @@ namespace TMPMS.Controllers
             [FromQuery] DateTime from, [FromQuery] DateTime to, [FromQuery] string groupBy = "Day")
             => Ok(await _service.GetUserGrowth(from, to, groupBy));
 
+        // Giá trị tồn kho hiện tại (giá vốn) theo từng kho — dùng cho biểu đồ chi tiết ở Dashboard.
+        [HttpGet("inventory-value")]
+        public async Task<ActionResult> GetInventoryValueByWarehouse()
+            => Ok(await _service.GetInventoryValueByWarehouse());
+
         // GET /api/Report/revenue/export-excel?from=...&to=...&groupBy=Day
         // Xuất báo cáo doanh thu (theo khoảng ngày) ra file Excel gồm 4 sheet: Doanh thu, Bán chạy,
         // Theo danh mục, Theo nhân viên.

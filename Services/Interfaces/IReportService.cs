@@ -13,5 +13,6 @@ namespace Services.Interfaces
         Task<List<AppointmentStatusStatDTO>> GetAppointmentStatusStatistics();
         Task<List<PrescriptionStatusStatDTO>> GetPrescriptionStatusStatistics();
         Task<List<UserGrowthPointDTO>> GetUserGrowth(DateTime from, DateTime to, string groupBy);
+        Task<List<InventoryValueDTO>> GetInventoryValueByWarehouse();
     }
 }

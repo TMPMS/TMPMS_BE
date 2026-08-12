@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using TMPMS.DTOs;
 using TMPMS.DTOs.TMPMS_BE.DTOs;
 using TMPMS.Services.Interfaces;
+using TMPMS.Utils;
 
 namespace TMPMS.Controllers
 {
@@ -13,10 +14,12 @@ namespace TMPMS.Controllers
     public class UserController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly IAuditLogService _auditLogService;
 
-        public UserController(IUserService userService)
+        public UserController(IUserService userService, IAuditLogService auditLogService)
         {
             _userService = userService;
+            _auditLogService = auditLogService;
         }
 
         // Endpoint: POST https://localhost:xxxx/api/users/create
@@ -31,6 +34,7 @@ namespace TMPMS.Controllers
                 var result = await _userService.CreateUserAsync(dto);
                 if (result)
                 {
+                    await this.LogAuditAsync(_auditLogService, "User", "Create", dto.Username, $"Tạo tài khoản '{dto.Username}' với vai trò {dto.RoleName}");
                     return Ok(new { message = "Tạo tài khoản thành công!" });
                 }
                 return BadRequest(new { message = "Không thể tạo tài khoản." });
@@ -106,6 +110,8 @@ namespace TMPMS.Controllers
                     });
                 }
 
+                await this.LogAuditAsync(_auditLogService, "User", "Update", id.ToString(), $"Cập nhật thông tin user #{id}");
+
                 return Ok(new
                 {
                     message = "User updated successfully."
@@ -136,6 +142,8 @@ namespace TMPMS.Controllers
                         message = "User not found."
                     });
                 }
+
+                await this.LogAuditAsync(_auditLogService, "User", "Delete", id.ToString(), $"Xóa user #{id}");
 
                 return Ok(new
                 {
@@ -171,6 +179,8 @@ namespace TMPMS.Controllers
                     });
                 }
 
+                await this.LogAuditAsync(_auditLogService, "User", "AssignRole", dto.UserId.ToString(), $"Gán vai trò '{dto.RoleName}' cho user #{dto.UserId}");
+
                 return Ok(new
                 {
                     message = "Assign role successfully."
@@ -195,6 +205,8 @@ namespace TMPMS.Controllers
             if (!result)
                 return NotFound(new { message = "User not found." });
 
+            await this.LogAuditAsync(_auditLogService, "User", "Lock", id.ToString(), $"Khóa tài khoản user #{id}");
+
             return Ok(new { message = "User locked successfully." });
         }
 
@@ -207,6 +219,8 @@ namespace TMPMS.Controllers
 
             if (!result)
                 return NotFound(new { message = "User not found." });
+
+            await this.LogAuditAsync(_auditLogService, "User", "Unlock", id.ToString(), $"Mở khóa tài khoản user #{id}");
 
             return Ok(new { message = "User unlocked successfully." });
         }

@@ -35,6 +35,7 @@ namespace TMPMS.Controllers
         public string? Unit { get; set; }
         public string? Origin { get; set; }
         public string? Packaging { get; set; }
+        public string? Barcode { get; set; }
         public DateTime? ManufactureDate { get; set; }
         public DateTime? ExpiryDate { get; set; }
     }
@@ -49,6 +50,7 @@ namespace TMPMS.Controllers
         public string? Unit { get; set; }
         public string? Origin { get; set; }
         public string? Packaging { get; set; }
+        public string? Barcode { get; set; }
         public string? ImageUrl { get; set; }
         public bool? RequiresPrescription { get; set; }
         public int? CategoryId { get; set; }
@@ -269,6 +271,7 @@ namespace TMPMS.Controllers
                     m.Unit,
                     m.Origin,
                     m.Packaging,
+                    m.Barcode,
                     m.OldPrice,
                     m.Discount,
                     m.IsActive,
@@ -331,10 +334,39 @@ namespace TMPMS.Controllers
                 m.Unit,
                 m.Origin,
                 m.Packaging,
+                m.Barcode,
                 m.OldPrice,
                 m.Discount,
                 m.IsActive,
                 m.CreatedAt
+            });
+        }
+
+        // Tra cứu nhanh 1 sản phẩm theo mã vạch — dùng cho máy quét barcode ở POS/kiểm kê.
+        [HttpGet("by-barcode/{barcode}")]
+        public async Task<IActionResult> GetMedicineByBarcode(string barcode)
+        {
+            var m = await _context.Medicines.FirstOrDefaultAsync(x => x.IsActive && x.Barcode == barcode);
+            if (m == null) return NotFound(new { message = "Không tìm thấy sản phẩm với mã vạch này" });
+
+            return Ok(new {
+                m.Id,
+                m.CategoryId,
+                m.SupplierId,
+                m.Name,
+                m.Description,
+                m.Price,
+                PriceStatus = m.Price == null ? "contact" : "available",
+                m.StockQuantity,
+                m.RequiresPrescription,
+                m.ImageUrl,
+                m.Unit,
+                m.Origin,
+                m.Packaging,
+                m.Barcode,
+                m.OldPrice,
+                m.Discount,
+                m.IsActive
             });
         }
 
@@ -358,6 +390,7 @@ namespace TMPMS.Controllers
                 Unit = dto.Unit,
                 Origin = dto.Origin,
                 Packaging = dto.Packaging,
+                Barcode = dto.Barcode,
                 ManufactureDate = dto.ManufactureDate ?? DateTime.UtcNow,
                 ExpiryDate = dto.ExpiryDate ?? DateTime.UtcNow.AddYears(1),
                 CreatedAt = DateTime.UtcNow,
@@ -402,6 +435,7 @@ namespace TMPMS.Controllers
             if (!string.IsNullOrWhiteSpace(dto.Unit)) med.Unit = dto.Unit;
             if (!string.IsNullOrWhiteSpace(dto.Origin)) med.Origin = dto.Origin;
             if (!string.IsNullOrWhiteSpace(dto.Packaging)) med.Packaging = dto.Packaging;
+            if (dto.Barcode != null) med.Barcode = dto.Barcode;
             if (!string.IsNullOrWhiteSpace(dto.ImageUrl)) med.ImageUrl = dto.ImageUrl;
             if (dto.RequiresPrescription != null) med.RequiresPrescription = dto.RequiresPrescription.Value;
             if (dto.CategoryId != null && dto.CategoryId > 0) med.CategoryId = dto.CategoryId.Value;
@@ -422,6 +456,7 @@ namespace TMPMS.Controllers
                 med.Unit,
                 med.Origin,
                 med.Packaging,
+                med.Barcode,
                 med.OldPrice,
                 med.IsActive
             });
