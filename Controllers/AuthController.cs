@@ -86,7 +86,7 @@ namespace TMPMS.Controllers
             {
                 var ok = await _authService.SendOtp(dto.Phone);
                 if (!ok) return BadRequest("Không thể gửi mã OTP. Vui lòng thử lại.");
-                return Ok(new { message = "Mã OTP đã được gửi qua SMS." });
+                return Ok(new { message = "Mã OTP đã được gửi qua Zalo." });
             }
             catch (ArgumentException ex) { return BadRequest(ex.Message); }
             catch (InvalidOperationException ex) { return BadRequest(ex.Message); }

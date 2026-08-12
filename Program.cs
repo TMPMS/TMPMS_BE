@@ -61,7 +61,7 @@ builder.Services.AddScoped<IMedicineImageSearchService, MedicineImageSearchServi
 builder.Services.AddHttpClient();
 
 builder.Services.AddMemoryCache();
-builder.Services.AddScoped<ISmsService, TwilioSmsService>();
+builder.Services.AddScoped<ISmsService, ZaloZnsService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddSignalR();
 
