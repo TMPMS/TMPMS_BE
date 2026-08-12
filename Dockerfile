@@ -25,6 +25,13 @@ RUN dotnet publish "./TMPMS.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:U
 
 # This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
 FROM base AS final
+# Container mặc định chạy giờ UTC (không có tzdata) khiến mọi DateTime.Now trong code (giữ chỗ
+# lịch hẹn, "thời điểm hiện tại" gửi cho AI...) lệch 7 tiếng so với giờ Việt Nam thật — cài tzdata
+# + đặt TZ để DateTime.Now trả về đúng giờ VN mà không cần sửa từng chỗ dùng DateTime.Now trong code.
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
+ENV TZ=Asia/Ho_Chi_Minh
+USER 1654:1654
 WORKDIR /app
 COPY --chown=1654:1654 --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "TMPMS.dll"]
