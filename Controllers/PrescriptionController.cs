@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Services.Interfaces;
 using System.Security.Claims;
 using TMPMS.DTOs;
+using TMPMS.Services.Interfaces;
+using TMPMS.Utils;
 
 namespace TMPMS.Controllers
 {
@@ -14,10 +16,12 @@ namespace TMPMS.Controllers
     {
         private readonly IPrescriptionService _service;
         private readonly IWebHostEnvironment _environment;
-        public PrescriptionController(IPrescriptionService service, IWebHostEnvironment environment)
+        private readonly IAuditLogService _auditLogService;
+        public PrescriptionController(IPrescriptionService service, IWebHostEnvironment environment, IAuditLogService auditLogService)
         {
             _service = service;
             _environment = environment;
+            _auditLogService = auditLogService;
         }
 
         // Khách hàng tải ảnh toa thuốc thật lên (dùng cho tính năng "Gửi Toa Thuốc") — miễn phí,
@@ -53,7 +57,12 @@ namespace TMPMS.Controllers
         [Authorize(Roles = "Pharmacy,Admin")]
         public async Task<ActionResult> Finalize(int id, [FromBody] PrescriptionFinalizeDTO dto)
         {
-            try { return Ok(await _service.Finalize(id, dto)); }
+            try
+            {
+                var result = await _service.Finalize(id, dto);
+                await this.LogAuditAsync(_auditLogService, "Prescription", "Finalize", id.ToString(), $"Dược sĩ hoàn thiện & duyệt đơn thuốc #{id}");
+                return Ok(result);
+            }
             catch (Exception ex) { return BadRequest(new { message = ex.Message }); }
         }
 
@@ -71,6 +80,7 @@ namespace TMPMS.Controllers
                     dto.PatientId = null;
                 }
                 var result = await _service.Create(dto);
+                await this.LogAuditAsync(_auditLogService, "Prescription", "Create", result.Id.ToString(), $"Tạo đơn thuốc #{result.Id} cho user #{dto.UserId}");
                 return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
             }
             catch (Exception ex) { return BadRequest(ex.Message); }
@@ -108,6 +118,7 @@ namespace TMPMS.Controllers
             {
                 var result = await _service.UpdateStatus(id, dto);
                 if (result == null) return NotFound();
+                await this.LogAuditAsync(_auditLogService, "Prescription", "UpdateStatus", id.ToString(), $"Cập nhật trạng thái đơn thuốc #{id} → {dto.Status}");
                 return Ok(result);
             }
             catch (Exception ex) { return BadRequest(ex.Message); }
@@ -119,6 +130,7 @@ namespace TMPMS.Controllers
         {
             var ok = await _service.Delete(id);
             if (!ok) return NotFound();
+            await this.LogAuditAsync(_auditLogService, "Prescription", "Delete", id.ToString(), $"Xóa đơn thuốc #{id}");
             return NoContent();
         }
 

@@ -13,64 +13,28 @@ using System.Text.Json;
 using System.IO;
 using Microsoft.Extensions.Configuration;
 using Services.Interfaces;
-using TMPMS.DTOs;
 using TMPMS.Utils;
+using TMPMS.DTOs;
+using TMPMS.Services.Interfaces;
 
 namespace TMPMS.Controllers
 {
-    public class MedicineCreateDto
-    {
-        [Required]
-        public string Name { get; set; } = string.Empty;
-        public string? Description { get; set; }
-        [Required]
-        public int CategoryId { get; set; }
-        [Required]
-        public int SupplierId { get; set; }
-        public decimal? Price { get; set; }
-        public decimal? OldPrice { get; set; }
-        public int? Discount { get; set; }
-        public bool RequiresPrescription { get; set; }
-        public string? ImageUrl { get; set; }
-        public string? Unit { get; set; }
-        public string? Origin { get; set; }
-        public string? Packaging { get; set; }
-        public string? Barcode { get; set; }
-        public DateTime? ManufactureDate { get; set; }
-        public DateTime? ExpiryDate { get; set; }
-    }
-
-    public class MedicineUpdateDto
-    {
-        public string? Name { get; set; }
-        public string? Description { get; set; }
-        public decimal? Price { get; set; }
-        public decimal? OldPrice { get; set; }
-        public int? StockQuantity { get; set; }
-        public string? Unit { get; set; }
-        public string? Origin { get; set; }
-        public string? Packaging { get; set; }
-        public string? Barcode { get; set; }
-        public string? ImageUrl { get; set; }
-        public bool? RequiresPrescription { get; set; }
-        public int? CategoryId { get; set; }
-        public int? SupplierId { get; set; }
-    }
-
     [ApiController]
     [Route("api/[controller]")]
     [Route("[controller]")]
     public class MedicinesController : ControllerBase
     {
-        private readonly TMPMSDbContext _context;
+        private readonly IMedicineService _service;
         private readonly IConfiguration _config;
         private readonly IMedicineImageSearchService _imageSearchService;
+        private readonly IAuditLogService _auditLogService;
 
-        public MedicinesController(TMPMSDbContext context, IConfiguration config, IMedicineImageSearchService imageSearchService)
+        public MedicinesController(IMedicineService service, IConfiguration config, IMedicineImageSearchService imageSearchService, IAuditLogService auditLogService)
         {
-            _context = context;
+            _service = service;
             _config = config;
             _imageSearchService = imageSearchService;
+            _auditLogService = auditLogService;
         }
 
         // Khách hàng dán/tải ảnh vỏ thuốc ở ô tìm kiếm bằng hình ảnh — AI đọc tên sản phẩm trên bao
@@ -126,248 +90,61 @@ namespace TMPMS.Controllers
             [FromQuery(Name = "page")] int? page = null,
             [FromQuery(Name = "page_size")] int? pageSize = null)
         {
-            var query = _context.Medicines.Where(m => m.IsActive).AsQueryable();
-
-            if (!includeRx)
+            var filter = new MedicineSearchFilterDto
             {
-                query = query.Where(m => !m.RequiresPrescription);
-            }
-
-            if (!string.IsNullOrEmpty(categoryIdStr))
-            {
-                var cleanId = categoryIdStr.Replace("eq.", "");
-                if (int.TryParse(cleanId, out int catId))
-                {
-                    query = query.Where(m => m.CategoryId == catId);
-                }
-            }
-
-            if (!string.IsNullOrEmpty(supplierIdStr))
-            {
-                var cleanId = supplierIdStr.Replace("eq.", "");
-                if (int.TryParse(cleanId, out int supId))
-                {
-                    query = query.Where(m => m.SupplierId == supId);
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(originStr))
-            {
-                query = query.Where(m => m.Origin != null && m.Origin.Contains(originStr.Trim()));
-            }
-
-            if (!string.IsNullOrWhiteSpace(unitStr))
-            {
-                query = query.Where(m => m.Unit != null && m.Unit.Contains(unitStr.Trim()));
-            }
-
-            if (minPrice.HasValue)
-            {
-                query = query.Where(m => m.Price >= minPrice.Value);
-            }
-
-            if (maxPrice.HasValue)
-            {
-                query = query.Where(m => m.Price <= maxPrice.Value);
-            }
-
-            if (!string.IsNullOrEmpty(nameStr))
-            {
-                var searchTerm = Uri.UnescapeDataString(nameStr)
-                    .Replace("ilike.*", "")
-                    .Replace("*", "")
-                    .Trim();
-
-                // Khớp theo từng từ thay vì cả cụm nguyên văn: tên do AI đọc từ ảnh (hoặc gõ tay)
-                // thường khác thứ tự/thêm bớt từ so với tên lưu trong danh mục (vd "Mật Ong Rừng
-                // Tây Nguyên" khi tên thật là "Mật ong hoa rừng nguyên chất Tây Nguyên"), nên yêu
-                // cầu khớp nguyên cụm sẽ bỏ sót sản phẩm dù đọc đúng nhãn hàng.
-                var words = searchTerm.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                if (words.Length > 1)
-                {
-                    foreach (var word in words)
-                    {
-                        var w = word;
-                        query = query.Where(m => m.Name.Contains(w) || (m.Description != null && m.Description.Contains(w)));
-                    }
-                }
-                else
-                {
-                    query = query.Where(m => m.Name.Contains(searchTerm) || (m.Description != null && m.Description.Contains(searchTerm)));
-                }
-            }
-
-            if (inStock == true)
-            {
-                query = query.Where(m => m.StockQuantity > 0);
-            }
-
-            if (hasDiscount == true)
-            {
-                query = query.Where(m => m.Discount != null && m.Discount > 0);
-            }
-
-            var partUsed = string.IsNullOrWhiteSpace(partUsedStr) ? null : partUsedStr.Trim();
-            var effects = string.IsNullOrWhiteSpace(effectsStr) ? null : effectsStr.Trim();
-            if (herbalOnly == true || partUsed != null || effects != null)
-            {
-                query = query.Where(m => _context.HerbalMedicineInfos.Any(h => h.MedicineId == m.Id
-                    && (partUsed == null || h.PartUsed.Contains(partUsed))
-                    && (effects == null || h.Effects.Contains(effects))));
-            }
-
-            // Đếm tổng số kết quả TRƯỚC khi phân trang, để FE hiển thị "còn bao nhiêu" / nút tải thêm.
-            var totalCount = await query.CountAsync();
-
-            query = sort switch
-            {
-                "priceAsc" => query.OrderBy(m => m.Price),
-                "priceDesc" => query.OrderByDescending(m => m.Price),
-                "nameAsc" => query.OrderBy(m => m.Name),
-                "nameDesc" => query.OrderByDescending(m => m.Name),
-                "newest" => query.OrderByDescending(m => m.CreatedAt),
-                _ => query.OrderBy(m => m.Id)
+                CategoryIdStr = categoryIdStr,
+                SupplierIdStr = supplierIdStr,
+                Origin = originStr,
+                Unit = unitStr,
+                MinPrice = minPrice,
+                MaxPrice = maxPrice,
+                Name = nameStr,
+                IncludeRx = includeRx,
+                InStock = inStock,
+                HasDiscount = hasDiscount,
+                PartUsed = partUsedStr,
+                Effects = effectsStr,
+                HerbalOnly = herbalOnly,
+                Sort = sort,
+                Page = page,
+                PageSize = pageSize
             };
 
-            // Phân trang là OPT-IN: chỉ áp dụng khi FE gửi page/page_size, để không phá các nơi
-            // (vd. trang Admin) vẫn cần tải toàn bộ danh sách thuốc trong 1 lần gọi.
-            var isPaged = page.HasValue && pageSize.HasValue && pageSize.Value > 0;
-            if (isPaged)
-            {
-                query = query.Skip((page!.Value - 1) * pageSize!.Value).Take(pageSize.Value);
-            }
-
-            var medicines = await query.ToListAsync();
-            var medIds = medicines.Select(m => m.Id).ToList();
-
-            var reviewStats = await _context.Reviews
-                .Where(r => medIds.Contains(r.MedicineId))
-                .GroupBy(r => r.MedicineId)
-                .Select(g => new {
-                    MedicineId = g.Key,
-                    AvgRating = g.Average(r => (double)r.Rating),
-                    Count = g.Count()
-                })
-                .ToDictionaryAsync(x => x.MedicineId);
-
-            var response = medicines.Select(m => {
-                double avgRating = reviewStats.TryGetValue(m.Id, out var stat) && stat.Count > 0
-                    ? Math.Round(stat.AvgRating, 1)
-                    : Math.Round(4.3 + (m.Id % 8) / 10.0, 1);
-
-                return new {
-                    m.Id,
-                    m.CategoryId,
-                    m.SupplierId,
-                    m.Name,
-                    m.Description,
-                    m.Price,
-                    PriceStatus = m.Price == null ? "contact" : "available",
-                    m.StockQuantity,
-                    m.ManufactureDate,
-                    m.ExpiryDate,
-                    m.RequiresPrescription,
-                    m.ImageUrl,
-                    m.Unit,
-                    m.Origin,
-                    m.Packaging,
-                    m.Barcode,
-                    m.OldPrice,
-                    m.Discount,
-                    m.IsActive,
-                    m.CreatedAt,
-                    Rating = avgRating,
-                    ReviewCount = reviewStats.TryGetValue(m.Id, out var st) ? st.Count : 0
-                };
-            });
+            var (items, totalCount, isPaged) = await _service.SearchAsync(filter);
 
             // Giữ nguyên contract cũ (trả mảng thô) khi KHÔNG phân trang, để không phá các FE caller
             // hiện có (Array.isArray(data)). Chỉ khi có page/page_size mới bọc thêm metadata.
             if (!isPaged)
             {
-                return Ok(response);
+                return Ok(items);
             }
 
-            return Ok(new { items = response, totalCount, page = page!.Value, pageSize = pageSize!.Value });
+            return Ok(new { items, totalCount, page = page!.Value, pageSize = pageSize!.Value });
         }
 
         // Danh sách giá trị "Bộ phận dùng" / "Công dụng" hiện có, dùng cho dropdown filter Đông y ở FE.
         [HttpGet("herbal-filter-options")]
         public async Task<IActionResult> GetHerbalFilterOptions()
         {
-            var partUsed = await _context.HerbalMedicineInfos
-                .Where(h => h.PartUsed != null && h.PartUsed != "")
-                .Select(h => h.PartUsed)
-                .Distinct()
-                .OrderBy(x => x)
-                .ToListAsync();
-
-            var effects = await _context.HerbalMedicineInfos
-                .Where(h => h.Effects != null && h.Effects != "")
-                .Select(h => h.Effects)
-                .Distinct()
-                .OrderBy(x => x)
-                .ToListAsync();
-
-            return Ok(new { partUsed, effects });
+            var options = await _service.GetHerbalFilterOptionsAsync();
+            return Ok(new { partUsed = options.PartUsed, effects = options.Effects });
         }
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetMedicineById(int id)
         {
-            var m = await _context.Medicines.FindAsync(id);
+            var m = await _service.GetByIdAsync(id);
             if (m == null) return NotFound();
-
-            return Ok(new {
-                m.Id,
-                m.CategoryId,
-                m.SupplierId,
-                m.Name,
-                m.Description,
-                m.Price,
-                PriceStatus = m.Price == null ? "contact" : "available",
-                m.StockQuantity,
-                m.ManufactureDate,
-                m.ExpiryDate,
-                m.RequiresPrescription,
-                m.ImageUrl,
-                m.Unit,
-                m.Origin,
-                m.Packaging,
-                m.Barcode,
-                m.OldPrice,
-                m.Discount,
-                m.IsActive,
-                m.CreatedAt
-            });
+            return Ok(m);
         }
 
         // Tra cứu nhanh 1 sản phẩm theo mã vạch — dùng cho máy quét barcode ở POS/kiểm kê.
         [HttpGet("by-barcode/{barcode}")]
         public async Task<IActionResult> GetMedicineByBarcode(string barcode)
         {
-            var m = await _context.Medicines.FirstOrDefaultAsync(x => x.IsActive && x.Barcode == barcode);
+            var m = await _service.GetByBarcodeAsync(barcode);
             if (m == null) return NotFound(new { message = "Không tìm thấy sản phẩm với mã vạch này" });
-
-            return Ok(new {
-                m.Id,
-                m.CategoryId,
-                m.SupplierId,
-                m.Name,
-                m.Description,
-                m.Price,
-                PriceStatus = m.Price == null ? "contact" : "available",
-                m.StockQuantity,
-                m.RequiresPrescription,
-                m.ImageUrl,
-                m.Unit,
-                m.Origin,
-                m.Packaging,
-                m.Barcode,
-                m.OldPrice,
-                m.Discount,
-                m.IsActive
-            });
+            return Ok(m);
         }
 
         [HttpPost]
@@ -376,32 +153,9 @@ namespace TMPMS.Controllers
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            var medicine = new Medicine
-            {
-                Name = dto.Name,
-                Description = dto.Description,
-                CategoryId = dto.CategoryId,
-                SupplierId = dto.SupplierId,
-                Price = dto.Price,
-                OldPrice = dto.OldPrice,
-                Discount = dto.Discount,
-                RequiresPrescription = dto.RequiresPrescription,
-                ImageUrl = dto.ImageUrl,
-                Unit = dto.Unit,
-                Origin = dto.Origin,
-                Packaging = dto.Packaging,
-                Barcode = dto.Barcode,
-                ManufactureDate = dto.ManufactureDate ?? DateTime.UtcNow,
-                ExpiryDate = dto.ExpiryDate ?? DateTime.UtcNow.AddYears(1),
-                CreatedAt = DateTime.UtcNow,
-                IsActive = true,
-                // Tồn kho chỉ được cộng qua nhập lô (StockBatch) — sản phẩm mới luôn bắt đầu từ 0
-                // và cần nhập lô đầu tiên (số lô, NSX, HSD thật) trong tab Nhập kho.
-                StockQuantity = 0
-            };
+            var medicine = await _service.CreateAsync(dto);
 
-            _context.Medicines.Add(medicine);
-            await _context.SaveChangesAsync();
+            await this.LogAuditAsync(_auditLogService, "Medicine", "Create", medicine.Id.ToString(), $"Tạo dược phẩm '{medicine.Name}' (#{medicine.Id})");
 
             return StatusCode(201, medicine);
         }
@@ -423,43 +177,12 @@ namespace TMPMS.Controllers
                 int.TryParse(clean, out medId);
             }
 
-            var med = await _context.Medicines.FindAsync(medId);
-            if (med == null) return NotFound(new { error = "Không tìm thấy dược phẩm" });
+            var updated = await _service.UpdateAsync(medId, dto);
+            if (updated == null) return NotFound(new { error = "Không tìm thấy dược phẩm" });
 
-            if (!string.IsNullOrWhiteSpace(dto.Name)) med.Name = dto.Name;
-            if (dto.Description != null) med.Description = dto.Description;
-            if (dto.Price != null) med.Price = dto.Price;
-            if (dto.OldPrice != null) med.OldPrice = dto.OldPrice;
-            // Số lượng tồn kho không còn được sửa trực tiếp ở đây — nguồn sự thật là StockBatches,
-            // chỉnh qua API /api/inventory/batches (nhập lô mới / hủy / kiểm kê điều chỉnh).
-            if (!string.IsNullOrWhiteSpace(dto.Unit)) med.Unit = dto.Unit;
-            if (!string.IsNullOrWhiteSpace(dto.Origin)) med.Origin = dto.Origin;
-            if (!string.IsNullOrWhiteSpace(dto.Packaging)) med.Packaging = dto.Packaging;
-            if (dto.Barcode != null) med.Barcode = dto.Barcode;
-            if (!string.IsNullOrWhiteSpace(dto.ImageUrl)) med.ImageUrl = dto.ImageUrl;
-            if (dto.RequiresPrescription != null) med.RequiresPrescription = dto.RequiresPrescription.Value;
-            if (dto.CategoryId != null && dto.CategoryId > 0) med.CategoryId = dto.CategoryId.Value;
-            if (dto.SupplierId != null && dto.SupplierId > 0) med.SupplierId = dto.SupplierId.Value;
+            await this.LogAuditAsync(_auditLogService, "Medicine", "Update", updated.Id.ToString(), $"Cập nhật dược phẩm '{updated.Name}' (#{updated.Id})");
 
-            await _context.SaveChangesAsync();
-
-            return Ok(new {
-                med.Id,
-                med.CategoryId,
-                med.SupplierId,
-                med.Name,
-                med.Description,
-                med.Price,
-                med.StockQuantity,
-                med.RequiresPrescription,
-                med.ImageUrl,
-                med.Unit,
-                med.Origin,
-                med.Packaging,
-                med.Barcode,
-                med.OldPrice,
-                med.IsActive
-            });
+            return Ok(updated);
         }
 
         [HttpDelete("{id}")]
@@ -476,23 +199,16 @@ namespace TMPMS.Controllers
                 int.TryParse(clean, out medId);
             }
 
-            var med = await _context.Medicines.FindAsync(medId);
-            if (med == null) return NotFound(new { error = "Không tìm thấy dược phẩm" });
+            var (found, deactivated, name) = await _service.DeleteAsync(medId);
+            if (!found) return NotFound(new { error = "Không tìm thấy dược phẩm" });
 
-            bool hasLinks = await _context.OrderItems.AnyAsync(oi => oi.MedicineId == medId) ||
-                            await _context.CartItems.AnyAsync(ci => ci.MedicineId == medId) ||
-                            await _context.PrescriptionItems.AnyAsync(pi => pi.MedicineId == medId) ||
-                            await _context.StockBatches.AnyAsync(b => b.MedicineId == medId);
-
-            if (hasLinks)
+            if (deactivated)
             {
-                med.IsActive = false;
-                await _context.SaveChangesAsync();
+                await this.LogAuditAsync(_auditLogService, "Medicine", "Deactivate", medId.ToString(), $"Ẩn dược phẩm '{name}' (#{medId}) — có liên kết đơn hàng/lô hàng nên không xóa hẳn");
             }
             else
             {
-                _context.Medicines.Remove(med);
-                await _context.SaveChangesAsync();
+                await this.LogAuditAsync(_auditLogService, "Medicine", "Delete", medId.ToString(), $"Xóa hẳn dược phẩm '{name}' (#{medId})");
             }
 
             return Ok(new { message = "Đã xóa hoặc ẩn dược phẩm thành công" });

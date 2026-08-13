@@ -27,4 +27,13 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- TMPMS.Tests is a separate project; without this the SDK's default **/*.cs glob also
+         compiles its files into TMPMS.csproj itself, causing duplicate/broken compilation. -->
+    <Compile Remove="TMPMS.Tests\**\*.cs" />
+    <Content Remove="TMPMS.Tests\**\*" />
+    <EmbeddedResource Remove="TMPMS.Tests\**\*" />
+    <None Remove="TMPMS.Tests\**\*" />
+  </ItemGroup>
+
 </Project>

@@ -11,6 +11,8 @@ using System.Security.Claims;
 using BusinessObjects;
 using TMPMS.Models;
 using Services.Interfaces;
+using TMPMS.Services.Interfaces;
+using TMPMS.Utils;
 
 namespace TMPMS.Controllers
 {
@@ -22,12 +24,14 @@ namespace TMPMS.Controllers
         private readonly TMPMSDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly IInventoryService _inventoryService;
+        private readonly IAuditLogService _auditLogService;
 
-        public PayOSController(TMPMSDbContext context, IConfiguration configuration, IInventoryService inventoryService)
+        public PayOSController(TMPMSDbContext context, IConfiguration configuration, IInventoryService inventoryService, IAuditLogService auditLogService)
         {
             _context = context;
             _configuration = configuration;
             _inventoryService = inventoryService;
+            _auditLogService = auditLogService;
         }
 
         // Khi PayOS báo giao dịch bị hủy/hết hạn, đơn hàng liên quan phải được hủy thật
@@ -171,6 +175,8 @@ namespace TMPMS.Controllers
                     payment.PaidAt = DateTime.UtcNow;
                     order.PaymentStatus = "Paid";
                     await _context.SaveChangesAsync();
+
+                    await this.LogAuditAsync(_auditLogService, "Payment", "WebhookSuccess", order.Id.ToString(), $"PayOS webhook xác nhận thanh toán thành công đơn hàng #{order.Id} — {verified.Amount:N0}đ (ref {verified.Reference})");
                 }
 
                 return Ok(new { success = true });
@@ -220,6 +226,9 @@ namespace TMPMS.Controllers
             _context.Appointments.Add(appointment); await _context.SaveChangesAsync();
             _context.AppointmentPayments.Add(new AppointmentPayment { AppointmentId = appointment.Id, Amount = intent.Amount, Method = "PayOS", Status = "Paid", TransactionCode = transactionCode, CreatedAt = DateTime.UtcNow, PaidAt = DateTime.UtcNow });
             intent.Status = "Paid"; intent.SlotHold.IsConsumed = true; await _context.SaveChangesAsync(); await tx.CommitAsync();
+
+            var isDemo = transactionCode.StartsWith("DEMO-", StringComparison.OrdinalIgnoreCase);
+            await this.LogAuditAsync(_auditLogService, "Payment", isDemo ? "DemoPayAppointment" : "AppointmentPaymentSuccess", appointment.Id.ToString(), $"Đặt cọc lịch hẹn #{appointment.Id} thành công ({intent.Amount:N0}đ, mã GD {transactionCode}){(isDemo ? " — GIẢ LẬP (demo-pay)" : "")}");
         }
 
         [HttpPost("verify/{orderId:int}")]
@@ -253,12 +262,14 @@ namespace TMPMS.Controllers
                         payment.Status = "Success";
                         payment.PaidAt ??= DateTime.UtcNow;
                     }
+                    await this.LogAuditAsync(_auditLogService, "Payment", "VerifySuccess", order.Id.ToString(), $"Xác minh thanh toán PayOS thành công cho đơn hàng #{order.Id}");
                 }
                 else if (payOSStatus is "CANCELLED" or "EXPIRED")
                 {
                     order.PaymentStatus = "Failed";
                     if (payment != null) payment.Status = "Failed";
                     await CancelUnpaidOrderAsync(order);
+                    await this.LogAuditAsync(_auditLogService, "Payment", "VerifyFailed", order.Id.ToString(), $"Giao dịch PayOS đơn hàng #{order.Id} bị {payOSStatus} — đơn tự động hủy, hoàn kho");
                 }
 
                 await _context.SaveChangesAsync();
@@ -336,6 +347,9 @@ namespace TMPMS.Controllers
             }
 
             await _context.SaveChangesAsync();
+
+            await this.LogAuditAsync(_auditLogService, "Payment", "DemoPay", order.Id.ToString(), $"Giả lập thanh toán PayOS thành công cho đơn hàng #{order.Id} ({order.TotalAmount:N0}đ) — GIẢ LẬP (demo-pay)");
+
             return Ok(new
             {
                 success = true,
