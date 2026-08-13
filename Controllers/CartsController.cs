@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.EntityFrameworkCore;
-using BusinessObjects;
-using TMPMS.Data;
+using TMPMS.Services.Interfaces;
+using TMPMS.Utils;
 using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace TMPMS.Controllers
 {
@@ -13,11 +13,13 @@ namespace TMPMS.Controllers
     [Authorize]
     public class CartsController : ControllerBase
     {
-        private readonly TMPMSDbContext _context;
+        private readonly ICartService _service;
+        private readonly IAuditLogService _auditLogService;
 
-        public CartsController(TMPMSDbContext context)
+        public CartsController(ICartService service, IAuditLogService auditLogService)
         {
-            _context = context;
+            _service = service;
+            _auditLogService = auditLogService;
         }
 
         public class CartCreateInput
@@ -36,10 +38,7 @@ namespace TMPMS.Controllers
             if (currentUserId == null) return Unauthorized();
             if (!CanProxy() && userId != currentUserId.Value) return Forbid();
 
-            var carts = await _context.Carts
-                .Where(c => c.UserId == userId)
-                .ToListAsync();
-
+            var carts = await _service.GetCartsByUserIdAsync(userId);
             return Ok(carts);
         }
 
@@ -50,12 +49,14 @@ namespace TMPMS.Controllers
             if (currentUserId == null) return Unauthorized();
             if (!CanProxy() && input.UserId != currentUserId.Value) return Forbid();
 
-            var cart = new Cart
+            var targetUserId = CanProxy() ? input.UserId : currentUserId.Value;
+            var cart = await _service.CreateCartAsync(targetUserId);
+
+            if (currentUserId.Value != cart.UserId)
             {
-                UserId = CanProxy() ? input.UserId : currentUserId.Value
-            };
-            _context.Carts.Add(cart);
-            await _context.SaveChangesAsync();
+                await this.LogAuditAsync(_auditLogService, "Cart", "Create", cart.Id.ToString(), $"Tạo giỏ hàng thay mặt user #{cart.UserId}");
+            }
+
             return StatusCode(201, cart);
         }
 

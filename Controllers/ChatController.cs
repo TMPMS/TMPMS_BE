@@ -121,7 +121,14 @@ Quy tắc phân loại ý định (intent):
    - wantsCheckout: true nếu khách dùng động từ ngụ ý mua ngay/thanh toán ngay (""mua"", ""đặt mua"", ""thanh toán luôn"", ""mua luôn""); false nếu khách chỉ nói ""thêm vào giỏ""/""bỏ vào giỏ"" (chưa muốn thanh toán ngay).
    - suggestedAction: {{ ""type"": ""none"", ""label"": """" }}
 
-8. ""BOOK_APPOINTMENT_NOW"": Khách hàng muốn đặt lịch khám vào một THỜI ĐIỂM CỤ THỂ đã nêu rõ ngày/giờ (ví dụ: ""đặt lịch lúc 9h mai"", ""khám lúc 2h chiều thứ 6 tuần này"", ""đặt lịch 10h hôm nay""). Khác với intent ""APPOINTMENT"" (dùng khi khách chỉ nói muốn đặt lịch chung chung, CHƯA nêu giờ cụ thể) — nếu khách đã nói rõ thời điểm thì PHẢI dùng intent này để hệ thống tự giữ chỗ ngay lập tức.
+8. ""REMOVE_FROM_CART"": Khách hàng muốn GỠ, XÓA hoặc BỚT một sản phẩm cụ thể đang có trong giỏ hàng (ví dụ: ""gỡ 5 chai mật ong ở giỏ hàng đi"", ""xóa mật ong khỏi giỏ"", ""bớt 2 hộp sâm"", ""xóa hết sâm trong giỏ""). Chỉ dùng intent này khi xác định được sản phẩm khớp trong danh sách trên VÀ khách rõ ràng muốn LOẠI BỎ khỏi giỏ (không phải thêm/mua — đó là intent ORDER_MEDICINE).
+   - reply: Xác nhận ngắn gọn sẽ gỡ sản phẩm nào khỏi giỏ hàng (backend sẽ tự kiểm tra giỏ hàng thực tế và ghi đè lại reply theo đúng số lượng thực sự đã gỡ, nên chỉ cần xác nhận ý định).
+   - recommendedMedicineId: ID sản phẩm khớp nhất trong danh sách (bắt buộc phải có, không được null).
+   - quantity: số lượng khách muốn gỡ bớt (số nguyên dương) — CHỈ điền khi khách nói rõ một số lượng cụ thể muốn gỡ bớt (không phải xóa hết).
+   - removeAll: true nếu khách muốn xóa hẳn/xóa hết/toàn bộ sản phẩm này khỏi giỏ hoặc không nói rõ số lượng cần gỡ; false nếu khách nói rõ số lượng cụ thể muốn gỡ bớt (dùng quantity ở trên).
+   - suggestedAction: {{ ""type"": ""none"", ""label"": """" }}
+
+9. ""BOOK_APPOINTMENT_NOW"": Khách hàng muốn đặt lịch khám vào một THỜI ĐIỂM CỤ THỂ đã nêu rõ ngày/giờ (ví dụ: ""đặt lịch lúc 9h mai"", ""khám lúc 2h chiều thứ 6 tuần này"", ""đặt lịch 10h hôm nay""). Khác với intent ""APPOINTMENT"" (dùng khi khách chỉ nói muốn đặt lịch chung chung, CHƯA nêu giờ cụ thể) — nếu khách đã nói rõ thời điểm thì PHẢI dùng intent này để hệ thống tự giữ chỗ ngay lập tức.
    - resolvedDateTimeIso: QUY TẮC TÍNH TOÁN — chỉ dùng ĐÚNG 1 giá trị ""Thời điểm hiện tại"" đã cho ở trên làm mốc gốc (KHÔNG dùng bất kỳ ngày/giờ nào được nhắc trong lịch sử hội thoại làm mốc, dù trước đó có nói tới ngày khác). Quy đổi tuyệt đối theo định dạng ""yyyy-MM-ddTHH:mm:ss"". Giờ làm việc 08:00–17:30, chỉ nhận phút :00 hoặc :30 — nếu khách nói giờ lẻ (vd 9h15) thì làm tròn xuống mốc 30 phút gần nhất.
      QUAN TRỌNG: LUÔN tính ra resolvedDateTimeIso nếu câu nói đủ rõ để suy luận ra 1 ngày-giờ cụ thể — kể cả khi bạn nghĩ thời điểm đó đã qua hoặc không hợp lệ. ĐỪNG tự phán đoán/từ chối trong phần reply rằng thời điểm đó ""đã qua"" hay ""không hợp lệ"" — hệ thống backend sẽ tự kiểm tra chính xác bằng mã nguồn (so sánh đầy đủ cả ngày lẫn giờ, không chỉ giờ trong ngày) và tự trả lời khách nếu thực sự không hợp lệ. Việc của bạn CHỈ là tính đúng resolvedDateTimeIso theo lời khách nói, không phán xét tính hợp lệ. Chỉ để null nếu câu nói THỰC SỰ không đủ thông tin để suy luận ra ngày/giờ (khi đó dùng intent ""APPOINTMENT"" thay thế).
    - reply: Xác nhận đã giữ khung giờ (giả định resolvedDateTimeIso sẽ được giữ thành công — backend sẽ ghi đè reply nếu thất bại). NẾU đã biết triệu chứng (xem symptomHint bên dưới) thì nhắc lại triệu chứng đó trong câu trả lời để khách xác nhận là đúng ý. NẾU chưa biết triệu chứng, PHẢI hỏi lại khách khám vì lý do/triệu chứng gì (không được im lặng bỏ qua, không được tự bịa ra 1 triệu chứng khách chưa từng nói).
@@ -131,11 +138,12 @@ Quy tắc phân loại ý định (intent):
 
 BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
 {{
-  ""intent"": ""SYMPTOM_CONSULT | APPOINTMENT | LIVE_PHARMACIST | PRESCRIPTION_LOOKUP | STORE_INFO | GENERAL_CHAT | ORDER_MEDICINE | BOOK_APPOINTMENT_NOW"",
+  ""intent"": ""SYMPTOM_CONSULT | APPOINTMENT | LIVE_PHARMACIST | PRESCRIPTION_LOOKUP | STORE_INFO | GENERAL_CHAT | ORDER_MEDICINE | REMOVE_FROM_CART | BOOK_APPOINTMENT_NOW"",
   ""reply"": ""Nội dung trả lời..."",
   ""recommendedMedicineId"": 101,
   ""quantity"": 1,
   ""wantsCheckout"": false,
+  ""removeAll"": false,
   ""resolvedDateTimeIso"": null,
   ""symptomHint"": null,
   ""suggestedAction"": {{
@@ -290,6 +298,9 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
                                 }
 
                                 bool wantsCheckout = aiRoot.TryGetProperty("wantsCheckout", out var checkoutProp) && checkoutProp.ValueKind == JsonValueKind.True;
+                                bool removeAll = aiRoot.TryGetProperty("removeAll", out var removeAllProp) && removeAllProp.ValueKind == JsonValueKind.True;
+                                // REMOVE_FROM_CART không có "quantity" nghĩa là gỡ hết — không được mặc định về 1 như ORDER_MEDICINE.
+                                bool removeQuantitySpecified = aiRoot.TryGetProperty("quantity", out var removeQtyProp) && removeQtyProp.ValueKind == JsonValueKind.Number && removeQtyProp.GetInt32() > 0;
 
                                 DateTime? resolvedAppointmentDate = null;
                                 if (aiRoot.TryGetProperty("resolvedDateTimeIso", out var dtProp) && dtProp.ValueKind == JsonValueKind.String
@@ -336,6 +347,16 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
                                     actionLabel = wantsCheckout ? "🛒 Xem giỏ hàng & Thanh toán" : "🛒 Xem giỏ hàng";
                                 }
 
+                                // REMOVE_FROM_CART: giao việc gỡ khỏi giỏ cho FE thực hiện (giỏ hàng khách vãng lai chỉ
+                                // tồn tại ở localStorage phía FE, BE không thấy được) — FE sẽ tự đối chiếu số lượng
+                                // thực tế trong giỏ rồi ghi đè lại "reply" cho khớp với những gì thực sự đã xảy ra.
+                                if (intent == "REMOVE_FROM_CART" && recommendedProduct != null)
+                                {
+                                    actionType = "remove_from_cart";
+                                    actionLabel = "🛒 Xem giỏ hàng";
+                                    if (!removeQuantitySpecified) removeAll = true;
+                                }
+
                                 // BOOK_APPOINTMENT_NOW: giữ chỗ ngay (không cần đợi khách bấm nút) — việc giữ chỗ
                                 // không tốn tiền/không cam kết (tự hết hạn sau 15 phút nếu không hoàn tất đặt cọc),
                                 // nên an toàn để thực hiện ngay khi khách nêu rõ thời điểm, đúng như khách yêu cầu.
@@ -373,6 +394,7 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
                                     text = reply,
                                     product = recommendedProduct,
                                     quantity = quantity,
+                                    removeAll = removeAll,
                                     appointment = appointmentResult,
                                     suggestedAction = new
                                     {

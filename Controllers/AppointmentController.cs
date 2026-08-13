@@ -11,6 +11,7 @@ using PayOS;
 using PayOS.Models.V2.PaymentRequests;
 using TMPMS.DTOs;
 using TMPMS.Services.Interfaces;
+using TMPMS.Utils;
 
 namespace TMPMS.Controllers
 {
@@ -24,15 +25,17 @@ namespace TMPMS.Controllers
         private readonly IWebHostEnvironment _environment;
         private readonly IConfiguration _configuration;
         private readonly ILogger<AppointmentController> _logger;
+        private readonly IAuditLogService _auditLogService;
         private const decimal DefaultDeposit = 100000m;
 
-        public AppointmentController(IAppointmentService appointmentService, TMPMSDbContext context, IWebHostEnvironment environment, IConfiguration configuration, ILogger<AppointmentController> logger)
+        public AppointmentController(IAppointmentService appointmentService, TMPMSDbContext context, IWebHostEnvironment environment, IConfiguration configuration, ILogger<AppointmentController> logger, IAuditLogService auditLogService)
         {
             _appointmentService = appointmentService;
             _context = context;
             _environment = environment;
             _configuration = configuration;
             _logger = logger;
+            _auditLogService = auditLogService;
         }
 
         [HttpGet("availability")]
@@ -195,6 +198,7 @@ namespace TMPMS.Controllers
             {
                 bool result = await _appointmentService.UpdateAppointment(id, dto);
                 if (!result) return BadRequest(new { success = false, message = "Update appointment failed." });
+                await this.LogAuditAsync(_auditLogService, "Appointment", "Update", id.ToString(), $"Cập nhật lịch hẹn #{id}");
                 return Ok(new { success = true, message = "Appointment updated successfully." });
             }
             catch (Exception ex)
@@ -211,6 +215,7 @@ namespace TMPMS.Controllers
             {
                 bool result = await _appointmentService.DeleteAppointment(id);
                 if (!result) return NotFound(new { success = false, message = "Appointment not found." });
+                await this.LogAuditAsync(_auditLogService, "Appointment", "Delete", id.ToString(), $"Xóa lịch hẹn #{id}");
                 return Ok(new { success = true, message = "Appointment deleted successfully." });
             }
             catch (Exception ex)
@@ -265,6 +270,7 @@ namespace TMPMS.Controllers
             var payment = appt.AppointmentPayments.OrderByDescending(p => p.Id).FirstOrDefault();
             if (payment != null) { payment.RefundAmount = appt.RefundAmount; payment.RefundStatus = appt.RefundAmount > 0 ? "ContactCustomerForManualRefund" : "NonRefundable"; }
             await _context.SaveChangesAsync();
+            await this.LogAuditAsync(_auditLogService, "Appointment", "CancelWithRefund", id.ToString(), $"Hủy lịch hẹn #{id} — hoàn {percent}% cọc ({appt.RefundAmount:N0}đ)");
             return Ok(new { success = true, refundPercentage = percent, refundAmount = appt.RefundAmount, refundStatus = payment?.RefundStatus });
         }
 
@@ -301,7 +307,9 @@ namespace TMPMS.Controllers
             if (appt == null) return NotFound();
             if (appt.Status != "Confirmed") return BadRequest(new { message = "Chỉ lịch đã xác nhận mới có thể check-in." });
             appt.Status = "CheckedIn"; appt.CheckedInAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync(); return Ok(new { success = true });
+            await _context.SaveChangesAsync();
+            await this.LogAuditAsync(_auditLogService, "Appointment", "CheckIn", id.ToString(), $"Check-in lịch hẹn #{id}");
+            return Ok(new { success = true });
         }
 
         [HttpPost("{id}/propose-time")]
@@ -311,7 +319,9 @@ namespace TMPMS.Controllers
             var appt = await _context.Appointments.FindAsync(id); if (appt == null) return NotFound();
             if (appt.Status != "PendingConfirmation" || dto.AppointmentDate <= DateTime.Now) return BadRequest(new { message = "Không thể đề xuất giờ cho lịch này." });
             appt.ProposedAppointmentDateNote = $"{dto.AppointmentDate:O}|{dto.Note}"; appt.Status = "AlternativeProposed";
-            await _context.SaveChangesAsync(); return Ok(new { success = true });
+            await _context.SaveChangesAsync();
+            await this.LogAuditAsync(_auditLogService, "Appointment", "ProposeTime", id.ToString(), $"Đề xuất giờ khám mới cho lịch hẹn #{id}: {dto.AppointmentDate:O}");
+            return Ok(new { success = true });
         }
 
         [HttpPost("{id}/respond-proposal")]
@@ -334,7 +344,9 @@ namespace TMPMS.Controllers
             if (request == null) return NotFound();
             request.Status = dto.Accept ? "Approved" : "Rejected"; request.ResolvedAt = DateTime.UtcNow; request.ResolvedByStaffId = GetCurrentUserId();
             if (dto.Accept) request.Appointment.AppointmentDate = request.RequestedAppointmentDate;
-            request.Appointment.Status = "Confirmed"; await _context.SaveChangesAsync(); return Ok(new { success = true });
+            request.Appointment.Status = "Confirmed"; await _context.SaveChangesAsync();
+            await this.LogAuditAsync(_auditLogService, "Appointment", "ResolveReschedule", request.AppointmentId.ToString(), $"{(dto.Accept ? "Duyệt" : "Từ chối")} yêu cầu đổi lịch #{requestId} cho lịch hẹn #{request.AppointmentId}");
+            return Ok(new { success = true });
         }
 
         [HttpPut("{id}/no-show")]
@@ -346,7 +358,9 @@ namespace TMPMS.Controllers
             if (appt.Status != "Confirmed" || DateTime.Now < appt.AppointmentDate.AddMinutes(15)) return BadRequest(new { message = "Chỉ đánh dấu vắng sau giờ hẹn 15 phút." });
             appt.Status = "NoShow"; appt.RefundAmount = 0;
             var payment = appt.AppointmentPayments.FirstOrDefault(); if (payment != null) payment.RefundStatus = "NonRefundable";
-            await _context.SaveChangesAsync(); return Ok(new { success = true });
+            await _context.SaveChangesAsync();
+            await this.LogAuditAsync(_auditLogService, "Appointment", "NoShow", id.ToString(), $"Đánh dấu vắng mặt lịch hẹn #{id} — không hoàn cọc");
+            return Ok(new { success = true });
         }
 
         [HttpPut("approve/{id}")]
@@ -356,6 +370,7 @@ namespace TMPMS.Controllers
             try
             {
                 bool result = await _appointmentService.ApproveAppointment(id, GetCurrentUserId());
+                await this.LogAuditAsync(_auditLogService, "Appointment", "Approve", id.ToString(), $"Duyệt lịch hẹn #{id}");
                 return Ok(new { Success = result, Message = "Appointment approved successfully." });
             }
             catch (Exception ex)
@@ -379,6 +394,7 @@ namespace TMPMS.Controllers
                     if (payment != null) { payment.RefundAmount = rejected.DepositAmount; payment.RefundStatus = "ContactCustomerForManualRefund"; }
                     await _context.SaveChangesAsync();
                 }
+                await this.LogAuditAsync(_auditLogService, "Appointment", "Reject", id.ToString(), $"Từ chối lịch hẹn #{id} — lý do: {dto?.Reason}");
                 return Ok(new { Success = result, Message = "Appointment rejected successfully." });
             }
             catch (Exception ex)
@@ -394,6 +410,7 @@ namespace TMPMS.Controllers
             try
             {
                 bool result = await _appointmentService.CompleteAppointment(id);
+                await this.LogAuditAsync(_auditLogService, "Appointment", "Complete", id.ToString(), $"Hoàn thành lịch hẹn #{id}");
                 return Ok(new { Success = result, Message = "Appointment completed successfully." });
             }
             catch (Exception ex)
