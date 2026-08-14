@@ -19,6 +19,18 @@ namespace BusinessObjects
 
         public int DiscountPercent { get; set; }
 
+        // Hẹn giờ chạy Flash Sale — null = áp dụng ngay khi tạo. Nếu ở tương lai, giá chỉ được
+        // đổi thực sự khi FlashSaleBackgroundService quét tới đúng giờ (không đổi giá ngay lúc tạo).
+        public DateTime? StartTime { get; set; }
+
+        // null = không giới hạn thời gian, chỉ kết thúc khi Admin gỡ thủ công.
+        public DateTime? EndTime { get; set; }
+
+        // null = không giới hạn số lượng bán theo giá sale.
+        public int? QuantityLimit { get; set; }
+
+        public int QuantitySold { get; set; } = 0;
+
         public DateTime? BatchExpiryDate { get; set; }
 
         public int? DaysUntilExpiryAtApply { get; set; }

@@ -29,6 +29,10 @@ namespace Services.Interfaces
         Task<FlashSaleCandidateDTO> ApplyFlashSale(int medicineId, ApplyFlashSaleDTO dto, int? staffId);
         Task RemoveFlashSale(int medicineId, int? staffId);
         Task<List<FlashSaleRecordDTO>> GetFlashSales(bool activeOnly);
+        // Danh sách Flash Sale công khai (đang chạy + sắp diễn ra) cho trang khách hàng
+        Task<List<PublicFlashSaleDTO>> GetActiveFlashSalesForCustomer();
+        // Quét định kỳ: kích hoạt Flash Sale đã tới giờ bắt đầu, tự gỡ Flash Sale đã hết giờ/hết suất
+        Task SweepFlashSales();
 
         // Báo cáo lãi gộp ước tính theo lô
         Task<List<BatchProfitDTO>> GetBatchProfitReport(int? warehouseId, int? medicineId);

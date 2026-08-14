@@ -131,8 +131,17 @@ namespace TMPMS.DTOs
 
     public class ApplyFlashSaleDTO
     {
-        // Không truyền = dùng mức giảm đề xuất theo số ngày còn hạn
+        // Không truyền = dùng mức giảm đề xuất theo số ngày còn hạn (chỉ khả dụng nếu có lô sắp hết hạn)
         public int? DiscountPercent { get; set; }
+
+        // Không truyền/null = áp dụng ngay. Truyền thời điểm tương lai để hẹn giờ bắt đầu.
+        public DateTime? StartTime { get; set; }
+
+        // Không truyền/null = không tự kết thúc, chỉ gỡ thủ công.
+        public DateTime? EndTime { get; set; }
+
+        // Không truyền/null = không giới hạn số lượng bán theo giá sale.
+        public int? QuantityLimit { get; set; }
     }
 
     // Bản ghi trong bảng quản lý Flash Sale (Admin) — khác FlashSaleCandidateDTO ở chỗ đây là
@@ -153,6 +162,32 @@ namespace TMPMS.DTOs
         public string? AppliedByStaffName { get; set; }
         public bool IsActive { get; set; }
         public DateTime? RemovedAt { get; set; }
+        public DateTime? StartTime { get; set; }
+        public DateTime? EndTime { get; set; }
+        public int? QuantityLimit { get; set; }
+        public int QuantitySold { get; set; }
+        // Scheduled (chưa tới giờ bắt đầu) / Running (đang diễn ra) / Ended (đã gỡ/hết hạn/hết suất)
+        public string Status { get; set; }
+    }
+
+    // Danh sách Flash Sale công khai cho trang khách hàng — gọn hơn FlashSaleRecordDTO (không lộ
+    // thông tin nội bộ như ai áp dụng, lô hàng).
+    public class PublicFlashSaleDTO
+    {
+        public int MedicineId { get; set; }
+        public string MedicineName { get; set; }
+        public string ImageUrl { get; set; }
+        public string Unit { get; set; }
+        public string Origin { get; set; }
+        public decimal OriginalPrice { get; set; }
+        public decimal SalePrice { get; set; }
+        public int DiscountPercent { get; set; }
+        public DateTime? StartTime { get; set; }
+        public DateTime? EndTime { get; set; }
+        public int? QuantityLimit { get; set; }
+        public int QuantitySold { get; set; }
+        // Scheduled / Running
+        public string Status { get; set; }
     }
 
     // Báo cáo lãi gộp ước tính theo lô — Doanh thu dùng GIÁ BÁN HIỆN TẠI của sản phẩm

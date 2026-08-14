@@ -313,6 +313,7 @@ namespace TMPMS.Services
                     });
                 }
 
+                await TrackFlashSaleSold(medicineId, quantity);
                 await _repo.RecomputeStockCaches(medicineId, warehouseId);
                 if (tx != null) await tx.CommitAsync();
             }
@@ -325,6 +326,16 @@ namespace TMPMS.Services
             {
                 if (tx != null) tx.Dispose();
             }
+        }
+
+        // Cộng dồn số lượng đã bán theo giá Flash Sale (chỉ khi sản phẩm đang có Flash Sale đang chạy
+        // với giới hạn số lượng) — dùng để tự động gỡ khi bán hết suất, không cần đợi tick định kỳ.
+        private async Task TrackFlashSaleSold(int medicineId, int quantity)
+        {
+            var activeSale = await _repo.GetActiveFlashSaleByMedicine(medicineId);
+            if (activeSale == null || !activeSale.QuantityLimit.HasValue) return;
+            if (activeSale.StartTime.HasValue && activeSale.StartTime.Value > DateTime.Now) return;
+            activeSale.QuantitySold += quantity;
         }
 
         public async Task RestoreStockFEFO(int medicineId, int warehouseId, int quantity, string referenceId)
@@ -369,6 +380,7 @@ namespace TMPMS.Services
                     CreatedAt = DateTime.Now
                 });
 
+                await UntrackFlashSaleSold(medicineId, quantity);
                 await _repo.RecomputeStockCaches(medicineId, warehouseId);
                 if (tx != null) await tx.CommitAsync();
             }
@@ -381,6 +393,15 @@ namespace TMPMS.Services
             {
                 if (tx != null) tx.Dispose();
             }
+        }
+
+        // Ngược lại TrackFlashSaleSold — khi đơn hủy/trả hàng, trừ lại số đã tính là "đã bán theo Flash Sale"
+        // nếu sản phẩm vẫn đang trong đợt Flash Sale đó (không hồi lại nếu đợt sale đã kết thúc).
+        private async Task UntrackFlashSaleSold(int medicineId, int quantity)
+        {
+            var activeSale = await _repo.GetActiveFlashSaleByMedicine(medicineId);
+            if (activeSale == null || !activeSale.QuantityLimit.HasValue) return;
+            activeSale.QuantitySold = Math.Max(0, activeSale.QuantitySold - quantity);
         }
 
         public async Task<List<FlashSaleCandidateDTO>> GetFlashSaleCandidates(int daysThreshold)
@@ -439,23 +460,40 @@ namespace TMPMS.Services
             if (discountPercent <= 0 || discountPercent >= 100)
                 throw new ArgumentException("Phần trăm giảm giá phải trong khoảng 1-99.");
 
-            if (medicine.OldPrice == null || medicine.OldPrice <= 0)
-                medicine.OldPrice = medicine.Price;
+            if (dto.StartTime.HasValue && dto.EndTime.HasValue && dto.EndTime <= dto.StartTime)
+                throw new ArgumentException("Thời gian kết thúc phải sau thời gian bắt đầu.");
+            if (dto.EndTime.HasValue && dto.EndTime <= now)
+                throw new ArgumentException("Thời gian kết thúc phải ở tương lai.");
+            if (dto.QuantityLimit.HasValue && dto.QuantityLimit <= 0)
+                throw new ArgumentException("Giới hạn số lượng bán phải lớn hơn 0.");
 
-            medicine.Price = Math.Round(medicine.OldPrice.Value * (1 - discountPercent / 100m), 0);
-            medicine.Discount = discountPercent;
+            var originalPrice = (medicine.OldPrice != null && medicine.OldPrice > 0) ? medicine.OldPrice.Value : medicine.Price.Value;
+            var salePrice = Math.Round(originalPrice * (1 - discountPercent / 100m), 0);
+            var startsImmediately = !dto.StartTime.HasValue || dto.StartTime.Value <= now;
 
-            await _repo.SaveChangesAsync();
+            if (startsImmediately)
+            {
+                if (medicine.OldPrice == null || medicine.OldPrice <= 0)
+                    medicine.OldPrice = medicine.Price;
+                medicine.Price = salePrice;
+                medicine.Discount = discountPercent;
+                await _repo.SaveChangesAsync();
+            }
 
             // Ghi vào bảng quản lý Flash Sale (lịch sử áp dụng, để Admin theo dõi/quản lý riêng
-            // thay vì chỉ suy ra từ Medicine.Discount).
+            // thay vì chỉ suy ra từ Medicine.Discount). Nếu hẹn giờ tương lai, giá thật sự chỉ đổi
+            // khi FlashSaleBackgroundService quét tới đúng StartTime.
             await _repo.AddFlashSale(new FlashSale
             {
                 MedicineId = medicine.Id,
                 BatchId = nearest?.Id,
-                OriginalPrice = medicine.OldPrice.Value,
-                SalePrice = medicine.Price.Value,
+                OriginalPrice = originalPrice,
+                SalePrice = salePrice,
                 DiscountPercent = discountPercent,
+                StartTime = dto.StartTime,
+                EndTime = dto.EndTime,
+                QuantityLimit = dto.QuantityLimit,
+                QuantitySold = 0,
                 BatchExpiryDate = nearest?.ExpiryDate,
                 DaysUntilExpiryAtApply = days,
                 AppliedAt = DateTime.UtcNow,
@@ -479,7 +517,7 @@ namespace TMPMS.Services
                 DaysUntilExpiry = days ?? 0,
                 QuantityRemaining = nearest?.QuantityRemaining ?? 0,
                 SuggestedDiscountPercent = discountPercent,
-                IsOnFlashSale = true
+                IsOnFlashSale = startsImmediately
             };
         }
 
@@ -523,8 +561,94 @@ namespace TMPMS.Services
                 AppliedAt = f.AppliedAt,
                 AppliedByStaffName = f.AppliedByStaff?.FullName ?? f.AppliedByStaff?.UserName,
                 IsActive = f.IsActive,
-                RemovedAt = f.RemovedAt
+                RemovedAt = f.RemovedAt,
+                StartTime = f.StartTime,
+                EndTime = f.EndTime,
+                QuantityLimit = f.QuantityLimit,
+                QuantitySold = f.QuantitySold,
+                Status = FlashSaleStatus(f)
             }).ToList();
+        }
+
+        public async Task<List<PublicFlashSaleDTO>> GetActiveFlashSalesForCustomer()
+        {
+            var records = await _repo.GetFlashSales(true);
+            return records
+                .Where(f => f.Medicine != null)
+                .Select(f => new PublicFlashSaleDTO
+                {
+                    MedicineId = f.MedicineId,
+                    MedicineName = f.Medicine.Name,
+                    ImageUrl = f.Medicine.ImageUrl,
+                    Unit = f.Medicine.Unit,
+                    Origin = f.Medicine.Origin,
+                    OriginalPrice = f.OriginalPrice,
+                    SalePrice = f.SalePrice,
+                    DiscountPercent = f.DiscountPercent,
+                    StartTime = f.StartTime,
+                    EndTime = f.EndTime,
+                    QuantityLimit = f.QuantityLimit,
+                    QuantitySold = f.QuantitySold,
+                    Status = FlashSaleStatus(f)
+                })
+                .OrderBy(f => f.Status == "Scheduled" ? 1 : 0)
+                .ThenBy(f => f.Status == "Running" ? (f.EndTime ?? DateTime.MaxValue) : (f.StartTime ?? DateTime.MaxValue))
+                .ToList();
+        }
+
+        private static string FlashSaleStatus(FlashSale f)
+        {
+            if (!f.IsActive) return "Ended";
+            var now = DateTime.Now;
+            if (f.StartTime.HasValue && f.StartTime.Value > now) return "Scheduled";
+            return "Running";
+        }
+
+        // Chạy định kỳ từ FlashSaleBackgroundService: kích hoạt các Flash Sale đã hẹn giờ tới đúng
+        // StartTime (áp giá sale vào Medicine), và tự gỡ các Flash Sale đã hết EndTime hoặc bán hết
+        // suất giới hạn (trả giá về giá gốc), để không cần Admin phải thao tác thủ công đúng giờ.
+        public async Task SweepFlashSales()
+        {
+            var actives = await _repo.GetFlashSales(true);
+            var now = DateTime.Now;
+            var changed = false;
+
+            foreach (var f in actives)
+            {
+                var medicine = f.Medicine;
+                if (medicine == null) continue;
+
+                var scheduledFuture = f.StartTime.HasValue && f.StartTime.Value > now;
+                if (scheduledFuture) continue;
+
+                var expired = (f.EndTime.HasValue && f.EndTime.Value <= now)
+                    || (f.QuantityLimit.HasValue && f.QuantitySold >= f.QuantityLimit.Value);
+
+                if (expired)
+                {
+                    if (medicine.Price == f.SalePrice)
+                    {
+                        medicine.Price = (medicine.OldPrice.HasValue && medicine.OldPrice > 0) ? medicine.OldPrice : f.OriginalPrice;
+                        medicine.OldPrice = null;
+                        medicine.Discount = null;
+                    }
+                    f.IsActive = false;
+                    f.RemovedAt = DateTime.UtcNow;
+                    changed = true;
+                    continue;
+                }
+
+                if (medicine.Price != f.SalePrice)
+                {
+                    if (medicine.OldPrice == null || medicine.OldPrice <= 0)
+                        medicine.OldPrice = medicine.Price ?? f.OriginalPrice;
+                    medicine.Price = f.SalePrice;
+                    medicine.Discount = f.DiscountPercent;
+                    changed = true;
+                }
+            }
+
+            if (changed) await _repo.SaveChangesAsync();
         }
 
         public async Task<List<BatchProfitDTO>> GetBatchProfitReport(int? warehouseId, int? medicineId)

@@ -142,6 +142,13 @@ namespace TMPMS.Controllers
         public async Task<ActionResult> GetFlashSaleList([FromQuery] bool activeOnly = true)
             => Ok(await _service.GetFlashSales(activeOnly));
 
+        // Danh sách Flash Sale công khai (đang chạy + sắp diễn ra) cho trang khách hàng — không giới
+        // hạn theo hàng sắp hết hạn như /candidates, gồm mọi sản phẩm Admin đã đưa vào Flash Sale.
+        [HttpGet("flash-sale/active")]
+        [AllowAnonymous]
+        public async Task<ActionResult> GetActiveFlashSalesForCustomer()
+            => Ok(await _service.GetActiveFlashSalesForCustomer());
+
         // ==== Báo cáo lãi gộp ước tính theo lô ====
 
         [HttpGet("reports/profit")]

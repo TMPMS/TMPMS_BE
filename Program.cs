@@ -84,6 +84,7 @@ builder.Services.AddSingleton<TrackingSimulationService>();
 
 builder.Services.AddHostedService(provider => provider.GetRequiredService<TrackingSimulationService>());
 builder.Services.AddHostedService<AppointmentStatusBackgroundService>();
+builder.Services.AddHostedService<FlashSaleBackgroundService>();
 
 builder.Services.AddDbContext<TMPMSDbContext>(options =>
 {

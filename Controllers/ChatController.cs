@@ -49,14 +49,29 @@ namespace TMPMS.Controllers
         {
             public string Text { get; set; } = "";
             public List<ChatMessageItem>? History { get; set; }
+            // Ảnh khách đính kèm (vd chụp/dán ảnh vỏ hộp thuốc) — base64 thuần, không kèm tiền tố "data:...;base64,".
+            public string? ImageBase64 { get; set; }
+            public string? ImageMimeType { get; set; }
         }
+
+        private const int MaxImageBase64Length = 7_000_000; // ~5MB ảnh gốc sau khi encode base64
 
         [HttpPost]
         public async Task<IActionResult> Chat([FromBody] ChatRequest request)
         {
-            if (string.IsNullOrEmpty(request.Text))
+            if (string.IsNullOrEmpty(request.Text) && string.IsNullOrEmpty(request.ImageBase64))
             {
                 return BadRequest(new { error = "Text is required" });
+            }
+
+            string? imageBase64 = request.ImageBase64;
+            if (!string.IsNullOrEmpty(imageBase64))
+            {
+                var commaIdx = imageBase64.IndexOf(',');
+                if (imageBase64.StartsWith("data:", StringComparison.Ordinal) && commaIdx > 0)
+                    imageBase64 = imageBase64.Substring(commaIdx + 1);
+                if (imageBase64.Length > MaxImageBase64Length)
+                    return BadRequest(new { error = "Ảnh quá lớn, vui lòng chọn ảnh dưới 5MB" });
             }
 
             var apiKey = _config["Gemini:ApiKey"];
@@ -77,6 +92,8 @@ namespace TMPMS.Controllers
 Nhiệm vụ của bạn là phân tích ý định của người dùng (dựa trên câu hỏi HIỆN TẠI và LỊCH SỬ HỘI THOẠI trước đó) và trả về JSON theo đúng cấu trúc yêu cầu.
 
 QUY TẮC BẮT BUỘC (áp dụng cho mọi intent): mọi thông tin bạn trích xuất (triệu chứng, tên sản phẩm, thời gian...) phải dựa trên những gì khách THỰC SỰ đã nói — ở tin nhắn hiện tại HOẶC bất kỳ tin nhắn nào trước đó trong lịch sử hội thoại. TUYỆT ĐỐI KHÔNG được tự bịa đặt/suy đoán thông tin khách chưa từng cung cấp. Nếu thiếu thông tin cần thiết để hoàn tất một hành động, hãy hỏi lại khách trong phần reply thay vì tự giả định.
+
+QUY TẮC KHI TIN NHẮN HIỆN TẠI CÓ KÈM HÌNH ẢNH: nếu khách gửi kèm 1 ảnh (vd ảnh chụp vỏ hộp thuốc, ảnh sản phẩm), hãy quan sát kỹ ảnh và cố nhận diện tên thuốc/sản phẩm xuất hiện trong ảnh, rồi so khớp với ""Danh sách sản phẩm hiện có"" bên dưới. Nếu khớp được đúng 1 sản phẩm, coi như khách đang hỏi về sản phẩm đó (chọn intent phù hợp theo yêu cầu kèm theo — vd không nói gì thêm thì dùng SYMPTOM_CONSULT để giới thiệu sản phẩm, nói ""mua""/""thêm vào giỏ"" thì dùng ORDER_MEDICINE) và điền recommendedMedicineId tương ứng. Nếu ảnh mờ, không phải ảnh thuốc, hoặc không khớp được sản phẩm nào trong danh sách, dùng intent GENERAL_CHAT và trả lời trung thực rằng bạn không chắc chắn nhận diện được sản phẩm trong ảnh, đề nghị khách mô tả thêm bằng lời hoặc chụp ảnh rõ hơn — không được bịa tên sản phẩm không có trong danh sách.
 
 Thời điểm hiện tại (giờ Việt Nam, dùng để quy đổi ""hôm nay/mai/chiều nay""...): {nowLocal:dddd, dd/MM/yyyy HH:mm} ({nowLocal:yyyy-MM-ddTHH:mm:ss})
 
@@ -169,11 +186,26 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
                         }
                     }
 
-                    // Add current user request
+                    // Add current user request (kèm ảnh nếu có)
+                    var currentParts = new List<object>
+                    {
+                        new { text = string.IsNullOrWhiteSpace(request.Text) ? "(Khách gửi kèm một hình ảnh, không có chú thích bằng lời)" : request.Text }
+                    };
+                    if (!string.IsNullOrEmpty(imageBase64))
+                    {
+                        currentParts.Add(new
+                        {
+                            inlineData = new
+                            {
+                                mimeType = string.IsNullOrWhiteSpace(request.ImageMimeType) ? "image/jpeg" : request.ImageMimeType,
+                                data = imageBase64
+                            }
+                        });
+                    }
                     contentsList.Add(new
                     {
                         role = "user",
-                        parts = new[] { new { text = request.Text } }
+                        parts = currentParts
                     });
 
                     var payload = new
