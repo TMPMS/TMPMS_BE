@@ -234,13 +234,24 @@ namespace TMPMS.Services
             foreach (var line in raw.MedicationLines)
             {
                 var match = MatchMedicine(line, catalog.Select(m => (m.Id, m.Name)));
-                result.Items.Add(new PrescriptionOcrItemDto
+                var item = new PrescriptionOcrItemDto
                 {
                     RawText = line,
                     MatchedMedicineId = match?.Id,
                     MatchedMedicineName = match?.Name,
                     SuggestedQuantity = ExtractQuantity(line)
-                });
+                };
+
+                // Không có sẵn trong kho -> gợi ý các thuốc gần giống tên/công dụng trong kho thay vì
+                // chỉ báo "không tìm thấy" và bỏ mặc Dược sĩ tự tìm thủ công.
+                if (match == null)
+                {
+                    item.SimilarSuggestions = FindSimilarMedicines(line, catalog.Select(m => (m.Id, m.Name)))
+                        .Select(s => new PrescriptionOcrSuggestionDto { MedicineId = s.Id, MedicineName = s.Name })
+                        .ToList();
+                }
+
+                result.Items.Add(item);
             }
 
             if (result.Items.Count == 0)
@@ -274,6 +285,56 @@ namespace TMPMS.Services
         }
 
         private static string Normalize(string? s) => (s ?? "").ToLowerInvariant().Trim();
+
+        private static readonly HashSet<string> TokenStopWords = new(new[]
+        {
+            "hop", "hộp", "goi", "gói", "vien", "viên", "chai", "lo", "lọ", "vi", "vỉ", "tuyp", "tuýp",
+            "dang", "dạng", "loai", "loại", "cua", "của", "va", "và", "cho", "voi", "với", "va", "sang",
+            "chieu", "toi", "ngay", "lan", "uong", "song", "dong", "kho"
+        });
+
+        // Tách tên/dòng chữ thành các từ có nghĩa (bỏ số, đơn vị, từ đóng gói/liều dùng chung chung)
+        // để so mức độ trùng từ khóa — dùng khi không khớp được chính xác tên thuốc trong kho, nhằm
+        // gợi ý các thuốc có công dụng/tên gần giống thay vì bỏ mặc Dược sĩ tự tìm thủ công.
+        private static HashSet<string> Tokenize(string s)
+        {
+            var normalized = Normalize(s);
+            var words = Regex.Matches(normalized, @"\p{L}+")
+                .Select(m => m.Value)
+                .Where(w => w.Length >= 3 && !TokenStopWords.Contains(w));
+            return new HashSet<string>(words);
+        }
+
+        private static List<(int Id, string Name)> FindSimilarMedicines(string line, IEnumerable<(int Id, string Name)> catalog, int take = 3)
+        {
+            var lineTokens = Tokenize(line);
+            if (lineTokens.Count == 0) return new List<(int, string)>();
+
+            return catalog
+                .Select(m => new { m.Id, m.Name, Score = TokenOverlapScore(lineTokens, Tokenize(StripPackagingInfo(m.Name))) })
+                .Where(m => m.Score > 0)
+                .OrderByDescending(m => m.Score)
+                .Take(take)
+                .Select(m => (m.Id, m.Name))
+                .ToList();
+        }
+
+        // So khớp mềm giữa 2 tập từ khóa: coi là trùng nếu bằng nhau hệt, hoặc một từ là tiền tố/hậu
+        // tố của từ kia (đủ dài để tránh trùng ngẫu nhiên) — vì AI thường đọc/viết tắt thương hiệu
+        // khác chút ít so với tên đầy đủ trong kho (vd "Probio" AI đọc được vs "Probiotic" trong kho).
+        private static int TokenOverlapScore(HashSet<string> lineTokens, HashSet<string> catalogTokens)
+        {
+            var score = 0;
+            foreach (var catalogToken in catalogTokens)
+            {
+                var matched = lineTokens.Any(lineToken =>
+                    lineToken == catalogToken ||
+                    (lineToken.Length >= 4 && catalogToken.Length >= 4 &&
+                     (lineToken.Contains(catalogToken) || catalogToken.Contains(lineToken))));
+                if (matched) score++;
+            }
+            return score;
+        }
 
         // Toa thuốc Việt Nam thường ghi liều dùng trước ("sáng 1 gói - chiều 1 gói") rồi mới đến
         // tổng số lượng cấp phát ở cuối dòng ("- 10 gói") — lấy số cuối cùng thay vì số đầu tiên

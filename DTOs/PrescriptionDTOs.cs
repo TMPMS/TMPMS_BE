@@ -92,6 +92,16 @@ namespace TMPMS.DTOs
         public int? MatchedMedicineId { get; set; }
         public string? MatchedMedicineName { get; set; }
         public int SuggestedQuantity { get; set; } = 1;
+
+        // Khi không khớp được thuốc nào trong kho (MatchedMedicineId null), gợi ý các thuốc khác
+        // trong kho có tên gần giống/cùng công dụng để Dược sĩ chọn thay thế thay vì phải tự tìm.
+        public List<PrescriptionOcrSuggestionDto> SimilarSuggestions { get; set; } = new();
+    }
+
+    public class PrescriptionOcrSuggestionDto
+    {
+        public int MedicineId { get; set; }
+        public string MedicineName { get; set; } = "";
     }
 
     public class PrescriptionOcrResultDto
