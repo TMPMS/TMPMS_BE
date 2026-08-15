@@ -16,5 +16,6 @@ namespace Services.Interfaces
 
         Task<List<SymptomQuestionDTO>> GetQuestionsAsync();
         Task<DiagnosisResultDTO> ClassifyAsync(DiagnosisClassifyRequestDTO dto, int? currentUserId);
+        Task<NextQuestionResponseDTO> GetNextQuestionAsync(List<AnswerSubmissionDTO> answeredSoFar);
     }
 }

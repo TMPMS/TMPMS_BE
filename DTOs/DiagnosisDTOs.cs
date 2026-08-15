@@ -99,5 +99,31 @@ namespace TMPMS.DTOs
         public string Description { get; set; }
         public string RecommendationText { get; set; }
         public List<int> SuggestedHerbalMedicineIds { get; set; } = new List<int>();
+        public List<SuggestedMedicineDTO> SuggestedMedicines { get; set; } = new List<SuggestedMedicineDTO>();
+    }
+
+    // Gợi ý sản phẩm theo thể bệnh vừa chẩn đoán được — kèm lý do (AI hoặc từ khóa dự phòng)
+    public class SuggestedMedicineDTO
+    {
+        public int MedicineId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Reason { get; set; } = string.Empty;
+        public decimal? Price { get; set; }
+        public string? ImageUrl { get; set; }
+        public bool IsAiGenerated { get; set; }
+    }
+
+    // ---------- Câu hỏi tự chẩn đoán thích ứng (adaptive) ----------
+    public class NextQuestionRequestDTO
+    {
+        public List<AnswerSubmissionDTO> Answers { get; set; } = new List<AnswerSubmissionDTO>();
+    }
+
+    public class NextQuestionResponseDTO
+    {
+        public SymptomQuestionDTO? NextQuestion { get; set; }
+        public bool Done { get; set; }
+        public int AnsweredCount { get; set; }
+        public int MinRecommended { get; set; }
     }
 }

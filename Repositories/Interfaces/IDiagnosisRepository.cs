@@ -20,5 +20,6 @@ namespace Repositories.Interfaces
         Task<List<SymptomQuestion>> GetQuestionsWithAnswersAsync();
         Task<List<SyndromeType>> GetSyndromeTypesAsync();
         Task<List<AnswerScoreMapping>> GetScoreMappingsAsync();
+        Task<List<HerbalMedicineInfo>> GetHerbalCandidatesAsync(int take);
     }
 }

@@ -1,6 +1,9 @@
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Threading.Tasks;
 using BusinessObjects;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Repositories.Interfaces;
 using TMPMS.DTOs;
@@ -19,8 +22,15 @@ namespace TMPMS.Tests
             var repo = new Mock<IDiagnosisRepository>();
             repo.Setup(r => r.GetSyndromeTypesAsync()).ReturnsAsync(syndromes);
             repo.Setup(r => r.GetScoreMappingsAsync()).ReturnsAsync(mappings);
+            // Không có dược liệu ứng viên -> SuggestMedicinesAsync trả rỗng ngay, không cần gọi AI thật.
+            repo.Setup(r => r.GetHerbalCandidatesAsync(It.IsAny<int>())).ReturnsAsync(new List<HerbalMedicineInfo>());
             return repo;
         }
+
+        // DiagnosisService giờ cần thêm HttpClient/IConfiguration/ILogger cho phần gợi ý thuốc bằng AI —
+        // các test ở đây không chạm tới nhánh AI (candidates rỗng) nên chỉ cần instance giả hợp lệ.
+        private static DiagnosisService CreateService(Mock<IDiagnosisRepository> repo) =>
+            new DiagnosisService(repo.Object, new HttpClient(), new ConfigurationBuilder().Build(), Mock.Of<ILogger<DiagnosisService>>());
 
         [Fact]
         public async Task ClassifyAsync_AllScoresBelowThreshold_ReturnsUnclear()
@@ -34,7 +44,7 @@ namespace TMPMS.Tests
                 new() { AnswerOptionId = 1, SyndromeTypeId = 1, Points = 2 }, // < ngưỡng 5
             };
             var repo = CreateRepoMock(syndromes, mappings);
-            var sut = new DiagnosisService(repo.Object);
+            var sut = CreateService(repo);
 
             var request = new DiagnosisClassifyRequestDTO
             {
@@ -60,7 +70,7 @@ namespace TMPMS.Tests
                 new() { AnswerOptionId = 2, SyndromeTypeId = 2, Points = 2 }, // cách xa >20% điểm cao nhất
             };
             var repo = CreateRepoMock(syndromes, mappings);
-            var sut = new DiagnosisService(repo.Object);
+            var sut = CreateService(repo);
 
             var request = new DiagnosisClassifyRequestDTO
             {
@@ -92,7 +102,7 @@ namespace TMPMS.Tests
                 new() { AnswerOptionId = 2, SyndromeTypeId = 2, Points = 9 },
             };
             var repo = CreateRepoMock(syndromes, mappings);
-            var sut = new DiagnosisService(repo.Object);
+            var sut = CreateService(repo);
 
             var request = new DiagnosisClassifyRequestDTO
             {
@@ -116,7 +126,7 @@ namespace TMPMS.Tests
             var syndromes = new List<SyndromeType> { new() { Id = 1, Code = "A", Name = "A", Description = "d", RecommendationText = "r" } };
             var mappings = new List<AnswerScoreMapping> { new() { AnswerOptionId = 1, SyndromeTypeId = 1, Points = 10 } };
             var repo = CreateRepoMock(syndromes, mappings);
-            var sut = new DiagnosisService(repo.Object);
+            var sut = CreateService(repo);
 
             var request = new DiagnosisClassifyRequestDTO
             {
@@ -135,7 +145,7 @@ namespace TMPMS.Tests
             var mappings = new List<AnswerScoreMapping> { new() { AnswerOptionId = 1, SyndromeTypeId = 1, Points = 10 } };
             var repo = CreateRepoMock(syndromes, mappings);
             repo.Setup(r => r.Create(It.IsAny<Diagnosis>())).ReturnsAsync((Diagnosis d) => d);
-            var sut = new DiagnosisService(repo.Object);
+            var sut = CreateService(repo);
 
             var request = new DiagnosisClassifyRequestDTO
             {
