@@ -683,6 +683,12 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
             await using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             await _context.AppointmentSlotHolds.Where(h => !h.IsConsumed && h.ExpiresAt <= DateTime.UtcNow)
                 .ExecuteUpdateAsync(s => s.SetProperty(h => h.IsConsumed, true));
+            // Mirror AppointmentController.HoldSlot: giải phóng hold cũ của khách chưa vào luồng
+            // thanh toán, tránh khung giờ trước đó bị kẹt "đang giữ" khi khách đổi ý chọn giờ khác.
+            await _context.AppointmentSlotHolds
+                .Where(h => h.UserId == userId && !h.IsConsumed && h.ExpiresAt > DateTime.UtcNow
+                    && !_context.AppointmentPaymentIntents.Any(pi => pi.SlotHoldId == h.Id))
+                .ExecuteUpdateAsync(s => s.SetProperty(h => h.IsConsumed, true));
             var unavailable = await _context.Appointments.AnyAsync(a => a.Location == location && a.AppointmentDate == appointmentDate
                     && new[] { "PendingConfirmation", "Confirmed", "CheckedIn", "AlternativeProposed" }.Contains(a.Status))
                 || await _context.AppointmentSlotHolds.AnyAsync(h => h.Location == location && h.AppointmentDate == appointmentDate && !h.IsConsumed && h.ExpiresAt > DateTime.UtcNow);

@@ -35,16 +35,18 @@ namespace TMPMS.Services
 
             try
             {
-                const string prompt = @"Bạn là trợ lý của một nhà thuốc, có nhiệm vụ đọc ảnh toa thuốc giấy do bệnh nhân chụp gửi lên.
+                const string prompt = @"Bạn là trợ lý của một nhà thuốc, có nhiệm vụ đọc ảnh do khách hàng chụp gửi lên để nhờ Dược sĩ tư vấn/kê đơn. Ảnh có thể thuộc MỘT TRONG HAI loại sau, hãy tự nhận diện:
+1. Toa thuốc giấy: có chữ ký/dấu bác sĩ, tên bệnh nhân, chẩn đoán, danh sách thuốc kèm liều dùng.
+2. Ảnh chụp trực tiếp hộp/vỉ/lọ/bao bì thuốc (không kèm toa giấy) — khách hàng chỉ muốn mua đúng (các) loại thuốc có trong ảnh.
 Hãy đọc thông tin trong ảnh và trả về CHỈ một JSON theo đúng schema sau, không thêm giải thích, không thêm markdown:
 {
-  ""patientName"": ""Họ tên bệnh nhân ghi trên toa, hoặc null nếu không đọc được"",
-  ""doctorName"": ""Tên bác sĩ kê đơn (kèm chức danh nếu có), hoặc null"",
-  ""hospital"": ""Tên bệnh viện/phòng khám nơi kê đơn, hoặc null"",
-  ""diagnosis"": ""Chẩn đoán ghi trên toa (ví dụ: Viêm họng cấp), hoặc null"",
-  ""medications"": [""Tên thuốc và liều dùng dạng chuỗi văn bản, ví dụ: 'ACEMUC 100mg gói - sáng 1 gói - chiều 1 gói - 06 gói'""]
+  ""patientName"": ""Họ tên bệnh nhân ghi trên toa, hoặc null nếu ảnh không phải toa giấy hoặc không đọc được"",
+  ""doctorName"": ""Tên bác sĩ kê đơn (kèm chức danh nếu có), hoặc null nếu ảnh không phải toa giấy hoặc không đọc được"",
+  ""hospital"": ""Tên bệnh viện/phòng khám nơi kê đơn, hoặc null nếu ảnh không phải toa giấy hoặc không đọc được"",
+  ""diagnosis"": ""Chẩn đoán ghi trên toa (ví dụ: Viêm họng cấp), hoặc null nếu ảnh không phải toa giấy hoặc không đọc được"",
+  ""medications"": [""Nếu là toa giấy: tên thuốc kèm liều dùng dạng chuỗi văn bản, ví dụ 'ACEMUC 100mg gói - sáng 1 gói - chiều 1 gói - 06 gói'. Nếu là ảnh hộp/vỉ/lọ thuốc: chỉ cần đúng tên thuốc in trên bao bì, ví dụ 'Enterogermina'.""]
 }
-Nếu ảnh không phải toa thuốc hoặc không đọc được, trả về medications là mảng rỗng.";
+Chỉ trả về medications là mảng rỗng khi ảnh hoàn toàn không đọc được chữ hoặc không liên quan gì đến thuốc/toa thuốc.";
 
                 var base64 = Convert.ToBase64String(imageBytes);
                 var payload = new

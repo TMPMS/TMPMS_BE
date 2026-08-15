@@ -75,6 +75,15 @@ namespace TMPMS.Controllers
             var place = string.IsNullOrWhiteSpace(dto.Location) ? "Nhà thuốc TMPMS" : dto.Location.Trim();
             await _context.AppointmentSlotHolds.Where(h => !h.IsConsumed && h.ExpiresAt <= DateTime.UtcNow)
                 .ExecuteUpdateAsync(s => s.SetProperty(h => h.IsConsumed, true));
+            // Giải phóng các khung giờ khách đã giữ trước đó nhưng chưa thanh toán/checkout — nếu
+            // không, khi khách đổi ý chọn giờ khác, khung giờ cũ vẫn bị coi là "đang giữ" tới hết 15
+            // phút dù không còn ai chọn nó nữa, khiến khách quay lại không chọn được giờ cũ đó. Chỉ
+            // giải phóng hold chưa gắn AppointmentPaymentIntent nào — hold đã vào luồng thanh toán thì
+            // giữ nguyên để không phá vé đang chờ thanh toán ở tab/phiên khác.
+            await _context.AppointmentSlotHolds
+                .Where(h => h.UserId == userId && !h.IsConsumed && h.ExpiresAt > DateTime.UtcNow
+                    && !_context.AppointmentPaymentIntents.Any(pi => pi.SlotHoldId == h.Id))
+                .ExecuteUpdateAsync(s => s.SetProperty(h => h.IsConsumed, true));
             var unavailable = await _context.Appointments.AnyAsync(a => a.Location == place && a.AppointmentDate == dto.AppointmentDate
                 && new[] { "PendingConfirmation", "Confirmed", "CheckedIn", "AlternativeProposed" }.Contains(a.Status))
                 || await _context.AppointmentSlotHolds.AnyAsync(h => h.Location == place && h.AppointmentDate == dto.AppointmentDate && !h.IsConsumed && h.ExpiresAt > DateTime.UtcNow);

@@ -98,7 +98,10 @@ namespace TMPMS.Controllers
                         }
                     }
                 }
-                for (int c = 0; c < headers.Length; c++) sheet.AutoSizeColumn(c);
+                // Không gọi sheet.AutoSizeColumn() ở đây: NPOI đo font qua GDI/SixLabors và cần font
+                // hệ thống — container Linux (mcr.microsoft.com/dotnet/aspnet:8.0) không cài font nào,
+                // nên AutoSizeColumn ném exception và làm cả request 500 dù dữ liệu vẫn hợp lệ.
+                for (int c = 0; c < headers.Length; c++) sheet.SetColumnWidth(c, 20 * 256);
             }
 
             WriteSheet("Doanh thu", new[] { "Kỳ", "Doanh thu bán hàng", "Doanh thu đặt cọc khám", "Tổng doanh thu", "Số đơn hàng" },
