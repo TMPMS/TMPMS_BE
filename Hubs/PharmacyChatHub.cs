@@ -47,30 +47,37 @@ namespace TMPMS.Hubs
                     {
                         await Groups.AddToGroupAsync(Context.ConnectionId, "pharmacy-dashboard");
                     }
-                    else
-                    {
-                        var session = await _context.PharmacyChatSessions
-                            .FirstOrDefaultAsync(s => s.UserId == userId && s.Status != "Closed");
-
-                        if (session == null)
-                        {
-                            session = new PharmacyChatSession
-                            {
-                                UserId = userId,
-                                Status = "Open",
-                                CreatedAt = DateTime.Now,
-                                LastMessageAt = DateTime.Now
-                            };
-                            _context.PharmacyChatSessions.Add(session);
-                            await _context.SaveChangesAsync();
-                        }
-
-                        await Groups.AddToGroupAsync(Context.ConnectionId, session.Id.ToString());
-                    }
+                    // Người dùng thường không còn tự tạo/tìm session ở đây nữa — trước đây vừa có
+                    // REST GetMySession vừa có OnConnectedAsync cùng tự tìm-hoặc-tạo session độc lập,
+                    // hai request này chạy song song (không đợi nhau) nên có thể race và tạo ra 2
+                    // session "Open" khác nhau cho cùng 1 user. Khi đó widget gửi tin theo session id
+                    // lấy từ REST, nhưng connection SignalR lại join vào group của session kia (do
+                    // OnConnectedAsync tạo ra) -> tin nhắn bị gửi vào group mà chính người gửi không
+                    // ở trong đó, nên không thấy tin nhắn của mình dội lại. Giờ client phải gọi
+                    // JoinSession(sessionId) tường minh với id lấy từ REST sau khi đã có, đảm bảo luôn
+                    // join đúng group của session thật sự đang dùng.
                 }
             }
 
             await base.OnConnectedAsync();
+        }
+
+        public async Task JoinSession(int sessionId)
+        {
+            var userIdStr = GetUserIdStr();
+            if (!int.TryParse(userIdStr, out int userId)) return;
+
+            var user = await _userManager.FindByIdAsync(userIdStr);
+            if (user == null) return;
+
+            var session = await _context.PharmacyChatSessions.FindAsync(sessionId);
+            if (session == null) return;
+
+            bool isPharmacyOrAdmin = await _userManager.IsInRoleAsync(user, "Pharmacy") ||
+                                     await _userManager.IsInRoleAsync(user, "Admin");
+            if (!isPharmacyOrAdmin && session.UserId != userId) return;
+
+            await Groups.AddToGroupAsync(Context.ConnectionId, sessionId.ToString());
         }
 
         public async Task SendMessage(int sessionId, string content)

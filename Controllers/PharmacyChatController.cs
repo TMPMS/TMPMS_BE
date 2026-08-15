@@ -147,6 +147,18 @@ namespace TMPMS.Controllers
                 return Forbid();
             }
 
+            if (isPharmacyOrAdmin)
+            {
+                var unreadMessages = await _context.PharmacyChatMessages
+                    .Where(m => m.SessionId == id && !m.IsRead && m.SenderRole == "User")
+                    .ToListAsync();
+                if (unreadMessages.Count > 0)
+                {
+                    foreach (var m in unreadMessages) m.IsRead = true;
+                    await _context.SaveChangesAsync();
+                }
+            }
+
             var messages = await _context.PharmacyChatMessages
                 .Include(m => m.Sender)
                 .Where(m => m.SessionId == id)
