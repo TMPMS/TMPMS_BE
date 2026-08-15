@@ -25,6 +25,17 @@ namespace TMPMS.Controllers
             return Ok(questions);
         }
 
+        // Câu hỏi tự chẩn đoán thích ứng: trả về câu hỏi tiếp theo có khả năng phân biệt tốt nhất
+        // giữa các thể bệnh đang dẫn đầu dựa trên câu trả lời đã có, hoặc Done=true nếu đã đủ rõ ràng
+        // để dừng sớm/hết câu hỏi.
+        [HttpPost("next-question")]
+        [AllowAnonymous]
+        public async Task<ActionResult> NextQuestion([FromBody] NextQuestionRequestDTO dto)
+        {
+            var result = await _service.GetNextQuestionAsync(dto.Answers);
+            return Ok(result);
+        }
+
         [HttpPost("classify")]
         [AllowAnonymous]
         public async Task<ActionResult> Classify([FromBody] DiagnosisClassifyRequestDTO dto)

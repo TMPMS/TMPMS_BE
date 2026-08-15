@@ -73,6 +73,7 @@ builder.Services.AddScoped<ICartItemService, CartItemService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IPrescriptionOcrService, PrescriptionOcrService>();
 builder.Services.AddScoped<IMedicineImageSearchService, MedicineImageSearchService>();
+builder.Services.AddScoped<ITongueAnalysisService, TongueAnalysisService>();
 builder.Services.AddHttpClient();
 
 builder.Services.AddMemoryCache();

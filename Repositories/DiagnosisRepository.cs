@@ -118,5 +118,19 @@ namespace TMPMS.Repositories
         {
             return await _context.AnswerScoreMappings.ToListAsync();
         }
+
+        // Ứng viên gợi ý thuốc theo thể bệnh: chỉ lấy dược liệu Đông y đang bán, có sẵn thông tin
+        // Tính vị/Công dụng để AI (hoặc fallback từ khóa) có dữ liệu thật để so khớp. Medicine không
+        // có navigation property ngược tới HerbalMedicineInfo (quan hệ 1-1 chỉ khai 1 chiều trong
+        // TMPMSDbContext), nên truy vấn từ phía HerbalMedicineInfos rồi Include Medicine.
+        public async Task<List<HerbalMedicineInfo>> GetHerbalCandidatesAsync(int take)
+        {
+            return await _context.HerbalMedicineInfos
+                .Include(h => h.Medicine)
+                .Where(h => h.Medicine != null && h.Medicine.IsActive)
+                .OrderBy(h => h.MedicineId)
+                .Take(take)
+                .ToListAsync();
+        }
     }
 }
