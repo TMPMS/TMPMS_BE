@@ -86,6 +86,9 @@ namespace TMPMS.Controllers
 
                     var medicinesContext = string.Join("\n", medicines.Select(m => $"- ID: {m.Id}, Tên: {m.Name}, Mô tả: {m.Description}"));
 
+                    // 1b. Fetch REAL available appointment slots from DB (3 ngày tới) để AI không tự bịa giờ trống.
+                    var slotsContext = await BuildAvailableSlotsContextAsync();
+
                     // 2. Build structured prompt with Intent Classification & Multi-turn memory
                     var nowLocal = DateTime.Now;
                     string systemPrompt = $@"Bạn là trợ lý AI thông minh của hệ thống nhà thuốc/phòng khám y học cổ truyền TMPMS.
@@ -100,14 +103,19 @@ Thời điểm hiện tại (giờ Việt Nam, dùng để quy đổi ""hôm nay
 Danh sách sản phẩm hiện có trong kho thuốc:
 {medicinesContext}
 
+Khung giờ khám THỰC TẾ còn trống (dữ liệu truy vấn trực tiếp từ hệ thống đặt lịch, tính đến thời điểm hiện tại — đây là nguồn DUY NHẤT bạn được phép dùng khi nhắc tới giờ trống):
+{slotsContext}
+
+QUY TẮC VỀ GIỜ TRỐNG: khi khách hỏi còn giờ nào trống hoặc bạn cần gợi ý giờ khám cụ thể, CHỈ được liệt kê những giờ có trong danh sách ""Khung giờ khám THỰC TẾ còn trống"" ở trên. TUYỆT ĐỐI KHÔNG được tự bịa/đoán ra bất kỳ khung giờ nào không có trong danh sách đó. Nếu danh sách trống hoặc không đủ dữ liệu, hãy nói thật là chưa xác định được giờ trống và hướng dẫn khách bấm nút đặt lịch để xem đầy đủ, không được tự nghĩ ra giờ.
+
 Quy tắc phân loại ý định (intent):
 1. ""SYMPTOM_CONSULT"": Khách hàng mô tả triệu chứng bệnh, xin tư vấn về thuốc/sức khỏe hoặc hỏi câu follow-up đề xuất thuốc dựa trên triệu chứng đã nói ở các tin nhắn trước.
    - reply: Lời khuyên tư vấn ngắn gọn (2-3 câu), giải thích lý do đề xuất thuốc liên quan đến triệu chứng.
    - recommendedMedicineId: ID sản phẩm phù hợp nhất từ danh sách trên (hoặc null nếu không có).
    - suggestedAction: {{ ""type"": ""none"", ""label"": """" }}
 
-2. ""APPOINTMENT"": Khách hàng muốn đặt lịch khám bệnh, hẹn gặp bác sĩ/dược sĩ hoặc chọn giờ tư vấn.
-   - reply: Xóa tan lo lắng, hướng dẫn khách bấm nút để chọn giờ khám.
+2. ""APPOINTMENT"": Khách hàng muốn đặt lịch khám bệnh, hẹn gặp bác sĩ/dược sĩ hoặc chọn giờ tư vấn, nhưng CHƯA nêu rõ một thời điểm cụ thể (nếu đã nêu rõ ngày+giờ thì dùng intent ""BOOK_APPOINTMENT_NOW"" bên dưới).
+   - reply: Xóa tan lo lắng, gợi ý một vài khung giờ trống LẤY ĐÚNG TỪ danh sách ""Khung giờ khám THỰC TẾ còn trống"" ở trên (ví dụ 2-4 khung giờ gần nhất), rồi hướng dẫn khách bấm nút bên dưới nếu muốn xem đầy đủ hoặc chọn giờ khác. TUYỆT ĐỐI KHÔNG được nêu bất kỳ giờ nào không có trong danh sách đó — nếu danh sách rỗng thì chỉ hướng dẫn khách bấm nút, không đoán giờ.
    - recommendedMedicineId: null
    - suggestedAction: {{ ""type"": ""navigate_to_booking"", ""label"": ""📅 Đặt lịch khám ngay"" }}
 
@@ -615,6 +623,42 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
                 product = recommendedProductFallback,
                 suggestedAction = new { type = "none", label = "" }
             });
+        }
+
+        // Truy vấn khung giờ trống THẬT từ DB cho 3 ngày tới, để nhồi vào prompt cho AI — cố ý mirror
+        // logic của AppointmentController.GetAvailability, thay vì để AI tự đoán/bịa giờ trống.
+        private async Task<string> BuildAvailableSlotsContextAsync()
+        {
+            const string location = "Nhà thuốc TMPMS";
+            var now = DateTime.Now;
+            var today = now.Date;
+            var rangeStart = today;
+            var rangeEnd = today.AddDays(3); // exclusive — hôm nay + 2 ngày tới
+
+            var occupied = new HashSet<DateTime>(await _context.Appointments
+                .Where(a => a.Location == location && a.AppointmentDate >= rangeStart && a.AppointmentDate < rangeEnd
+                    && new[] { "PendingConfirmation", "Confirmed", "CheckedIn", "AlternativeProposed" }.Contains(a.Status))
+                .Select(a => a.AppointmentDate).ToListAsync());
+            var held = new HashSet<DateTime>(await _context.AppointmentSlotHolds
+                .Where(h => h.Location == location && !h.IsConsumed && h.ExpiresAt > DateTime.UtcNow
+                    && h.AppointmentDate >= rangeStart && h.AppointmentDate < rangeEnd)
+                .Select(h => h.AppointmentDate).ToListAsync());
+
+            var lines = new List<string>();
+            for (var day = rangeStart; day < rangeEnd; day = day.AddDays(1))
+            {
+                var freeSlots = new List<string>();
+                for (var time = day.AddHours(8); time <= day.AddHours(17.5); time = time.AddMinutes(30))
+                {
+                    if (time > now && !occupied.Contains(time) && !held.Contains(time))
+                        freeSlots.Add(time.ToString("HH:mm"));
+                }
+                var dayLabel = day == today ? "Hôm nay" : day == today.AddDays(1) ? "Ngày mai" : day.ToString("dddd", new System.Globalization.CultureInfo("vi-VN"));
+                lines.Add(freeSlots.Count > 0
+                    ? $"- {dayLabel} ({day:dd/MM}): {string.Join(", ", freeSlots)}"
+                    : $"- {dayLabel} ({day:dd/MM}): hết chỗ");
+            }
+            return string.Join("\n", lines);
         }
 
         // Giữ 1 khung giờ khám cho trợ lý AI — cố ý mirror logic của AppointmentController.HoldSlot
