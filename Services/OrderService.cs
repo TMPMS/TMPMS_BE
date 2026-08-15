@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using BusinessObjects;
 using Microsoft.EntityFrameworkCore;
@@ -153,12 +154,16 @@ namespace TMPMS.Services
                     PaidAt = null
                 });
 
-                // 5. Clear cart items
+                // 5. Xoá khỏi giỏ hàng CHỈ những dòng vừa đặt — khách có thể chỉ tick chọn một phần
+                // giỏ hàng để mua (FE gửi lên đúng request.Items), phần chưa chọn phải còn nguyên
+                // trong giỏ để mua sau, không bị xoá sạch toàn bộ giỏ như trước.
+                var orderedMedicineIds = request.Items.Select(i => i.MedicineId).ToHashSet();
                 var cart = await _repo.GetCartByUserIdAsync(request.UserId);
                 if (cart != null)
                 {
                     var cartItems = await _repo.GetCartItemsByCartIdAsync(cart.Id);
-                    _repo.RemoveCartItems(cartItems);
+                    var itemsToRemove = cartItems.Where(ci => orderedMedicineIds.Contains(ci.MedicineId)).ToList();
+                    _repo.RemoveCartItems(itemsToRemove);
                 }
 
                 await _repo.SaveChangesAsync();

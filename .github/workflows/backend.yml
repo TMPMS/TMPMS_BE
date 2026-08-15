@@ -36,6 +36,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
+            set -e
             cd /home/deploy/deploy
             docker compose pull api
             docker compose up -d api
