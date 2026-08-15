@@ -249,17 +249,28 @@ namespace TMPMS.Services
             return result;
         }
 
-        // Khớp gần đúng: chuẩn hóa chữ thường rồi tìm tên thuốc trong danh mục xuất hiện trong dòng
-        // chữ AI đọc được. Ưu tiên tên khớp dài nhất để giảm khớp nhầm do trùng từ ngắn (vd "B1").
+        // Khớp gần đúng: chuẩn hóa chữ thường rồi so khớp hai chiều giữa tên thuốc trong danh mục và
+        // dòng chữ AI đọc được. Trước đây chỉ kiểm tra tên danh mục có nằm trong dòng AI hay không —
+        // nhưng tên danh mục thường dài, kèm thương hiệu/quy cách đóng gói (vd "Men vi sinh
+        // Enterogermina (Hộp 20 gói)"), trong khi AI đọc từ toa giấy hoặc ảnh hộp thuốc thường chỉ ra
+        // tên ngắn gọn (vd "Enterogermina") — nên vế kiểm tra một chiều gần như luôn thất bại. Giờ bỏ
+        // phần quy cách đóng gói trong ngoặc trước khi so, đồng thời so khớp cả hai chiều.
+        // Ưu tiên tên khớp dài nhất để giảm khớp nhầm do trùng từ ngắn (vd "B1").
         private static (int Id, string Name)? MatchMedicine(string line, IEnumerable<(int Id, string Name)> catalog)
         {
             var normalizedLine = Normalize(line);
             var best = catalog
-                .Select(m => new { m.Id, m.Name, Norm = Normalize(m.Name) })
-                .Where(m => m.Norm.Length >= 3 && normalizedLine.Contains(m.Norm))
+                .Select(m => new { m.Id, m.Name, Norm = Normalize(StripPackagingInfo(m.Name)) })
+                .Where(m => m.Norm.Length >= 3 && normalizedLine.Length >= 3 && (normalizedLine.Contains(m.Norm) || m.Norm.Contains(normalizedLine)))
                 .OrderByDescending(m => m.Norm.Length)
                 .FirstOrDefault();
             return best == null ? null : (best.Id, best.Name);
+        }
+
+        private static string StripPackagingInfo(string name)
+        {
+            var idx = name.IndexOf('(');
+            return idx > 0 ? name.Substring(0, idx).Trim() : name;
         }
 
         private static string Normalize(string? s) => (s ?? "").ToLowerInvariant().Trim();
