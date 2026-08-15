@@ -79,6 +79,14 @@ namespace TMPMS.Controllers
                     dto.UserId = GetCurrentUserId();
                     dto.PatientId = null;
                 }
+                // Chặn trường hợp tài khoản nhân viên (Pharmacy/Admin/Staff) tự gửi toa cho chính họ
+                // qua widget "Gửi toa thuốc" dành cho khách hàng — CanProxy() cho phép nhân viên chọn
+                // UserId bất kỳ để kê đơn hộ khách thật, nhưng nếu UserId trùng chính tài khoản đang
+                // gọi API thì đây không phải kê hộ khách mà là nhân viên tự gửi toa rác vào hàng chờ.
+                else if (dto.UserId == GetCurrentUserId())
+                {
+                    return BadRequest(new { message = "Tài khoản nhân viên không thể tự gửi toa thuốc như khách hàng. Vui lòng dùng chức năng Kê đơn thuốc trong Trang quản trị." });
+                }
                 var result = await _service.Create(dto);
                 await this.LogAuditAsync(_auditLogService, "Prescription", "Create", result.Id.ToString(), $"Tạo đơn thuốc #{result.Id} cho user #{dto.UserId}");
                 return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
