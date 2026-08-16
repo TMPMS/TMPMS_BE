@@ -145,6 +145,25 @@ var authBuilder = builder.Services.AddAuthentication(options =>
                 }
             }
             return Task.CompletedTask;
+        },
+        // Access token còn hạn (tới 30 phút) vẫn được JWT middleware chấp nhận thuần theo chữ ký/thời
+        // hạn — nếu không check lại đây, admin khóa tài khoản sẽ không có tác dụng ngay với phiên đang
+        // đăng nhập sẵn. Query DB 1 lần mỗi request để đảm bảo khóa có hiệu lực gần như tức thời.
+        OnTokenValidated = async context =>
+        {
+            var userId = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                context.Fail("Invalid token.");
+                return;
+            }
+
+            var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<User>>();
+            var user = await userManager.FindByIdAsync(userId);
+            if (user == null || !user.IsActive)
+            {
+                context.Fail("Tài khoản đã bị khóa hoặc không còn tồn tại.");
+            }
         }
     };
 });
