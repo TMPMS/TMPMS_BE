@@ -10,6 +10,7 @@ namespace TMPMS.Repositories.Interfaces
         Task<UserDetailDto?> GetUserByIdAsync(int id);
         Task<bool> UpdateUserAsync(int id, UpdateUserDto dto);
         Task<bool> DeleteUserAsync(int id);
+        Task<bool> ForceDeleteUserAsync(int id);
         Task<bool> AssignRoleAsync(AssignRoleDto dto);
         Task<bool> LockUserAsync(int id);
 

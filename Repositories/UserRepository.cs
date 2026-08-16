@@ -126,6 +126,27 @@ namespace TMPMS.Repositories
             return true;
         }
 
+        // Không xóa cứng được vì có đơn thuốc/hồ sơ liên quan (ràng buộc Restrict để giữ hồ sơ y tế) —
+        // ẩn danh hóa thông tin cá nhân + khóa vĩnh viễn thay vì xóa, để không phá vỡ dữ liệu y tế đã lưu.
+        public async Task<bool> ForceDeleteUserAsync(int id)
+        {
+            var user = await _userManager.FindByIdAsync(id.ToString());
+
+            if (user == null)
+                return false;
+
+            await _userManager.SetUserNameAsync(user, $"deleted_user_{id}");
+            await _userManager.SetEmailAsync(user, $"deleted_{id}@deleted.local");
+            user.PhoneNumber = null;
+            user.IsActive = false;
+            user.LockoutEnabled = true;
+            user.LockoutEnd = DateTimeOffset.MaxValue;
+
+            var result = await _userManager.UpdateAsync(user);
+
+            return result.Succeeded;
+        }
+
         public async Task<bool> AssignRoleAsync(AssignRoleDto dto)
         {
             var user = await _userManager.FindByIdAsync(dto.UserId.ToString());

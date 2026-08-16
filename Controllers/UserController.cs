@@ -150,6 +150,49 @@ namespace TMPMS.Controllers
                     message = "Delete user successfully."
                 });
             }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new
+                {
+                    message = ex.Message,
+                    code = "HAS_RELATED_DATA"
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    message = ex.Message
+                });
+            }
+        }
+
+        // DELETE: api/users/force-delete/1
+        // Dùng khi xóa cứng bị chặn vì tài khoản còn đơn thuốc/hồ sơ liên quan (Restrict FK để giữ hồ
+        // sơ y tế) — ẩn danh hóa thông tin cá nhân + khóa vĩnh viễn thay vì xóa cứng.
+        [HttpDelete("force-delete/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> ForceDeleteUser(int id)
+        {
+            try
+            {
+                var result = await _userService.ForceDeleteUserAsync(id);
+
+                if (!result)
+                {
+                    return NotFound(new
+                    {
+                        message = "User not found."
+                    });
+                }
+
+                await this.LogAuditAsync(_auditLogService, "User", "ForceDelete", id.ToString(), $"Ẩn danh hóa và khóa vĩnh viễn user #{id}");
+
+                return Ok(new
+                {
+                    message = "Đã ẩn danh hóa và khóa vĩnh viễn tài khoản. Dữ liệu y tế liên quan (đơn thuốc, hồ sơ...) được giữ nguyên."
+                });
+            }
             catch (Exception ex)
             {
                 return BadRequest(new
