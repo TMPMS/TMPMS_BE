@@ -186,6 +186,7 @@ namespace TMPMS.DTOs
         public DateTime? EndTime { get; set; }
         public int? QuantityLimit { get; set; }
         public int QuantitySold { get; set; }
+        public int StockQuantity { get; set; }
         // Scheduled / Running
         public string Status { get; set; }
     }

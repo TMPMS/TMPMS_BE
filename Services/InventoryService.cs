@@ -589,6 +589,7 @@ namespace TMPMS.Services
                     EndTime = f.EndTime,
                     QuantityLimit = f.QuantityLimit,
                     QuantitySold = f.QuantitySold,
+                    StockQuantity = f.Medicine.StockQuantity,
                     Status = FlashSaleStatus(f)
                 })
                 .OrderBy(f => f.Status == "Scheduled" ? 1 : 0)
