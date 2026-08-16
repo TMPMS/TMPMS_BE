@@ -114,7 +114,14 @@ namespace TMPMS.Repositories
 
             _context.Users.Remove(user);
 
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                throw new InvalidOperationException("Không thể xóa tài khoản này vì đang có dữ liệu liên quan (đơn thuốc, hồ sơ...). Hãy khóa tài khoản thay vì xóa.");
+            }
 
             return true;
         }
@@ -157,6 +164,7 @@ namespace TMPMS.Repositories
 
             user.LockoutEnabled = true;
             user.LockoutEnd = DateTimeOffset.MaxValue;
+            user.IsActive = false;
 
             var result = await _userManager.UpdateAsync(user);
 
@@ -172,6 +180,7 @@ namespace TMPMS.Repositories
 
             user.LockoutEnd = null;
             user.LockoutEnabled = false;
+            user.IsActive = true;
 
             var result = await _userManager.UpdateAsync(user);
 
