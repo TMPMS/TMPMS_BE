@@ -84,6 +84,11 @@ namespace TMPMS.Services
             return await _userRepository.DeleteUserAsync(id);
         }
 
+        public async Task<bool> ForceDeleteUserAsync(int id)
+        {
+            return await _userRepository.ForceDeleteUserAsync(id);
+        }
+
         public async Task<bool> AssignRoleAsync(AssignRoleDto dto)
         {
             return await _userRepository.AssignRoleAsync(dto);
