@@ -17,6 +17,7 @@ namespace TMPMS.Services
         private readonly IInventoryService _inventoryService;
         private readonly IShippingFeeService _shippingFeeService;
         private readonly ILoyaltyService _loyaltyService;
+        private readonly IEmailService _emailService;
         private readonly TMPMS.Data.TMPMSDbContext _context; // dùng cho VoucherResolver (helper dùng chung với VouchersController)
 
         public OrderService(
@@ -24,12 +25,14 @@ namespace TMPMS.Services
             IInventoryService inventoryService,
             IShippingFeeService shippingFeeService,
             ILoyaltyService loyaltyService,
+            IEmailService emailService,
             TMPMS.Data.TMPMSDbContext context)
         {
             _repo = repo;
             _inventoryService = inventoryService;
             _shippingFeeService = shippingFeeService;
             _loyaltyService = loyaltyService;
+            _emailService = emailService;
             _context = context;
         }
 
@@ -169,6 +172,8 @@ namespace TMPMS.Services
                 await _repo.SaveChangesAsync();
                 await transaction.CommitAsync();
 
+                await SendOrderConfirmationEmailAsync(order, request, medicinesById, subtotal, serverShippingFee, productDiscount, shippingDiscount, finalAmount);
+
                 return new OrderActionResult { Success = true, Order = order };
             }
             catch (DbUpdateConcurrencyException)
@@ -181,6 +186,42 @@ namespace TMPMS.Services
                 await transaction.RollbackAsync();
                 return Error(OrderErrorType.ServerError, ex.Message);
             }
+        }
+
+        private async Task SendOrderConfirmationEmailAsync(Order order, CheckoutRequestDto request, Dictionary<int, Medicine> medicinesById,
+            decimal subtotal, decimal shippingFee, decimal productDiscount, decimal shippingDiscount, decimal finalAmount)
+        {
+            var user = await _context.Users.FindAsync(request.UserId);
+            if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
+
+            var itemsHtml = string.Join("", request.Items.Select(item =>
+            {
+                var medicine = medicinesById[item.MedicineId];
+                return "<tr>" +
+                    $"<td style=\"padding:4px 8px;\">{System.Net.WebUtility.HtmlEncode(medicine.Name)}</td>" +
+                    $"<td style=\"padding:4px 8px;text-align:center;\">x{item.Quantity}</td>" +
+                    $"<td style=\"padding:4px 8px;text-align:right;\">{(medicine.Price!.Value * item.Quantity):N0}đ</td>" +
+                    "</tr>";
+            }));
+
+            var discountsHtml =
+                (productDiscount > 0 ? $"Giảm giá sản phẩm: -{productDiscount:N0}đ<br/>" : "") +
+                (shippingDiscount > 0 ? $"Giảm giá vận chuyển: -{shippingDiscount:N0}đ<br/>" : "");
+
+            await _emailService.SendEmailAsync(
+                user.Email,
+                $"Đã xác nhận đơn hàng #{order.Id} - TMPMS",
+                $"<p>Xin chào {System.Net.WebUtility.HtmlEncode(user.FullName ?? user.UserName)},</p>" +
+                $"<p>Đơn hàng <b>#{order.Id}</b> của bạn đã được xác nhận và đang chờ xử lý.</p>" +
+                $"<table style=\"border-collapse:collapse;width:100%;\">{itemsHtml}</table>" +
+                "<p>" +
+                $"Tạm tính: {subtotal:N0}đ<br/>" +
+                $"Phí vận chuyển: {shippingFee:N0}đ<br/>" +
+                discountsHtml +
+                $"<b>Tổng cộng: {finalAmount:N0}đ</b>" +
+                "</p>" +
+                $"<p>Địa chỉ giao hàng: {System.Net.WebUtility.HtmlEncode(order.ShippingAddress)}</p>" +
+                "<p>Chúng tôi sẽ gửi thông báo ngay khi đơn hàng được giao.</p>");
         }
 
         public Task<List<OrderSummaryDto>> GetUserOrdersAsync(int userId) => _repo.GetUserOrdersAsync(userId);

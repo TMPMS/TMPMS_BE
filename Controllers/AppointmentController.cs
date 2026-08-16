@@ -12,6 +12,7 @@ using PayOS.Models.V2.PaymentRequests;
 using TMPMS.DTOs;
 using TMPMS.Services.Interfaces;
 using TMPMS.Utils;
+using Services.Interfaces;
 
 namespace TMPMS.Controllers
 {
@@ -26,9 +27,10 @@ namespace TMPMS.Controllers
         private readonly IConfiguration _configuration;
         private readonly ILogger<AppointmentController> _logger;
         private readonly IAuditLogService _auditLogService;
+        private readonly IEmailService _emailService;
         private const decimal DefaultDeposit = 100000m;
 
-        public AppointmentController(IAppointmentService appointmentService, TMPMSDbContext context, IWebHostEnvironment environment, IConfiguration configuration, ILogger<AppointmentController> logger, IAuditLogService auditLogService)
+        public AppointmentController(IAppointmentService appointmentService, TMPMSDbContext context, IWebHostEnvironment environment, IConfiguration configuration, ILogger<AppointmentController> logger, IAuditLogService auditLogService, IEmailService emailService)
         {
             _appointmentService = appointmentService;
             _context = context;
@@ -36,6 +38,7 @@ namespace TMPMS.Controllers
             _configuration = configuration;
             _logger = logger;
             _auditLogService = auditLogService;
+            _emailService = emailService;
         }
 
         [HttpGet("availability")]
@@ -267,7 +270,7 @@ namespace TMPMS.Controllers
         [Authorize]
         public async Task<IActionResult> CancelWithRefund(int id)
         {
-            var appt = await _context.Appointments.Include(a => a.AppointmentPayments).FirstOrDefaultAsync(a => a.Id == id);
+            var appt = await _context.Appointments.Include(a => a.AppointmentPayments).Include(a => a.User).FirstOrDefaultAsync(a => a.Id == id);
             if (appt == null) return NotFound();
             if (!CanProxy() && appt.UserId != GetCurrentUserId()) return Forbid();
             if (!new[] { "PendingConfirmation", "Confirmed", "AlternativeProposed", "RescheduleRequested" }.Contains(appt.Status))
@@ -280,6 +283,18 @@ namespace TMPMS.Controllers
             if (payment != null) { payment.RefundAmount = appt.RefundAmount; payment.RefundStatus = appt.RefundAmount > 0 ? "ContactCustomerForManualRefund" : "NonRefundable"; }
             await _context.SaveChangesAsync();
             await this.LogAuditAsync(_auditLogService, "Appointment", "CancelWithRefund", id.ToString(), $"Hủy lịch hẹn #{id} — hoàn {percent}% cọc ({appt.RefundAmount:N0}đ)");
+            if (!string.IsNullOrWhiteSpace(appt.User?.Email))
+            {
+                await _emailService.SendEmailAsync(
+                    appt.User.Email,
+                    "Lịch hẹn đã được hủy - TMPMS",
+                    $"<p>Xin chào {System.Net.WebUtility.HtmlEncode(appt.User.FullName ?? appt.User.UserName)},</p>" +
+                    $"<p>Lịch hẹn khám vào lúc <b>{appt.AppointmentDate:HH:mm dd/MM/yyyy}</b> của bạn đã được <b>hủy</b> thành công.</p>" +
+                    (appt.RefundAmount > 0
+                        ? $"<p>Số tiền cọc được hoàn: <b>{appt.RefundAmount:N0}đ</b> ({percent}%). Chúng tôi sẽ liên hệ để hoàn tiền.</p>"
+                        : "<p>Lịch hẹn này không được hoàn cọc theo chính sách hủy lịch.</p>") +
+                    "<p>Nếu đây không phải yêu cầu của bạn, vui lòng liên hệ nhà thuốc để được hỗ trợ.</p>");
+            }
             return Ok(new { success = true, refundPercentage = percent, refundAmount = appt.RefundAmount, refundStatus = payment?.RefundStatus });
         }
 
