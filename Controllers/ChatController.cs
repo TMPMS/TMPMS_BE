@@ -142,7 +142,8 @@ Quy tắc phân loại ý định (intent):
 7. ""ORDER_MEDICINE"": Khách hàng ra lệnh MUA hoặc THÊM VÀO GIỎ một sản phẩm cụ thể, có nêu rõ tên sản phẩm (ví dụ: ""mua 2 hộp sâm nhật"", ""thêm 1 chai mật ong vào giỏ""). Chỉ dùng intent này khi xác định được sản phẩm khớp trong danh sách trên.
    - reply: Xác nhận ngắn gọn đã thêm sản phẩm nào, số lượng bao nhiêu vào giỏ hàng.
    - recommendedMedicineId: ID sản phẩm khớp nhất trong danh sách (bắt buộc phải có, không được null).
-   - quantity: số lượng khách yêu cầu (số nguyên dương, mặc định 1 nếu khách không nói rõ số lượng).
+   - quantity: số lượng theo ý nghĩa của trường isCorrection bên dưới.
+   - isCorrection: true nếu khách đang SỬA LẠI/ĐIỀU CHỈNH số lượng của một sản phẩm mà chính khách hoặc bot vừa nhắc đến/thêm vào giỏ ở tin nhắn gần đây trong lịch sử hội thoại (ví dụ: vừa nói ""mua 2 chai X"" xong, khách nói tiếp ""thôi 1 chai thôi"", ""đổi thành 1 chai"", ""giảm xuống 1 chai"", ""thôi bớt lại còn 1"") — khi đó quantity PHẢI là TỔNG SỐ LƯỢNG CUỐI CÙNG khách muốn có (số sẽ ghi đè lên giỏ hàng, không cộng dồn). false nếu đây là một yêu cầu mua/thêm mới (kể cả ""mua thêm 1 chai nữa"" — vẫn là false, quantity lúc này là số CỘNG THÊM vào giỏ).
    - wantsCheckout: true nếu khách dùng động từ ngụ ý mua ngay/thanh toán ngay — bao gồm ""mua"", ""đặt mua"", ""mua luôn"", và BẤT KỲ câu nào có chứa từ ""thanh toán"" dưới mọi hình thức (""thanh toán"", ""thanh toán luôn"", ""thanh toán cho tôi..."", ""thanh toán giúp tôi...""); false nếu khách chỉ nói ""thêm vào giỏ""/""bỏ vào giỏ"" (chưa muốn thanh toán ngay).
    - suggestedAction: {{ ""type"": ""none"", ""label"": """" }}
 
@@ -167,6 +168,7 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
   ""reply"": ""Nội dung trả lời..."",
   ""recommendedMedicineId"": 101,
   ""quantity"": 1,
+  ""isCorrection"": false,
   ""wantsCheckout"": false,
   ""removeAll"": false,
   ""resolvedDateTimeIso"": null,
@@ -338,6 +340,7 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
                                 }
 
                                 bool wantsCheckout = aiRoot.TryGetProperty("wantsCheckout", out var checkoutProp) && checkoutProp.ValueKind == JsonValueKind.True;
+                                bool isCorrection = aiRoot.TryGetProperty("isCorrection", out var correctionProp) && correctionProp.ValueKind == JsonValueKind.True;
                                 bool removeAll = aiRoot.TryGetProperty("removeAll", out var removeAllProp) && removeAllProp.ValueKind == JsonValueKind.True;
                                 // REMOVE_FROM_CART không có "quantity" nghĩa là gỡ hết — không được mặc định về 1 như ORDER_MEDICINE.
                                 bool removeQuantitySpecified = aiRoot.TryGetProperty("quantity", out var removeQtyProp) && removeQtyProp.ValueKind == JsonValueKind.Number && removeQtyProp.GetInt32() > 0;
@@ -434,6 +437,7 @@ BẮT BUỘC định dạng đầu ra phải là JSON hợp lệ theo schema:
                                     text = reply,
                                     product = recommendedProduct,
                                     quantity = quantity,
+                                    isCorrection = isCorrection,
                                     removeAll = removeAll,
                                     appointment = appointmentResult,
                                     suggestedAction = new
