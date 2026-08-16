@@ -153,7 +153,18 @@ namespace TMPMS.Services
             if (appointment.Status is not ("PendingConfirmation" or "Confirmed" or "AlternativeProposed" or "RescheduleRequested"))
                 throw new Exception("Lịch hẹn ở trạng thái hiện tại không thể hủy.");
             appointment.Status = "Cancelled";
-            return await _appointmentRepository.Update(appointment);
+            appointment.CancelledAt = DateTime.UtcNow;
+            var updated = await _appointmentRepository.Update(appointment);
+            if (updated && !string.IsNullOrWhiteSpace(appointment.User?.Email))
+            {
+                await _emailService.SendEmailAsync(
+                    appointment.User.Email,
+                    "Lịch hẹn đã được hủy - TMPMS",
+                    $"<p>Xin chào {System.Net.WebUtility.HtmlEncode(appointment.User.FullName ?? appointment.User.UserName)},</p>" +
+                    $"<p>Lịch hẹn khám vào lúc <b>{appointment.AppointmentDate:HH:mm dd/MM/yyyy}</b> của bạn đã được <b>hủy</b> thành công.</p>" +
+                    "<p>Nếu đây không phải yêu cầu của bạn, vui lòng liên hệ nhà thuốc để được hỗ trợ.</p>");
+            }
+            return updated;
         }
 
         public async Task<bool> ApproveAppointment(int id, int staffId)
