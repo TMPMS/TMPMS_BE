@@ -14,6 +14,14 @@ namespace TMPMS.Services
         private readonly IMedicineRepository _repo;
         public MedicineService(IMedicineRepository repo) => _repo = repo;
 
+        // Discount % luôn suy ra từ Price/OldPrice tại thời điểm đọc/ghi — không bao giờ tin
+        // vào một con số Discount nhập tay/rời rạc có thể lệch khỏi giá thật đang hiển thị.
+        private static int? ComputeDiscount(decimal? price, decimal? oldPrice)
+        {
+            if (price == null || oldPrice == null || oldPrice <= 0 || oldPrice <= price) return null;
+            return (int)Math.Round((1 - price.Value / oldPrice.Value) * 100);
+        }
+
         public async Task<(List<MedicineListItemDto> Items, int TotalCount, bool IsPaged)> SearchAsync(MedicineSearchFilterDto filter)
         {
             var (medicines, totalCount) = await _repo.SearchAsync(filter);
@@ -44,7 +52,7 @@ namespace TMPMS.Services
                     Packaging = m.Packaging,
                     Barcode = m.Barcode,
                     OldPrice = m.OldPrice,
-                    Discount = m.Discount,
+                    Discount = ComputeDiscount(m.Price, m.OldPrice),
                     IsActive = m.IsActive,
                     CreatedAt = m.CreatedAt,
                     Rating = rating,
@@ -84,7 +92,7 @@ namespace TMPMS.Services
                 Packaging = m.Packaging,
                 Barcode = m.Barcode,
                 OldPrice = m.OldPrice,
-                Discount = m.Discount,
+                Discount = ComputeDiscount(m.Price, m.OldPrice),
                 IsActive = m.IsActive,
                 CreatedAt = m.CreatedAt
             };
@@ -111,7 +119,7 @@ namespace TMPMS.Services
                 Packaging = m.Packaging,
                 Barcode = m.Barcode,
                 OldPrice = m.OldPrice,
-                Discount = m.Discount,
+                Discount = ComputeDiscount(m.Price, m.OldPrice),
                 IsActive = m.IsActive
             };
         }
@@ -126,7 +134,7 @@ namespace TMPMS.Services
                 SupplierId = dto.SupplierId,
                 Price = dto.Price,
                 OldPrice = dto.OldPrice,
-                Discount = dto.Discount,
+                Discount = ComputeDiscount(dto.Price, dto.OldPrice),
                 RequiresPrescription = dto.RequiresPrescription,
                 ImageUrl = dto.ImageUrl,
                 Unit = dto.Unit,
@@ -165,6 +173,9 @@ namespace TMPMS.Services
             if (dto.CategoryId != null && dto.CategoryId > 0) med.CategoryId = dto.CategoryId.Value;
             if (dto.SupplierId != null && dto.SupplierId > 0) med.SupplierId = dto.SupplierId.Value;
 
+            // Giá hoặc giá cũ vừa đổi thì % giảm phải đổi theo ngay, không để lại số cũ sai lệch.
+            if (dto.Price != null || dto.OldPrice != null) med.Discount = ComputeDiscount(med.Price, med.OldPrice);
+
             await _repo.SaveChangesAsync();
 
             return new MedicineUpdateResponseDto
@@ -183,6 +194,7 @@ namespace TMPMS.Services
                 Packaging = med.Packaging,
                 Barcode = med.Barcode,
                 OldPrice = med.OldPrice,
+                Discount = med.Discount,
                 IsActive = med.IsActive
             };
         }
