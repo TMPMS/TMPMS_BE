@@ -143,7 +143,7 @@ Quy tắc phân loại ý định (intent):
    - reply: Xác nhận ngắn gọn đã thêm sản phẩm nào, số lượng bao nhiêu vào giỏ hàng.
    - recommendedMedicineId: ID sản phẩm khớp nhất trong danh sách (bắt buộc phải có, không được null).
    - quantity: số lượng khách yêu cầu (số nguyên dương, mặc định 1 nếu khách không nói rõ số lượng).
-   - wantsCheckout: true nếu khách dùng động từ ngụ ý mua ngay/thanh toán ngay (""mua"", ""đặt mua"", ""thanh toán luôn"", ""mua luôn""); false nếu khách chỉ nói ""thêm vào giỏ""/""bỏ vào giỏ"" (chưa muốn thanh toán ngay).
+   - wantsCheckout: true nếu khách dùng động từ ngụ ý mua ngay/thanh toán ngay — bao gồm ""mua"", ""đặt mua"", ""mua luôn"", và BẤT KỲ câu nào có chứa từ ""thanh toán"" dưới mọi hình thức (""thanh toán"", ""thanh toán luôn"", ""thanh toán cho tôi..."", ""thanh toán giúp tôi...""); false nếu khách chỉ nói ""thêm vào giỏ""/""bỏ vào giỏ"" (chưa muốn thanh toán ngay).
    - suggestedAction: {{ ""type"": ""none"", ""label"": """" }}
 
 8. ""REMOVE_FROM_CART"": Khách hàng muốn GỠ, XÓA hoặc BỚT một sản phẩm cụ thể đang có trong giỏ hàng (ví dụ: ""gỡ 5 chai mật ong ở giỏ hàng đi"", ""xóa mật ong khỏi giỏ"", ""bớt 2 hộp sâm"", ""xóa hết sâm trong giỏ""). Chỉ dùng intent này khi xác định được sản phẩm khớp trong danh sách trên VÀ khách rõ ràng muốn LOẠI BỎ khỏi giỏ (không phải thêm/mua — đó là intent ORDER_MEDICINE).
