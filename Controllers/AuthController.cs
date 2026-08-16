@@ -25,6 +25,9 @@ namespace TMPMS.Controllers
         // đọc được nữa, giảm hẳn rủi ro XSS đánh cắp token. SameSite=Lax vì FE/BE cùng origin
         // (xem Program.cs CORS) nên đã đủ chặn CSRF cho các request state-changing, không cần
         // thêm cơ chế CSRF-token riêng.
+        // Không set Expires -> cookie phiên (session cookie): trình duyệt tự xoá khi đóng hẳn,
+        // theo yêu cầu "tắt trình duyệt là tự đăng xuất". Token trên server (JWT exp / bảng
+        // RefreshToken) vẫn có hạn riêng để giới hạn thời gian sống nếu cookie bị rò rỉ.
         private void SetAuthCookies(AuthResponseDTO result)
         {
             Response.Cookies.Append("access_token", result.AccessToken, new CookieOptions
@@ -32,17 +35,14 @@ namespace TMPMS.Controllers
                 HttpOnly = true,
                 Secure = true,
                 SameSite = SameSiteMode.Lax,
-                Expires = result.AccessTokenExpiresAt,
                 Path = "/"
             });
 
-            var refreshTokenDays = int.TryParse(_configuration["JWT:RefreshTokenExpiryDays"], out var d) ? d : 7;
             Response.Cookies.Append("refresh_token", result.RefreshToken, new CookieOptions
             {
                 HttpOnly = true,
                 Secure = true,
                 SameSite = SameSiteMode.Lax,
-                Expires = DateTimeOffset.UtcNow.AddDays(refreshTokenDays),
                 Path = "/"
             });
         }
