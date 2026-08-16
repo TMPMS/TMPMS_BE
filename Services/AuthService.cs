@@ -99,17 +99,9 @@ namespace TMPMS.Services
             if (user == null || !user.IsActive)
                 return null;
 
-            if (await _userManager.IsLockedOutAsync(user))
-                throw new InvalidOperationException("Tài khoản đang bị tạm khóa do đăng nhập sai nhiều lần. Vui lòng thử lại sau.");
-
             var validPassword = await _userManager.CheckPasswordAsync(user, dto.Password);
             if (!validPassword)
-            {
-                await _userManager.AccessFailedAsync(user);
                 return null;
-            }
-
-            await _userManager.ResetAccessFailedCountAsync(user);
 
             return await BuildAuthResponse(user, ipAddress, includeRefreshToken: true);
         }

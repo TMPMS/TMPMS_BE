@@ -98,8 +98,7 @@ builder.Services.AddIdentity<User, Role>(options =>
     options.Password.RequiredLength = 6;
     options.Password.RequireNonAlphanumeric = false;
     options.Password.RequireUppercase = false;
-    options.Lockout.MaxFailedAccessAttempts = 5;
-    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+    options.Lockout.AllowedForNewUsers = false;
     options.User.RequireUniqueEmail = true;
 })
 .AddEntityFrameworkStores<TMPMSDbContext>()
