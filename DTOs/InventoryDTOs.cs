@@ -191,8 +191,10 @@ namespace TMPMS.DTOs
         public string Status { get; set; }
     }
 
-    // Báo cáo lãi gộp ước tính theo lô — Doanh thu dùng GIÁ BÁN HIỆN TẠI của sản phẩm
-    // (không truy hồi giá bán thực tế tại thời điểm bán từng đơn), nên đây là số ƯỚC TÍNH, không phải sổ sách kế toán chính xác.
+    // Báo cáo lãi gộp theo lô. Doanh thu dùng GIÁ BÁN THỰC TẾ tại thời điểm bán (OrderItem.Price cho đơn
+    // hàng, PrescriptionItem.UnitPrice cho đơn thuốc). Chỉ khi không tra được giá thực (dữ liệu tạo trước
+    // khi có snapshot giá đơn thuốc) mới rơi về giá hiện tại của Medicine — khi đó IsEstimated = true để
+    // FE có thể hiển thị ghi chú "số liệu ước tính" cho lô đó.
     public class BatchProfitDTO
     {
         public int BatchId { get; set; }
@@ -208,5 +210,6 @@ namespace TMPMS.DTOs
         public decimal EstimatedCost { get; set; }
         public decimal EstimatedGrossProfit { get; set; }
         public decimal? GrossMarginPercent { get; set; }
+        public bool IsEstimated { get; set; }
     }
 }

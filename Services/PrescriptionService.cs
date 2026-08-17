@@ -66,7 +66,8 @@ namespace TMPMS.Services
                     targetUserId = defaultUser?.Id ?? 1;
                 }
 
-                // 1. Kiểm tra tồn kho cho từng vị thuốc được kê
+                // 1. Kiểm tra tồn kho cho từng vị thuốc được kê & lưu giá bán hiện hành để snapshot vào PrescriptionItem
+                var priceByMedicineId = new Dictionary<int, decimal?>();
                 foreach (var item in dto.Items)
                 {
                     var med = await _context.Medicines.FindAsync(item.MedicineId);
@@ -78,6 +79,7 @@ namespace TMPMS.Services
                     {
                         throw new InvalidOperationException($"Vị thuốc {med.Name} chỉ còn {med.StockQuantity}g trong kho, không đủ để kê {item.Quantity}g");
                     }
+                    priceByMedicineId[item.MedicineId] = med.Price;
                 }
 
                 // 2. Tạo đơn thuốc
@@ -98,6 +100,7 @@ namespace TMPMS.Services
                     {
                         MedicineId = i.MedicineId,
                         Quantity = i.Quantity,
+                        UnitPrice = priceByMedicineId.GetValueOrDefault(i.MedicineId),
                         Instructions = i.Instructions
                     }).ToList()
                 };
@@ -367,6 +370,7 @@ namespace TMPMS.Services
                 if (entity.Status != "Pending")
                     throw new InvalidOperationException("Chỉ có thể hoàn thiện đơn thuốc đang ở trạng thái Chờ duyệt.");
 
+                var priceByMedicineId = new Dictionary<int, decimal?>();
                 foreach (var item in dto.Items)
                 {
                     var med = await _context.Medicines.FindAsync(item.MedicineId);
@@ -374,6 +378,7 @@ namespace TMPMS.Services
                         throw new InvalidOperationException($"Không tìm thấy vị thuốc/dược liệu có mã ID {item.MedicineId}.");
                     if (med.StockQuantity < item.Quantity)
                         throw new InvalidOperationException($"Vị thuốc {med.Name} chỉ còn {med.StockQuantity} trong kho, không đủ để kê {item.Quantity}.");
+                    priceByMedicineId[item.MedicineId] = med.Price;
                 }
 
                 if (!string.IsNullOrWhiteSpace(dto.DoctorName)) entity.DoctorName = dto.DoctorName;
@@ -385,6 +390,7 @@ namespace TMPMS.Services
                 {
                     MedicineId = i.MedicineId,
                     Quantity = i.Quantity,
+                    UnitPrice = priceByMedicineId.GetValueOrDefault(i.MedicineId),
                     Instructions = i.Instructions
                 }).ToList();
 
@@ -446,6 +452,7 @@ namespace TMPMS.Services
                     MedicineId = i.MedicineId,
                     MedicineName = i.Medicine?.Name,
                     Quantity = i.Quantity,
+                    UnitPrice = i.UnitPrice,
                     RequiresPrescription = i.Medicine?.RequiresPrescription ?? false,
                     Instructions = i.Instructions
                 }).ToList() ?? new List<PrescriptionItemResponseDTO>()
