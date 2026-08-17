@@ -37,6 +37,9 @@ namespace Repositories.Interfaces
         Task<List<InventoryTransaction>> GetExportTransactionsWithBatch();
         Task<Dictionary<int, (string? Status, string? PaymentStatus)>> GetOrderStatusMap();
         Task<List<StockBatch>> GetBatchesWithCost(int? warehouseId, int? medicineId);
+        // Giá bán thực tế tại thời điểm bán, để tính doanh thu theo lô chính xác thay vì dùng giá hiện tại.
+        Task<Dictionary<(int OrderId, int MedicineId), decimal>> GetOrderItemPriceMap();
+        Task<Dictionary<(int PrescriptionId, int MedicineId), decimal?>> GetPrescriptionItemPriceMap();
 
         // Quản lý Flash Sale
         Task<FlashSale> AddFlashSale(FlashSale flashSale);

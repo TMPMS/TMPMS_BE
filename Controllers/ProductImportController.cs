@@ -179,6 +179,9 @@ namespace TMPMS.Controllers
                 var batchNumberCell = CellStr(13);
                 var mfgDateStr = CellStr(14);
                 var expDateStr = CellStr(15);
+                var costPriceStr = CellStr(16);
+                var regNumberCell = CellStr(17);
+                var storageConditionCell = CellStr(18);
 
                 // Bỏ qua hàng hoàn toàn trống
                 if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(priceStr)
@@ -203,6 +206,9 @@ namespace TMPMS.Controllers
                     BatchNumber = batchNumberCell,
                     ManufactureDate = ParseExcelDate(row, 14, mfgDateStr),
                     ExpiryDate = ParseExcelDate(row, 15, expDateStr),
+                    CostPriceStr = costPriceStr,
+                    RegistrationNumber = regNumberCell,
+                    StorageCondition = storageConditionCell,
                     Status = "New"
                 };
 
@@ -252,6 +258,19 @@ namespace TMPMS.Controllers
                     }
                     preview.Price = price;
 
+                    decimal costPrice = 0;
+                    bool costPriceProvided = !string.IsNullOrWhiteSpace(costPriceStr);
+                    if (costPriceProvided)
+                    {
+                        var cleanCost = costPriceStr.Replace(".", "").Replace(",", "");
+                        if (!decimal.TryParse(cleanCost, out costPrice) || costPrice < 0)
+                        {
+                            errors.Add($"Giá nhập không hợp lệ: '{costPriceStr}'");
+                            costPriceProvided = false;
+                        }
+                    }
+                    preview.CostPrice = costPrice;
+
                     // Category
                     var matchedCat = categories.FirstOrDefault(c =>
                         c.Name.Trim().ToLower() == categoryName.Trim().ToLower());
@@ -281,6 +300,17 @@ namespace TMPMS.Controllers
                         else if (preview.ManufactureDate != null && preview.ExpiryDate.Value.Date <= preview.ManufactureDate.Value.Date)
                         {
                             errors.Add("Hạn sử dụng phải sau Ngày sản xuất");
+                        }
+
+                        // Giá nhập BẮT BUỘC khi có Số lượng tồn kho — chặn cứng (không chỉ cảnh báo như HSD)
+                        // vì lô thiếu giá vốn sẽ không thể tính lợi nhuận và sẽ bị báo cáo lãi gộp bỏ qua hoàn toàn.
+                        if (!costPriceProvided)
+                        {
+                            errors.Add("Có Số lượng tồn kho nhưng thiếu (hoặc sai định dạng) Giá nhập — bắt buộc phải điền để tính đúng giá vốn/lợi nhuận theo lô");
+                        }
+                        else if (price > 0 && costPrice > price)
+                        {
+                            preview.Warnings.Add($"Giá nhập ({costPrice:N0}đ) cao hơn Giá bán lẻ ({price:N0}đ) — lô này sẽ có biên lợi nhuận âm");
                         }
                     }
 
@@ -402,7 +432,10 @@ namespace TMPMS.Controllers
                     requiresPrescription = p.RequiresPrescription,
                     p.BatchNumber,
                     manufactureDate = p.ManufactureDate,
-                    expiryDate = p.ExpiryDate
+                    expiryDate = p.ExpiryDate,
+                    costPrice = p.CostPrice,
+                    registrationNumber = p.RegistrationNumber,
+                    storageCondition = p.StorageCondition
                 })
             });
         }
@@ -430,6 +463,8 @@ namespace TMPMS.Controllers
 
             int successCount = 0;
             int deletedCount = 0;
+            int batchesCreatedCount = 0;
+            decimal totalImportValue = 0; // Σ SL × Giá nhập của các lô THỰC SỰ được tạo trong lần chạy này — số thật, không ước tính
             var failedRows = new List<object>();
             var confirmedSet = new HashSet<int>(req.ConfirmedRowIndexes ?? new List<int>());
 
@@ -553,9 +588,14 @@ namespace TMPMS.Controllers
                                 ManufactureDate = row.ManufactureDate ?? DateTime.Now,
                                 ExpiryDate = row.ExpiryDate.Value,
                                 Quantity = stockQty,
+                                UnitCostPrice = row.CostPrice > 0 ? row.CostPrice : (decimal?)null,
                                 SupplierId = row.SupplierId > 0 ? row.SupplierId : (int?)null,
+                                RegistrationNumber = string.IsNullOrWhiteSpace(row.RegistrationNumber) ? null : row.RegistrationNumber,
+                                StorageCondition = string.IsNullOrWhiteSpace(row.StorageCondition) ? null : row.StorageCondition,
                                 Note = $"Nhập qua Excel — phiên {req.ImportSessionId[..8]}"
                             });
+                            batchesCreatedCount++;
+                            totalImportValue += stockQty * row.CostPrice;
                         }
                         successCount++;
                     }
@@ -588,9 +628,14 @@ namespace TMPMS.Controllers
                                     ManufactureDate = row.ManufactureDate ?? DateTime.Now,
                                     ExpiryDate = row.ExpiryDate.Value,
                                     Quantity = stockQty,
+                                    UnitCostPrice = row.CostPrice > 0 ? row.CostPrice : (decimal?)null,
                                     SupplierId = row.SupplierId > 0 ? row.SupplierId : (int?)null,
+                                    RegistrationNumber = string.IsNullOrWhiteSpace(row.RegistrationNumber) ? null : row.RegistrationNumber,
+                                    StorageCondition = string.IsNullOrWhiteSpace(row.StorageCondition) ? null : row.StorageCondition,
                                     Note = $"Nhập qua Excel — phiên {req.ImportSessionId[..8]}"
                                 });
+                                batchesCreatedCount++;
+                                totalImportValue += stockQty * row.CostPrice;
                             }
                             successCount++;
                         }
@@ -609,7 +654,9 @@ namespace TMPMS.Controllers
                 successCount,
                 deletedCount,
                 failedCount = failedRows.Count,
-                failedRows
+                failedRows,
+                batchesCreatedCount,
+                totalImportValue
             });
         }
 
@@ -640,10 +687,14 @@ namespace TMPMS.Controllers
                 "  • Hệ thống dùng cột này để đối chiếu Update/Delete — xóa đi sẽ mất khả năng cập nhật chính xác",
                 "",
                 "Cột Số lượng tồn kho — MỖI LẦN NHẬP TẠO 1 LÔ HÀNG RIÊNG, không cộng dồn mất hạn dùng cũ:",
-                "  • Nếu điền Số lượng tồn kho > 0, BẮT BUỘC phải điền cột Hạn sử dụng (dd/mm/yyyy)",
+                "  • Nếu điền Số lượng tồn kho > 0, BẮT BUỘC phải điền cột Hạn sử dụng (dd/mm/yyyy) VÀ Giá nhập",
                 "  • Thiếu Hạn sử dụng → số lượng sẽ KHÔNG được nhập kho (chỉ cập nhật các thông tin khác)",
+                "  • Thiếu Giá nhập → dòng bị LỖI, KHÔNG nhập được (bắt buộc để tính đúng lợi nhuận theo lô)",
                 "  • Cột Số lô để trống → hệ thống tự sinh số lô",
                 "  • Cột Ngày sản xuất để trống → mặc định là ngày nhập",
+                "  • Cột SĐK / Điều kiện bảo quản: không bắt buộc, chỉ để ghi chú vào lô",
+                "  • Nếu số lô trùng với lô đang có (cùng NSX/HSD), giá nhập sẽ được tính BÌNH QUÂN GIA QUYỀN",
+                "    theo số lượng còn lại hiện có, không ghi đè giá cũ",
                 "",
                 "Các trường bắt buộc: Tên sản phẩm, Danh mục, Giá bán lẻ",
                 "Danh mục phải khớp chính xác tên danh mục đã có trong hệ thống",
@@ -666,7 +717,7 @@ namespace TMPMS.Controllers
                 fontColor: NPOI.HSSF.Util.HSSFColor.DarkRed.Index);
 
             // Column widths
-            int[] colWidths = { 2000, 8000, 6000, 7000, 4000, 4000, 4000, 3000, 10000, 8000, 4000, 3000, 4500, 4500, 4500, 4500 };
+            int[] colWidths = { 2000, 8000, 6000, 7000, 4000, 4000, 4000, 3000, 10000, 8000, 4000, 3000, 4500, 4500, 4500, 4500, 4500, 5000, 6000 };
             for (int i = 0; i < colWidths.Length; i++)
                 sheet.SetColumnWidth(i, colWidths[i]);
 
@@ -675,7 +726,8 @@ namespace TMPMS.Controllers
                 "STT", "Tên sản phẩm", "Danh mục", "Nhà cung cấp",
                 "Giá bán lẻ", "Giá niêm yết cũ", "Số lượng tồn kho",
                 "Đơn vị", "Mô tả", "Hình ảnh", "Đánh dấu Xóa", "ProductId", "Yêu cầu kê đơn (Có/Không)",
-                "Số lô", "Ngày sản xuất", "Hạn sử dụng"
+                "Số lô", "Ngày sản xuất", "Hạn sử dụng",
+                "Giá nhập", "Số đăng ký (SĐK)/GP", "Điều kiện bảo quản"
             };
             var headerRow = sheet.CreateRow(0);
             for (int i = 0; i < headers.Length; i++)
@@ -701,6 +753,12 @@ namespace TMPMS.Controllers
             noteRow.GetCell(14).CellStyle = noteStyle;
             noteRow.CreateCell(15).SetCellValue("dd/mm/yyyy — BẮT BUỘC nếu có Số lượng tồn kho");
             noteRow.GetCell(15).CellStyle = noteStyle;
+            noteRow.CreateCell(16).SetCellValue("BẮT BUỘC nếu có Số lượng tồn kho — dùng tính lợi nhuận");
+            noteRow.GetCell(16).CellStyle = noteStyle;
+            noteRow.CreateCell(17).SetCellValue("Không bắt buộc");
+            noteRow.GetCell(17).CellStyle = noteStyle;
+            noteRow.CreateCell(18).SetCellValue("Không bắt buộc — vd: Kho Thường / Kho Mát / Cold Chain");
+            noteRow.GetCell(18).CellStyle = noteStyle;
 
             if (medicines == null || medicines.Count == 0)
             {
@@ -710,7 +768,8 @@ namespace TMPMS.Controllers
                     "1", "Bạch truật thảo dược", "Thảo dược & Đông Y", "Dược liệu Việt Nam",
                     "85000", "100000", "200", "Túi 100g",
                     "Bạch truật khô hỗ trợ tiêu hoá, bổ tỳ vị", "", "", "", "Không",
-                    "", DateTime.Now.ToString("dd/MM/yyyy"), DateTime.Now.AddYears(1).ToString("dd/MM/yyyy")
+                    "", DateTime.Now.ToString("dd/MM/yyyy"), DateTime.Now.AddYears(1).ToString("dd/MM/yyyy"),
+                    "60000", "", "Kho Thường (<30°C)"
                 };
                 for (int i = 0; i < example.Length; i++)
                     exRow.CreateCell(i).SetCellValue(example[i]);
@@ -927,6 +986,10 @@ namespace TMPMS.Controllers
         public string BatchNumber { get; set; } = ""; // số lô — để trống sẽ tự sinh
         public DateTime? ManufactureDate { get; set; }
         public DateTime? ExpiryDate { get; set; }
+        public string CostPriceStr { get; set; } = "";
+        public decimal CostPrice { get; set; }
+        public string RegistrationNumber { get; set; } = "";
+        public string StorageCondition { get; set; } = "";
         public string Status { get; set; } = "New"; // New | Update | Delete | Error
         public string? ErrorMessage { get; set; }
         public List<string> Warnings { get; set; } = new();

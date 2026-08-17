@@ -137,6 +137,8 @@ namespace TMPMS.Services
                 throw new ArgumentException("Hạn sử dụng phải sau ngày sản xuất.");
             if (dto.ExpiryDate.Date < DateTime.Now.Date)
                 throw new ArgumentException("Không thể nhập lô hàng đã hết hạn sử dụng.");
+            if (dto.UnitCostPrice.HasValue && dto.UnitCostPrice.Value < 0)
+                throw new ArgumentException("Giá nhập không được âm.");
 
             var medicine = await _repo.GetMedicineById(dto.MedicineId);
             if (medicine == null)
@@ -153,9 +155,21 @@ namespace TMPMS.Services
                 if (existing.ExpiryDate.Date != dto.ExpiryDate.Date || existing.ManufactureDate.Date != dto.ManufactureDate.Date)
                     throw new ArgumentException($"Số lô '{batchNumber}' đã tồn tại với NSX/HSD khác. Vui lòng dùng số lô khác cho đợt nhập này.");
 
+                // Giá vốn BÌNH QUÂN GIA QUYỀN theo số lượng còn lại hiện có + số lượng nhập mới,
+                // thay vì ghi đè — ghi đè sẽ làm sai giá vốn của số lượng đã nhập từ đợt trước
+                // (vốn đã tính lãi/lỗ dựa trên giá cũ) mỗi khi báo cáo lãi gộp đọc lại UnitCostPrice hiện tại.
+                if (dto.UnitCostPrice != null)
+                {
+                    var priorQty = existing.QuantityRemaining;
+                    var priorCost = existing.UnitCostPrice ?? dto.UnitCostPrice.Value;
+                    var totalQty = priorQty + dto.Quantity;
+                    existing.UnitCostPrice = totalQty > 0
+                        ? Math.Round((priorQty * priorCost + dto.Quantity * dto.UnitCostPrice.Value) / totalQty, 2)
+                        : dto.UnitCostPrice;
+                }
+
                 existing.QuantityReceived += dto.Quantity;
                 existing.QuantityRemaining += dto.Quantity;
-                if (dto.UnitCostPrice != null) existing.UnitCostPrice = dto.UnitCostPrice;
                 batch = existing;
             }
             else
@@ -660,8 +674,14 @@ namespace TMPMS.Services
             var batches = await _repo.GetBatchesWithCost(warehouseId, medicineId);
             if (batches.Count == 0) return new List<BatchProfitDTO>();
 
+            var batchIds = batches.Select(b => b.Id).ToHashSet();
+            // medicineId cố định cho cả report nên giá hiện tại chỉ cần lấy 1 lần, dùng làm fallback cuối cùng.
+            var currentSellPrice = batches[0].Medicine?.Price;
+
             var exportTx = await _repo.GetExportTransactionsWithBatch();
             var orderStatusMap = await _repo.GetOrderStatusMap();
+            var orderPriceMap = await _repo.GetOrderItemPriceMap();
+            var prescriptionPriceMap = await _repo.GetPrescriptionItemPriceMap();
 
             // Chỉ tính là "đã bán thực tế" khi đơn hàng đã thanh toán (đã nhận tiền)
             // và không bị hủy/trả hàng. Đơn kê thuốc (RX-*) không có khái niệm thanh toán
@@ -681,16 +701,41 @@ namespace TMPMS.Services
                 return referenceId.StartsWith("RX-");
             }
 
-            var soldQuantities = exportTx
-                .Where(t => CountsAsSold(t.ReferenceId))
+            // Giá bán THỰC TẾ tại thời điểm bán: OrderItem.Price (đơn hàng) hoặc PrescriptionItem.UnitPrice
+            // (đơn thuốc, snapshot từ Medicine.Price lúc kê/duyệt đơn). Chỉ rơi về giá hiện tại của Medicine
+            // khi không tra được giá thực — xảy ra với dữ liệu tạo trước khi có snapshot giá đơn thuốc.
+            (decimal Price, bool IsActual) ResolveUnitPrice(string referenceId, int medId)
+            {
+                if (referenceId.StartsWith("ORDER-") && int.TryParse(referenceId.AsSpan(6), out var orderId)
+                    && orderPriceMap.TryGetValue((orderId, medId), out var orderPrice))
+                {
+                    return (orderPrice, true);
+                }
+                if (referenceId.StartsWith("RX-") && int.TryParse(referenceId.AsSpan(3), out var rxId)
+                    && prescriptionPriceMap.TryGetValue((rxId, medId), out var rxPrice) && rxPrice.HasValue)
+                {
+                    return (rxPrice.Value, true);
+                }
+                return (currentSellPrice ?? 0m, false);
+            }
+
+            var txByBatch = exportTx
+                .Where(t => t.StockBatchId.HasValue && batchIds.Contains(t.StockBatchId.Value) && CountsAsSold(t.ReferenceId))
                 .GroupBy(t => t.StockBatchId!.Value)
-                .ToDictionary(g => g.Key, g => g.Sum(t => t.Quantity));
+                .ToDictionary(g => g.Key, g => g.ToList());
 
             return batches.Select(b =>
             {
-                var qtySold = soldQuantities.GetValueOrDefault(b.Id, 0);
-                var sellPrice = b.Medicine?.Price;
-                var revenue = qtySold * (sellPrice ?? 0);
+                var txs = txByBatch.GetValueOrDefault(b.Id) ?? new List<InventoryTransaction>();
+                var qtySold = txs.Sum(t => t.Quantity);
+                var revenue = 0m;
+                var isEstimated = false;
+                foreach (var t in txs)
+                {
+                    var (price, isActual) = ResolveUnitPrice(t.ReferenceId, t.MedicineId);
+                    revenue += t.Quantity * price;
+                    if (!isActual) isEstimated = true;
+                }
                 var cost = qtySold * b.UnitCostPrice!.Value;
                 var profit = revenue - cost;
 
@@ -704,11 +749,12 @@ namespace TMPMS.Services
                     WarehouseName = b.Warehouse?.Name,
                     QuantitySold = qtySold,
                     UnitCostPrice = b.UnitCostPrice.Value,
-                    CurrentSellPrice = sellPrice,
+                    CurrentSellPrice = currentSellPrice,
                     EstimatedRevenue = revenue,
                     EstimatedCost = cost,
                     EstimatedGrossProfit = profit,
-                    GrossMarginPercent = revenue > 0 ? Math.Round(profit / revenue * 100, 1) : null
+                    GrossMarginPercent = revenue > 0 ? Math.Round(profit / revenue * 100, 1) : null,
+                    IsEstimated = isEstimated
                 };
             })
             .OrderByDescending(p => p.EstimatedGrossProfit)

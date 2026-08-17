@@ -265,6 +265,27 @@ namespace TMPMS.Repositories
             return await query.OrderByDescending(b => b.ReceivedAt).ToListAsync();
         }
 
+        public async Task<Dictionary<(int OrderId, int MedicineId), decimal>> GetOrderItemPriceMap()
+        {
+            var items = await _context.OrderItems
+                .Select(oi => new { oi.OrderId, oi.MedicineId, oi.Price })
+                .ToListAsync();
+            // Nhóm để tránh lỗi trùng khóa nếu 1 đơn có 2 dòng cùng MedicineId — lấy dòng đầu tiên.
+            return items
+                .GroupBy(x => (x.OrderId, x.MedicineId))
+                .ToDictionary(g => g.Key, g => g.First().Price);
+        }
+
+        public async Task<Dictionary<(int PrescriptionId, int MedicineId), decimal?>> GetPrescriptionItemPriceMap()
+        {
+            var items = await _context.PrescriptionItems
+                .Select(pi => new { pi.PrescriptionId, pi.MedicineId, pi.UnitPrice })
+                .ToListAsync();
+            return items
+                .GroupBy(x => (x.PrescriptionId, x.MedicineId))
+                .ToDictionary(g => g.Key, g => g.First().UnitPrice);
+        }
+
         public async Task SaveChangesAsync() => await _context.SaveChangesAsync();
 
         public async Task<FlashSale> AddFlashSale(FlashSale flashSale)
