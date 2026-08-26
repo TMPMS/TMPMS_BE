@@ -26,12 +26,13 @@ namespace TMPMS.Repositories
             var appointmentUserIds = await _context.Appointments.Select(a => a.UserId).Distinct().ToListAsync();
             var diagnosisPatientIds = await _context.Diagnoses.Select(d => d.PatientId).Distinct().ToListAsync();
             var activePatientUserIds = new HashSet<int>(appointmentUserIds.Concat(diagnosisPatientIds));
+            var rolesByUser = await GetRolesByUserIdAsync();
 
             var patients = new List<PatientDto>();
 
             foreach (var user in users)
             {
-                var roles = await _userManager.GetRolesAsync(user);
+                var roles = rolesByUser.TryGetValue(user.Id, out var userRoles) ? userRoles : new List<string>();
                 bool isStaffOrAdmin = roles.Contains("Admin") || roles.Contains("Doctor") || roles.Contains("Pharmacy") || roles.Contains("Staff");
 
                 // STRICT BUSINESS RULE: A user is ONLY listed as a Patient if they have an active Appointment or Diagnosis record (or explicit Patient role)
@@ -47,6 +48,7 @@ namespace TMPMS.Repositories
                         Gender = !string.IsNullOrEmpty(user.Gender) ? user.Gender : "Nam",
                         DateOfBirth = user.DateOfBirth,
                         Address = user.Address ?? "",
+                        MedicalHistory = user.MedicalHistory,
                         IsActive = user.IsActive,
                         CreatedAt = user.CreatedAt,
                         Role = roles.FirstOrDefault() ?? "Patient"
@@ -55,6 +57,20 @@ namespace TMPMS.Repositories
             }
 
             return patients;
+        }
+
+        // Batch-resolves roles for every user in one query instead of one UserManager call per user (fixes N+1).
+        private async Task<Dictionary<int, List<string>>> GetRolesByUserIdAsync()
+        {
+            var userRoleNames = await (
+                from ur in _context.UserRoles
+                join r in _context.Roles on ur.RoleId equals r.Id
+                select new { ur.UserId, r.Name }
+            ).ToListAsync();
+
+            return userRoleNames
+                .GroupBy(x => x.UserId)
+                .ToDictionary(g => g.Key, g => g.Select(x => x.Name ?? "").ToList());
         }
 
         public async Task<PatientOperationResult> AddPatientAsync(PatientCreateDTO dto)
@@ -100,6 +116,7 @@ namespace TMPMS.Repositories
                 Gender = dto.Gender ?? "Nam",
                 DateOfBirth = dto.DateOfBirth ?? DateTime.UtcNow.AddYears(-25),
                 Address = dto.Address ?? "",
+                MedicalHistory = dto.MedicalHistory,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             };
@@ -204,6 +221,7 @@ namespace TMPMS.Repositories
             if (!string.IsNullOrEmpty(dto.Gender)) patient.Gender = dto.Gender;
             if (dto.DateOfBirth.HasValue) patient.DateOfBirth = dto.DateOfBirth.Value;
             if (dto.Address != null) patient.Address = dto.Address;
+            if (dto.MedicalHistory != null) patient.MedicalHistory = dto.MedicalHistory;
             patient.IsActive = dto.IsActive;
 
             var result = await _userManager.UpdateAsync(patient);
@@ -246,11 +264,12 @@ namespace TMPMS.Repositories
                     (x.PhoneNumber != null && x.PhoneNumber.Contains(keyword)))
                 .ToListAsync();
 
+            var rolesByUser = await GetRolesByUserIdAsync();
             var patients = new List<PatientDto>();
 
             foreach (var user in users)
             {
-                var roles = await _userManager.GetRolesAsync(user);
+                var roles = rolesByUser.TryGetValue(user.Id, out var userRoles) ? userRoles : new List<string>();
 
                 if (roles.Contains("Patient") || roles.Contains("User"))
                 {
@@ -264,6 +283,7 @@ namespace TMPMS.Repositories
                         Gender = user.Gender ?? "Nam",
                         DateOfBirth = user.DateOfBirth,
                         Address = user.Address ?? "",
+                        MedicalHistory = user.MedicalHistory,
                         IsActive = user.IsActive,
                         CreatedAt = user.CreatedAt,
                         Role = roles.FirstOrDefault()

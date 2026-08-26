@@ -20,6 +20,9 @@ namespace BusinessObjects
         public DateTime? DateOfBirth { get; set; }
         public string? Gender { get; set; }
 
+        // Tiền sử bệnh lý & triệu chứng lâm sàng — dùng khi User đóng vai trò Patient
+        public string? MedicalHistory { get; set; }
+
         // Liên kết tài khoản Google (sub từ ID token đã xác thực) — NULL nếu đăng ký thường
         public string? GoogleId { get; set; }
 
