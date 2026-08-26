@@ -22,6 +22,7 @@ namespace TMPMS.Controllers
 
         // GET: api/patients
         [HttpGet]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> GetPatients()
         {
             var patients = await _patientService.GetAllPatientsAsync();
@@ -30,6 +31,7 @@ namespace TMPMS.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> CreatePatient([FromBody] PatientCreateDTO dto)
         {
             if (!ModelState.IsValid)

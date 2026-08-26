@@ -73,6 +73,7 @@ namespace TMPMS.Services
                     Username = patient.UserName ?? "",
                     Email = patient.Email ?? "",
                     PhoneNumber = patient.PhoneNumber ?? "",
+                    MedicalHistory = patient.MedicalHistory,
                     IsActive = patient.IsActive,
                     CreatedAt = patient.CreatedAt
                 },

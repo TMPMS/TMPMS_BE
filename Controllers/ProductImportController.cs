@@ -74,7 +74,7 @@ namespace TMPMS.Controllers
         // Xuất TOÀN BỘ danh mục ra Excel kèm ảnh nhúng
         // ================================================================
         [HttpGet("export")]
-        [AllowAnonymous]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> ExportAll()
 
         {

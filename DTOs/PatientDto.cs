@@ -10,6 +10,7 @@ namespace TMPMS.DTOs
         public string? Gender { get; set; }
         public DateTime? DateOfBirth { get; set; }
         public string? Address { get; set; }
+        public string? MedicalHistory { get; set; }
         public bool IsActive { get; set; }
         public DateTime CreatedAt { get; set; }
         public string? Role { get; set; }
