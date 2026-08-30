@@ -41,10 +41,13 @@ namespace TMPMS.Controllers
 
             using var ms = new MemoryStream();
             await file.CopyToAsync(ms);
+            var bytes = ms.ToArray();
+            if (!TMPMS.Utils.ImageMagicBytes.LooksLikeImage(bytes))
+                return BadRequest(new { message = "Tệp không phải ảnh hợp lệ." });
 
             try
             {
-                var result = await _service.AnalyzeAsync(ms.ToArray(), mimeType);
+                var result = await _service.AnalyzeAsync(bytes, mimeType);
                 return Ok(result);
             }
             catch (Exception ex)

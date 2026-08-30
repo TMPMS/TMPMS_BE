@@ -31,6 +31,13 @@ namespace TMPMS.Repositories
         {
             var sup = await _context.Suppliers.FindAsync(id);
             if (sup == null) return false;
+
+            // Chặn xóa nếu đang có Medicine tham chiếu — trước đây xóa thẳng, có thể cascade xóa nhầm
+            // sản phẩm (nếu Medicine đó chưa có StockBatch) hoặc ném lỗi 500 do vi phạm FK constraint
+            // (nếu đã có StockBatch) thay vì báo lỗi rõ ràng, giống cách CategoriesController đã làm.
+            var inUse = await _context.Medicines.AnyAsync(m => m.SupplierId == id);
+            if (inUse) throw new System.InvalidOperationException("Không thể xóa nhà cung cấp đang có sản phẩm sử dụng.");
+
             _context.Suppliers.Remove(sup);
             await _context.SaveChangesAsync();
             return true;

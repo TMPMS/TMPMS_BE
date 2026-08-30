@@ -109,12 +109,18 @@ namespace TMPMS.Controllers
             if (!allowed.Contains(ext)) return BadRequest(new { message = "Chỉ hỗ trợ JPG, PNG hoặc WEBP." });
             try
             {
+                using var ms = new MemoryStream();
+                await file.CopyToAsync(ms);
+                var bytes = ms.ToArray();
+                // Kiểm tra nội dung file thật (magic bytes) — trước đây chỉ tin đuôi file client tự khai.
+                if (!TMPMS.Utils.ImageMagicBytes.LooksLikeImage(bytes))
+                    return BadRequest(new { message = "Tệp không phải ảnh hợp lệ." });
+
                 var root = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
                 var folder = Path.Combine(root, "uploads", "appointments");
                 Directory.CreateDirectory(folder);
                 var name = $"{Guid.NewGuid():N}{ext}";
-                await using var stream = System.IO.File.Create(Path.Combine(folder, name));
-                await file.CopyToAsync(stream);
+                await System.IO.File.WriteAllBytesAsync(Path.Combine(folder, name), bytes);
                 return Ok(new { url = $"/api/uploads/appointments/{name}" });
             }
             catch (Exception ex)

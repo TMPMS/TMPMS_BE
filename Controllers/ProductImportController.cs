@@ -792,16 +792,16 @@ namespace TMPMS.Controllers
                     row.HeightInPoints = 72;
 
                     row.CreateCell(0).SetCellValue(i + 1);
-                    row.CreateCell(1).SetCellValue(med.Name ?? "");
-                    row.CreateCell(2).SetCellValue(med.Category?.Name ?? "");
-                    row.CreateCell(3).SetCellValue(med.Supplier?.CompanyName ?? "");
+                    row.CreateCell(1).SetCellValue(ExcelCellSanitizer.SafeText(med.Name));
+                    row.CreateCell(2).SetCellValue(ExcelCellSanitizer.SafeText(med.Category?.Name));
+                    row.CreateCell(3).SetCellValue(ExcelCellSanitizer.SafeText(med.Supplier?.CompanyName));
                     row.CreateCell(4).SetCellValue((double)(med.Price ?? 0));
                     row.CreateCell(5).SetCellValue((double)(med.OldPrice ?? 0));
                     // Để trống Số lượng tồn kho khi xuất — tồn kho quản lý theo lô ở tab Kho Dược liệu,
                     // xuất ra rồi nhập lại nguyên file sẽ không cộng/xóa nhầm tồn kho hiện có.
                     // Chỉ điền cột này (kèm Hạn sử dụng) khi THỰC SỰ muốn nhập thêm kho qua Excel.
-                    row.CreateCell(7).SetCellValue(med.Unit ?? "");
-                    row.CreateCell(8).SetCellValue(med.Description ?? "");
+                    row.CreateCell(7).SetCellValue(ExcelCellSanitizer.SafeText(med.Unit));
+                    row.CreateCell(8).SetCellValue(ExcelCellSanitizer.SafeText(med.Description));
 
                     // Cột Hình ảnh: nhúng ảnh nếu có, hoặc ghi URL
                     bool imageEmbedded = false;

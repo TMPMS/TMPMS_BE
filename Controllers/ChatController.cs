@@ -57,6 +57,7 @@ namespace TMPMS.Controllers
         private const int MaxImageBase64Length = 7_000_000; // ~5MB ảnh gốc sau khi encode base64
 
         [HttpPost]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("chat")]
         public async Task<IActionResult> Chat([FromBody] ChatRequest request)
         {
             if (string.IsNullOrEmpty(request.Text) && string.IsNullOrEmpty(request.ImageBase64))

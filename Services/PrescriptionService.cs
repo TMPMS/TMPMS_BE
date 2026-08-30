@@ -92,7 +92,7 @@ namespace TMPMS.Services
                     DoctorName = string.IsNullOrWhiteSpace(dto.DoctorName) ? "Bác sĩ Đông Y" : dto.DoctorName,
                     Hospital = string.IsNullOrWhiteSpace(dto.Hospital) ? "Phòng khám Đông Y TMPMS" : dto.Hospital,
                     PrescriptionDate = dto.PrescriptionDate == default ? DateTime.Now : dto.PrescriptionDate,
-                    ImageUrl = dto.ImageUrl ?? "",
+                    ImageUrl = SanitizeImageUrl(dto.ImageUrl) ?? "",
                     AppointmentId = dto.AppointmentId,
                     PatientId = dto.PatientId,
                     Status = dto.Items != null && dto.Items.Any() ? "Approved" : "Pending",
@@ -208,12 +208,30 @@ namespace TMPMS.Services
 
         // Đọc ảnh toa thuốc bằng AI (Gemini Vision) và gợi ý khớp với danh mục dược phẩm hiện có.
         // Chỉ trả về gợi ý — không tạo PrescriptionItem hay trừ kho, Dược sĩ phải xem lại rồi mới Finalize.
+        // Chỉ chấp nhận ImageUrl đúng định dạng server tự sinh qua POST /api/Prescription/upload-image
+        // (tên file GUID trong thư mục uploads/prescriptions) — trước đây Create() nhận thẳng chuỗi tuỳ
+        // ý từ client làm ImageUrl mà không validate, cho phép path traversal (vd "../../appsettings.json"
+        // hoặc đường dẫn tuyệt đối) khiến ScanImage đọc & gửi bất kỳ file nào trên server ra ngoài qua
+        // Gemini OCR API. Kiểm tra lại lần nữa ngay tại ScanImage (defense in depth) phòng trường hợp có
+        // đường ghi ImageUrl khác trong tương lai quên validate ở đầu vào.
+        private static readonly Regex ValidPrescriptionImageUrl =
+            new(@"^/uploads/prescriptions/[a-fA-F0-9]{32}\.(jpg|jpeg|png|webp)$", RegexOptions.IgnoreCase);
+
+        private static string? SanitizeImageUrl(string? imageUrl)
+        {
+            if (string.IsNullOrWhiteSpace(imageUrl)) return null;
+            var trimmed = imageUrl.Trim();
+            return ValidPrescriptionImageUrl.IsMatch(trimmed) ? trimmed : null;
+        }
+
         public async Task<PrescriptionOcrResultDto> ScanImage(int id)
         {
             var entity = await _repo.GetById(id);
             if (entity == null) throw new InvalidOperationException("Không tìm thấy đơn thuốc.");
             if (string.IsNullOrWhiteSpace(entity.ImageUrl))
                 throw new InvalidOperationException("Đơn thuốc này chưa có ảnh toa thuốc để quét.");
+            if (SanitizeImageUrl(entity.ImageUrl) == null)
+                throw new InvalidOperationException("Đường dẫn ảnh toa thuốc không hợp lệ.");
 
             var root = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
             var relativePath = entity.ImageUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);

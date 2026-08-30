@@ -35,7 +35,11 @@ namespace TMPMS.Services
 
         public async Task<bool> CheckEligibilityAsync(int userId, int medicineId)
         {
-            return await _repo.HasPurchasedAsync(userId, medicineId);
+            // Đã mua VÀ chưa từng review sản phẩm này — trước đây chỉ check đã mua, cho phép 1 user
+            // review vô hạn lần trên cùng 1 sản phẩm để thao túng rating trung bình.
+            var hasPurchased = await _repo.HasPurchasedAsync(userId, medicineId);
+            if (!hasPurchased) return false;
+            return !await _repo.HasReviewedAsync(userId, medicineId);
         }
 
         public async Task<(ReviewResponseDto? Review, string? Error)> CreateAsync(ReviewCreateDto dto)
@@ -49,6 +53,11 @@ namespace TMPMS.Services
             if (!hasPurchased)
             {
                 return (null, "Bạn chỉ có thể đánh giá sản phẩm sau khi đã mua hàng thành công.");
+            }
+
+            if (await _repo.HasReviewedAsync(dto.UserId, dto.MedicineId))
+            {
+                return (null, "Bạn đã đánh giá sản phẩm này rồi.");
             }
 
             var review = new Review
