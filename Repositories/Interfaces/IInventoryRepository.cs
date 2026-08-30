@@ -25,6 +25,10 @@ namespace Repositories.Interfaces
         Task<List<StockBatch>> GetActiveBatchesForFEFO(int medicineId, int warehouseId);
         // Như trên nhưng khoá dòng (UPDLOCK, ROWLOCK) — dùng trong giao dịch trừ/hoàn kho để tránh bán vượt tồn kho khi có nhiều request đồng thời.
         Task<List<StockBatch>> GetActiveBatchesForFEFOForUpdate(int medicineId, int warehouseId);
+        // Khoá 1 lô cụ thể (UPDLOCK, ROWLOCK) trước khi đọc-sửa QuantityRemaining — dùng ở Dispose/Adjust
+        // để đồng bộ mức độ chặt chẽ với DeductStockFEFO/RestoreStockFEFO, tránh mất cập nhật khi 2 nhân
+        // viên cùng thao tác 1 lô đồng thời.
+        Task<StockBatch> GetBatchByIdForUpdate(int id);
         Task<List<StockBatch>> GetBatchesExpiringWithin(int daysAhead);
         Task<StockBatch> AddBatch(StockBatch batch);
         Task<int> GetTotalRemainingForMedicine(int medicineId);
@@ -35,6 +39,13 @@ namespace Repositories.Interfaces
         // Báo cáo lãi gộp: các giao dịch xuất kho có gắn lô + trạng thái đơn hàng liên quan,
         // để chỉ tính là "đã bán" khi đơn đã thanh toán và không bị hủy/trả hàng.
         Task<List<InventoryTransaction>> GetExportTransactionsWithBatch();
+        // Như trên nhưng lọc theo khoảng thời gian giao dịch — dùng cho báo cáo lãi gộp tổng hợp theo kỳ
+        // (gộp mọi sản phẩm), khác GetExportTransactionsWithBatch (không lọc) dùng cho báo cáo theo 1 lô/sản phẩm.
+        Task<List<InventoryTransaction>> GetExportTransactionsWithBatchInRange(DateTime from, DateTime to);
+        // Các giao dịch xuất kho gốc (Type=Export) khớp đúng 1 ReferenceId cụ thể — dùng khi hoàn kho
+        // (RestoreStockFEFO) để hoàn đúng vào (các) lô đã thực sự xuất, thay vì luôn dồn vào lô hết hạn
+        // sớm nhất hiện tại.
+        Task<List<InventoryTransaction>> GetExportTransactionsForReference(int medicineId, int warehouseId, string referenceId);
         Task<Dictionary<int, (string? Status, string? PaymentStatus)>> GetOrderStatusMap();
         Task<List<StockBatch>> GetBatchesWithCost(int? warehouseId, int? medicineId);
         // Giá bán thực tế tại thời điểm bán, để tính doanh thu theo lô chính xác thay vì dùng giá hiện tại.

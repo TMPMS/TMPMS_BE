@@ -177,6 +177,16 @@ namespace TMPMS.Repositories
                 .ToListAsync();
         }
 
+        // Như GetActiveBatchesForFEFOForUpdate nhưng khoá đúng 1 lô theo Id — dùng cho Dispose/Adjust
+        // để 2 nhân viên không cùng đọc-rồi-ghi-đè QuantityRemaining của cùng 1 lô.
+        public async Task<StockBatch> GetBatchByIdForUpdate(int id)
+        {
+            return (await _context.StockBatches
+                .FromSqlInterpolated($"SELECT * FROM StockBatches WITH (UPDLOCK, ROWLOCK) WHERE Id = {id}")
+                .ToListAsync())
+                .FirstOrDefault();
+        }
+
         public async Task<List<StockBatch>> GetBatchesExpiringWithin(int daysAhead)
         {
             var limitDate = DateTime.Now.AddDays(daysAhead);
@@ -240,6 +250,23 @@ namespace TMPMS.Repositories
         {
             return await _context.InventoryTransactions
                 .Where(t => t.Type == "Export" && t.StockBatchId != null)
+                .ToListAsync();
+        }
+
+        public async Task<List<InventoryTransaction>> GetExportTransactionsWithBatchInRange(DateTime from, DateTime to)
+        {
+            return await _context.InventoryTransactions
+                .Include(t => t.StockBatch)
+                .Include(t => t.Medicine)
+                .Where(t => t.Type == "Export" && t.StockBatchId != null && t.CreatedAt >= from && t.CreatedAt <= to)
+                .ToListAsync();
+        }
+
+        public async Task<List<InventoryTransaction>> GetExportTransactionsForReference(int medicineId, int warehouseId, string referenceId)
+        {
+            return await _context.InventoryTransactions
+                .Where(t => t.Type == "Export" && t.MedicineId == medicineId && t.WarehouseId == warehouseId
+                    && t.ReferenceId == referenceId && t.StockBatchId != null)
                 .ToListAsync();
         }
 

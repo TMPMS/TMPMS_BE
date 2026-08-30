@@ -236,22 +236,6 @@ namespace TMPMS.Controllers
             }
         }
 
-        [HttpPut("cancel/{id}")]
-        [Authorize]
-        public async Task<IActionResult> CancelAppointment(int id)
-        {
-            try
-            {
-                int currentUserId = GetCurrentUserId();
-                bool result = await _appointmentService.CancelAppointment(id, currentUserId, CanProxy());
-                return Ok(new { Success = result, Message = "Appointment cancelled successfully." });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { Success = false, Message = ex.Message });
-            }
-        }
-
         [HttpGet("{id}/cancellation-quote")]
         [Authorize]
         public async Task<IActionResult> GetCancellationQuote(int id)

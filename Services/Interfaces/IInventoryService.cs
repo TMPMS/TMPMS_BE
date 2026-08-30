@@ -36,5 +36,8 @@ namespace Services.Interfaces
 
         // Báo cáo lãi gộp ước tính theo lô
         Task<List<BatchProfitDTO>> GetBatchProfitReport(int? warehouseId, int? medicineId);
+        // Báo cáo lãi gộp ước tính tổng hợp theo kỳ (ngày/tháng/năm), gộp mọi sản phẩm — cho phép xem
+        // lãi gộp toàn cửa hàng trong 1 màn hình thay vì phải chọn từng sản phẩm như GetBatchProfitReport.
+        Task<List<ProfitPointDTO>> GetProfitByPeriod(System.DateTime from, System.DateTime to, string groupBy);
     }
 }

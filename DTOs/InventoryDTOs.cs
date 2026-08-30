@@ -212,4 +212,17 @@ namespace TMPMS.DTOs
         public decimal? GrossMarginPercent { get; set; }
         public bool IsEstimated { get; set; }
     }
+
+    // Lãi gộp ước tính tổng hợp theo kỳ (ngày/tháng/năm), gộp mọi sản phẩm — bổ sung cho BatchProfitDTO
+    // (vốn chỉ xem được từng sản phẩm một). Cùng quy tắc "đã bán" và cách lấy giá bán thực tế như
+    // BatchProfitDTO (xem GetProfitByPeriod).
+    public class ProfitPointDTO
+    {
+        public string Period { get; set; }
+        public decimal EstimatedRevenue { get; set; }
+        public decimal EstimatedCost { get; set; }
+        public decimal EstimatedGrossProfit { get; set; }
+        public decimal? GrossMarginPercent { get; set; }
+        public bool IsEstimated { get; set; }
+    }
 }

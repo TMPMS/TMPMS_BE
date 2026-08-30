@@ -72,10 +72,6 @@ namespace TMPMS.Services
                 };
             }
 
-            // Chống đặt trùng: không cho 2 lịch hẹn cùng bác sĩ tại cùng thời điểm (trừ lịch đã hủy/từ chối/hoàn thành)
-            if (targetStaffId != null && await _appointmentRepository.IsAppointmentExist(targetStaffId.Value, appointmentDate))
-                throw new Exception("Bác sĩ đã có lịch hẹn vào thời điểm này. Vui lòng chọn thời gian khác.");
-
             Appointment appointment = new Appointment
             {
                 UserId = targetUserId,
@@ -89,8 +85,14 @@ namespace TMPMS.Services
                 ConfirmationDeadline = DateTime.UtcNow.AddHours(24)
             };
 
-            bool created = await _appointmentRepository.Add(appointment);
-            if (created && !string.IsNullOrWhiteSpace(user.Email))
+            // Kiểm tra "bác sĩ đã có lịch chưa" + thêm lịch mới nguyên tử trong 1 transaction — tách
+            // riêng 2 bước (check rồi insert) trước đây tạo race condition: 2 request đặt cùng bác sĩ/
+            // thời điểm chạy đồng thời có thể cả hai đều thấy "chưa có lịch" rồi cùng đặt thành công.
+            bool created = await _appointmentRepository.TryAddIfSlotFreeAsync(appointment);
+            if (!created)
+                throw new Exception("Bác sĩ đã có lịch hẹn vào thời điểm này. Vui lòng chọn thời gian khác.");
+
+            if (!string.IsNullOrWhiteSpace(user.Email))
             {
                 await _emailService.SendEmailAsync(
                     user.Email,
@@ -142,29 +144,6 @@ namespace TMPMS.Services
         public async Task<bool> DeleteAppointment(int id)
         {
             return await _appointmentRepository.Delete(id);
-        }
-
-        public async Task<bool> CancelAppointment(int id, int currentUserId, bool isStaff)
-        {
-            var appointment = await _appointmentRepository.GetById(id);
-            if (appointment == null) throw new Exception("Appointment not found.");
-            if (!isStaff && appointment.UserId != currentUserId)
-                throw new Exception("Bạn không có quyền hủy lịch hẹn này.");
-            if (appointment.Status is not ("PendingConfirmation" or "Confirmed" or "AlternativeProposed" or "RescheduleRequested"))
-                throw new Exception("Lịch hẹn ở trạng thái hiện tại không thể hủy.");
-            appointment.Status = "Cancelled";
-            appointment.CancelledAt = DateTime.UtcNow;
-            var updated = await _appointmentRepository.Update(appointment);
-            if (updated && !string.IsNullOrWhiteSpace(appointment.User?.Email))
-            {
-                await _emailService.SendEmailAsync(
-                    appointment.User.Email,
-                    "Lịch hẹn đã được hủy - TMPMS",
-                    $"<p>Xin chào {System.Net.WebUtility.HtmlEncode(appointment.User.FullName ?? appointment.User.UserName)},</p>" +
-                    $"<p>Lịch hẹn khám vào lúc <b>{appointment.AppointmentDate:HH:mm dd/MM/yyyy}</b> của bạn đã được <b>hủy</b> thành công.</p>" +
-                    "<p>Nếu đây không phải yêu cầu của bạn, vui lòng liên hệ nhà thuốc để được hỗ trợ.</p>");
-            }
-            return updated;
         }
 
         public async Task<bool> ApproveAppointment(int id, int staffId)

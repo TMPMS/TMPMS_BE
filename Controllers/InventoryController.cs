@@ -154,5 +154,11 @@ namespace TMPMS.Controllers
         [HttpGet("reports/profit")]
         public async Task<ActionResult> GetBatchProfitReport([FromQuery] int? warehouseId, [FromQuery] int? medicineId)
             => Ok(await _service.GetBatchProfitReport(warehouseId, medicineId));
+
+        // Lãi gộp tổng hợp theo kỳ, gộp mọi sản phẩm — bổ sung cho /reports/profit (vốn chỉ xem được
+        // từng sản phẩm một), để có 1 màn hình xem lãi gộp toàn cửa hàng theo ngày/tháng/năm.
+        [HttpGet("reports/profit-summary")]
+        public async Task<ActionResult> GetProfitSummary([FromQuery] DateTime from, [FromQuery] DateTime to, [FromQuery] string groupBy = "Day")
+            => Ok(await _service.GetProfitByPeriod(from, to, groupBy));
     }
 }

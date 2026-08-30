@@ -26,5 +26,9 @@ namespace TMPMS.Repositories.Interfaces
         Task<List<OrderItem>> GetOrderItemsAsync(int orderId);
         Task<Voucher?> GetVoucherByIdAsync(int id);
         Task<Payment?> GetLatestPaymentAsync(int orderId);
+
+        // Đơn còn "Pending"/"Unpaid" quá lâu (khách bỏ ngang, không qua PayOS nên không có webhook tự
+        // hủy) — dùng cho StaleOrderBackgroundService để tự hủy + hoàn kho, tránh giữ chỗ FEFO vô thời hạn.
+        Task<List<int>> GetStalePendingOrderIdsAsync(System.DateTime olderThan);
     }
 }

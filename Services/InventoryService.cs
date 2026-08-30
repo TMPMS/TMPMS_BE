@@ -10,50 +10,27 @@ namespace TMPMS.Services
         private readonly IInventoryRepository _repo;
         public InventoryService(IInventoryRepository repo) => _repo = repo;
 
-        // Nhập/Xuất kho: ghi log transaction + cập nhật số lượng tồn kho tại warehouse
+        // Xuất kho thủ công (vd. dùng nội bộ, hủy không qua quy trình lô) — LUÔN đi qua FEFO để trừ
+        // đúng vào (các) lô cụ thể. Trước đây type Adjustment/Export ghi thẳng vào cache InventoryStock/
+        // Medicine.StockQuantity mà không đụng StockBatch — cache đó bị RecomputeStockCaches (chạy ở mọi
+        // thao tác lô khác) tính lại từ tổng StockBatch ngay sau đó, âm thầm xoá bỏ hiệu lực của thao tác
+        // này. Nhập kho (Import) phải qua /api/inventory/batches; điều chỉnh theo kiểm kê phải qua
+        // /api/inventory/batches/{id}/adjust (gắn với 1 lô cụ thể) — cả hai không thể map an toàn vào
+        // đây vì không có ngữ nghĩa "trừ theo lô nào" cho một mức tồn kho tổng.
         public async Task<InventoryTransactionResponseDTO> CreateTransaction(StockTransactionCreateDTO dto)
         {
             if (dto.Quantity <= 0)
                 throw new ArgumentException("Số lượng phải lớn hơn 0.");
 
-            var allowedTypes = new[] { "Export", "Adjustment" };
-            if (!allowedTypes.Contains(dto.Type))
-                throw new ArgumentException("Loại giao dịch không hợp lệ (Export/Adjustment). Nhập kho (Import) phải thực hiện qua API tạo lô hàng (/api/inventory/batches) để theo dõi hạn dùng.");
+            if (dto.Type != "Export")
+                throw new ArgumentException("Chỉ hỗ trợ Export qua endpoint này. Nhập kho (Import) phải qua /api/inventory/batches để theo dõi hạn dùng; điều chỉnh theo kiểm kê phải qua /api/inventory/batches/{id}/adjust để không làm sai lệch số liệu theo lô.");
 
-            var stock = await _repo.GetStock(dto.MedicineId, dto.WarehouseId);
-            int currentQty = stock?.Quantity ?? 0;
-
-            int newQty = dto.Type switch
-            {
-                "Import" => currentQty + dto.Quantity,
-                "Export" => currentQty - dto.Quantity,
-                "Adjustment" => dto.Quantity,
-                _ => currentQty
-            };
-
-            if (newQty < 0)
-                throw new InvalidOperationException("Số lượng tồn kho không đủ để xuất.");
-
-            await _repo.UpsertStock(new InventoryStock
-            {
-                MedicineId = dto.MedicineId,
-                WarehouseId = dto.WarehouseId,
-                Quantity = newQty
-            });
-
-            var transaction = await _repo.AddTransaction(new InventoryTransaction
-            {
-                MedicineId = dto.MedicineId,
-                WarehouseId = dto.WarehouseId,
-                Type = dto.Type,
-                Quantity = dto.Quantity,
-                ReferenceId = dto.ReferenceId,
-                CreatedAt = DateTime.Now
-            });
+            var referenceId = string.IsNullOrWhiteSpace(dto.ReferenceId) ? "MANUAL-EXPORT" : dto.ReferenceId;
+            await DeductStockFEFO(dto.MedicineId, dto.WarehouseId, dto.Quantity, referenceId);
 
             var list = await _repo.GetTransactions(dto.MedicineId, dto.WarehouseId);
-            var full = list.FirstOrDefault(t => t.Id == transaction.Id) ?? transaction;
-            return MapTransaction(full);
+            var latest = list.FirstOrDefault(t => t.Type == "Export" && t.ReferenceId == referenceId);
+            return latest == null ? null : MapTransaction(latest);
         }
 
         public async Task<List<InventoryStockResponseDTO>> GetStockByWarehouse(int warehouseId)
@@ -234,28 +211,44 @@ namespace TMPMS.Services
 
         public async Task<StockBatchResponseDTO> DisposeBatch(int batchId, BatchDisposeDTO dto)
         {
-            var batch = await _repo.GetBatchById(batchId);
-            if (batch == null) throw new ArgumentException("Không tìm thấy lô hàng.");
-
-            var qty = dto.Quantity ?? batch.QuantityRemaining;
-            if (qty <= 0 || qty > batch.QuantityRemaining)
-                throw new ArgumentException($"Số lượng hủy không hợp lệ (còn lại: {batch.QuantityRemaining}).");
-
-            batch.QuantityRemaining -= qty;
-            if (batch.QuantityRemaining == 0) batch.Status = StockBatchStatus.Disposed;
-
-            await _repo.AddTransaction(new InventoryTransaction
+            // Khoá dòng (UPDLOCK/ROWLOCK) như DeductStockFEFO/RestoreStockFEFO — tránh 2 nhân viên cùng
+            // hủy/điều chỉnh 1 lô đồng thời đọc QuantityRemaining cũ rồi cùng ghi đè (mất cập nhật).
+            var tx = await _repo.BeginTransactionAsync();
+            try
             {
-                MedicineId = batch.MedicineId,
-                WarehouseId = batch.WarehouseId,
-                Type = "Dispose",
-                Quantity = qty,
-                ReferenceId = string.IsNullOrWhiteSpace(dto.Reason) ? "Hủy hàng hết hạn" : dto.Reason,
-                StockBatchId = batch.Id,
-                CreatedAt = DateTime.Now
-            });
+                var batch = await _repo.GetBatchByIdForUpdate(batchId);
+                if (batch == null) throw new ArgumentException("Không tìm thấy lô hàng.");
 
-            await _repo.RecomputeStockCaches(batch.MedicineId, batch.WarehouseId);
+                var qty = dto.Quantity ?? batch.QuantityRemaining;
+                if (qty <= 0 || qty > batch.QuantityRemaining)
+                    throw new ArgumentException($"Số lượng hủy không hợp lệ (còn lại: {batch.QuantityRemaining}).");
+
+                batch.QuantityRemaining -= qty;
+                if (batch.QuantityRemaining == 0) batch.Status = StockBatchStatus.Disposed;
+
+                await _repo.AddTransaction(new InventoryTransaction
+                {
+                    MedicineId = batch.MedicineId,
+                    WarehouseId = batch.WarehouseId,
+                    Type = "Dispose",
+                    Quantity = qty,
+                    ReferenceId = string.IsNullOrWhiteSpace(dto.Reason) ? "Hủy hàng hết hạn" : dto.Reason,
+                    StockBatchId = batch.Id,
+                    CreatedAt = DateTime.Now
+                });
+
+                await _repo.RecomputeStockCaches(batch.MedicineId, batch.WarehouseId);
+                if (tx != null) await tx.CommitAsync();
+            }
+            catch
+            {
+                if (tx != null) await tx.RollbackAsync();
+                throw;
+            }
+            finally
+            {
+                if (tx != null) tx.Dispose();
+            }
 
             var full = await _repo.GetBatchById(batchId);
             return MapBatch(full);
@@ -263,29 +256,43 @@ namespace TMPMS.Services
 
         public async Task<StockBatchResponseDTO> AdjustBatch(int batchId, BatchAdjustDTO dto)
         {
-            var batch = await _repo.GetBatchById(batchId);
-            if (batch == null) throw new ArgumentException("Không tìm thấy lô hàng.");
-            if (dto.QuantityRemaining < 0)
-                throw new ArgumentException("Số lượng kiểm kê không hợp lệ.");
-
-            var diff = dto.QuantityRemaining - batch.QuantityRemaining;
-            batch.QuantityRemaining = dto.QuantityRemaining;
-
-            if (diff != 0)
+            var tx = await _repo.BeginTransactionAsync();
+            try
             {
-                await _repo.AddTransaction(new InventoryTransaction
-                {
-                    MedicineId = batch.MedicineId,
-                    WarehouseId = batch.WarehouseId,
-                    Type = "Adjustment",
-                    Quantity = diff,
-                    ReferenceId = string.IsNullOrWhiteSpace(dto.Reason) ? "Kiểm kê điều chỉnh" : dto.Reason,
-                    StockBatchId = batch.Id,
-                    CreatedAt = DateTime.Now
-                });
-            }
+                var batch = await _repo.GetBatchByIdForUpdate(batchId);
+                if (batch == null) throw new ArgumentException("Không tìm thấy lô hàng.");
+                if (dto.QuantityRemaining < 0)
+                    throw new ArgumentException("Số lượng kiểm kê không hợp lệ.");
 
-            await _repo.RecomputeStockCaches(batch.MedicineId, batch.WarehouseId);
+                var diff = dto.QuantityRemaining - batch.QuantityRemaining;
+                batch.QuantityRemaining = dto.QuantityRemaining;
+
+                if (diff != 0)
+                {
+                    await _repo.AddTransaction(new InventoryTransaction
+                    {
+                        MedicineId = batch.MedicineId,
+                        WarehouseId = batch.WarehouseId,
+                        Type = "Adjustment",
+                        Quantity = diff,
+                        ReferenceId = string.IsNullOrWhiteSpace(dto.Reason) ? "Kiểm kê điều chỉnh" : dto.Reason,
+                        StockBatchId = batch.Id,
+                        CreatedAt = DateTime.Now
+                    });
+                }
+
+                await _repo.RecomputeStockCaches(batch.MedicineId, batch.WarehouseId);
+                if (tx != null) await tx.CommitAsync();
+            }
+            catch
+            {
+                if (tx != null) await tx.RollbackAsync();
+                throw;
+            }
+            finally
+            {
+                if (tx != null) tx.Dispose();
+            }
 
             var full = await _repo.GetBatchById(batchId);
             return MapBatch(full);
@@ -327,7 +334,11 @@ namespace TMPMS.Services
                     });
                 }
 
-                await TrackFlashSaleSold(medicineId, quantity);
+                // Chỉ tính là "bán theo Flash Sale" khi đây là 1 đơn hàng/đơn thuốc thực sự — không tính
+                // xuất kho thủ công/nội bộ (vd hao hụt, dùng thử) dù giờ đường đó cũng đi qua FEFO (xem
+                // CreateTransaction), nếu không 1 lần xuất nội bộ có thể vô tình làm Flash Sale tự kết
+                // thúc sớm (chạm QuantityLimit) dù chưa khách nào mua đủ.
+                if (IsCustomerSaleReference(referenceId)) await TrackFlashSaleSold(medicineId, quantity);
                 await _repo.RecomputeStockCaches(medicineId, warehouseId);
                 if (tx != null) await tx.CommitAsync();
             }
@@ -342,14 +353,39 @@ namespace TMPMS.Services
             }
         }
 
-        // Cộng dồn số lượng đã bán theo giá Flash Sale (chỉ khi sản phẩm đang có Flash Sale đang chạy
-        // với giới hạn số lượng) — dùng để tự động gỡ khi bán hết suất, không cần đợi tick định kỳ.
+        private static bool IsCustomerSaleReference(string? referenceId) =>
+            !string.IsNullOrEmpty(referenceId) && (referenceId.StartsWith("ORDER-") || referenceId.StartsWith("RX-"));
+
+        // Cộng dồn số lượng đã bán theo giá Flash Sale (nếu có giới hạn số lượng) — dùng để tự động gỡ
+        // khi bán hết suất, không cần đợi tick định kỳ. Đồng thời: nếu Flash Sale này được tạo từ 1 lô
+        // cận date cụ thể (BatchId) và lô đó vừa bán hết, tự kết thúc sale ngay — Flash Sale được tạo ra
+        // để xả đúng lô đó, không phải để tiếp tục giảm giá cho lô kế tiếp (có thể khác giá vốn), tránh
+        // sai lệch biên lợi nhuận so với mục đích ban đầu.
         private async Task TrackFlashSaleSold(int medicineId, int quantity)
         {
             var activeSale = await _repo.GetActiveFlashSaleByMedicine(medicineId);
-            if (activeSale == null || !activeSale.QuantityLimit.HasValue) return;
+            if (activeSale == null) return;
             if (activeSale.StartTime.HasValue && activeSale.StartTime.Value > DateTime.Now) return;
-            activeSale.QuantitySold += quantity;
+
+            if (activeSale.QuantityLimit.HasValue)
+                activeSale.QuantitySold += quantity;
+
+            if (activeSale.BatchId.HasValue)
+            {
+                var batch = await _repo.GetBatchById(activeSale.BatchId.Value);
+                if (batch == null || batch.QuantityRemaining <= 0)
+                {
+                    var medicine = await _repo.GetMedicineById(medicineId);
+                    if (medicine != null && medicine.Price == activeSale.SalePrice)
+                    {
+                        medicine.Price = (medicine.OldPrice.HasValue && medicine.OldPrice > 0) ? medicine.OldPrice : activeSale.OriginalPrice;
+                        medicine.OldPrice = null;
+                        medicine.Discount = null;
+                    }
+                    activeSale.IsActive = false;
+                    activeSale.RemovedAt = DateTime.UtcNow;
+                }
+            }
         }
 
         public async Task RestoreStockFEFO(int medicineId, int warehouseId, int quantity, string referenceId)
@@ -359,42 +395,86 @@ namespace TMPMS.Services
             var tx = await _repo.BeginTransactionAsync();
             try
             {
-                var batches = await _repo.GetActiveBatchesForFEFOForUpdate(medicineId, warehouseId);
-                var target = batches.FirstOrDefault();
+                var remaining = quantity;
 
-                if (target == null)
+                // Hoàn đúng vào (các) lô đã thực sự xuất cho giao dịch gốc, nếu còn xác định được — chính
+                // xác hơn cho lãi/lỗ theo lô so với việc luôn dồn vào lô hết hạn sớm nhất hiện tại (vốn có
+                // thể là lô khác với lô đã bán). Ta suy ra ReferenceId gốc từ quy ước đặt tên toàn hệ thống
+                // (OrderService/PayOSController/PrescriptionService luôn gọi Restore với hậu tố "-RESTOCK"
+                // của đúng ReferenceId đã dùng khi Deduct).
+                var originalReferenceId = referenceId.EndsWith("-RESTOCK", StringComparison.Ordinal)
+                    ? referenceId[..^"-RESTOCK".Length]
+                    : null;
+
+                if (originalReferenceId != null)
                 {
-                    // Không còn lô nào đang hoạt động (đã hết hạn/bị hủy hết) — tạo lô "hàng hoàn trả"
-                    // để không làm mất số lượng, đánh dấu để Dược sĩ kiểm tra lại hạn dùng thực tế.
-                    target = await _repo.AddBatch(new StockBatch
+                    var originalExports = (await _repo.GetExportTransactionsForReference(medicineId, warehouseId, originalReferenceId))
+                        ?? new List<InventoryTransaction>();
+
+                    foreach (var exportTx in originalExports.OrderByDescending(t => t.CreatedAt))
+                    {
+                        if (remaining <= 0) break;
+                        var batch = await _repo.GetBatchByIdForUpdate(exportTx.StockBatchId!.Value);
+                        if (batch == null || batch.Status == StockBatchStatus.Disposed) continue;
+
+                        var give = Math.Min(exportTx.Quantity, remaining);
+                        batch.QuantityRemaining += give;
+                        remaining -= give;
+
+                        await _repo.AddTransaction(new InventoryTransaction
+                        {
+                            MedicineId = medicineId,
+                            WarehouseId = warehouseId,
+                            Type = "Import",
+                            Quantity = give,
+                            ReferenceId = referenceId,
+                            StockBatchId = batch.Id,
+                            CreatedAt = DateTime.Now
+                        });
+                    }
+                }
+
+                if (remaining > 0)
+                {
+                    // Không xác định được lô gốc (dữ liệu cũ trước khi có cơ chế này, hoặc lô gốc đã bị
+                    // hủy/không còn) — dồn phần còn lại vào lô còn hạn gần nhất hiện có, như trước đây.
+                    var batches = await _repo.GetActiveBatchesForFEFOForUpdate(medicineId, warehouseId);
+                    var target = batches.FirstOrDefault();
+
+                    if (target == null)
+                    {
+                        // Không còn lô nào đang hoạt động (đã hết hạn/bị hủy hết) — tạo lô "hàng hoàn trả"
+                        // để không làm mất số lượng, đánh dấu để Dược sĩ kiểm tra lại hạn dùng thực tế.
+                        target = await _repo.AddBatch(new StockBatch
+                        {
+                            MedicineId = medicineId,
+                            WarehouseId = warehouseId,
+                            BatchNumber = $"RESTORE-{medicineId}-{DateTime.Now:yyyyMMddHHmmssfff}",
+                            ManufactureDate = DateTime.Now,
+                            ExpiryDate = DateTime.Now.AddYears(1),
+                            QuantityReceived = remaining,
+                            QuantityRemaining = 0,
+                            ReceivedAt = DateTime.Now,
+                            Status = StockBatchStatus.Active,
+                            Note = "Hàng hoàn trả từ đơn hủy — cần Dược sĩ kiểm tra lại hạn dùng thực tế."
+                        });
+                    }
+
+                    target.QuantityRemaining += remaining;
+
+                    await _repo.AddTransaction(new InventoryTransaction
                     {
                         MedicineId = medicineId,
                         WarehouseId = warehouseId,
-                        BatchNumber = $"RESTORE-{medicineId}-{DateTime.Now:yyyyMMddHHmmssfff}",
-                        ManufactureDate = DateTime.Now,
-                        ExpiryDate = DateTime.Now.AddYears(1),
-                        QuantityReceived = quantity,
-                        QuantityRemaining = 0,
-                        ReceivedAt = DateTime.Now,
-                        Status = StockBatchStatus.Active,
-                        Note = "Hàng hoàn trả từ đơn hủy — cần Dược sĩ kiểm tra lại hạn dùng thực tế."
+                        Type = "Import",
+                        Quantity = remaining,
+                        ReferenceId = referenceId,
+                        StockBatchId = target.Id,
+                        CreatedAt = DateTime.Now
                     });
                 }
 
-                target.QuantityRemaining += quantity;
-
-                await _repo.AddTransaction(new InventoryTransaction
-                {
-                    MedicineId = medicineId,
-                    WarehouseId = warehouseId,
-                    Type = "Import",
-                    Quantity = quantity,
-                    ReferenceId = referenceId,
-                    StockBatchId = target.Id,
-                    CreatedAt = DateTime.Now
-                });
-
-                await UntrackFlashSaleSold(medicineId, quantity);
+                if (IsCustomerSaleReference(referenceId)) await UntrackFlashSaleSold(medicineId, quantity);
                 await _repo.RecomputeStockCaches(medicineId, warehouseId);
                 if (tx != null) await tx.CommitAsync();
             }
@@ -484,6 +564,19 @@ namespace TMPMS.Services
             var originalPrice = (medicine.OldPrice != null && medicine.OldPrice > 0) ? medicine.OldPrice.Value : medicine.Price.Value;
             var salePrice = Math.Round(originalPrice * (1 - discountPercent / 100m), 0);
             var startsImmediately = !dto.StartTime.HasValue || dto.StartTime.Value <= now;
+
+            // Kết thúc Flash Sale đang Active hiện có cho sản phẩm này trước khi tạo bản ghi mới — trước
+            // đây luôn INSERT mới mà không dọn bản ghi cũ, khiến 2 bản ghi Active tồn tại song song cho
+            // cùng 1 sản phẩm (dễ xảy ra vì nút "Đưa vào Flash Sale" ở FE không kiểm tra sản phẩm đã đang
+            // sale hay chưa). Bản ghi cũ không có EndTime/QuantityLimit thì mồ côi vĩnh viễn vì
+            // RemoveFlashSale chỉ gỡ được bản ghi mới nhất.
+            var existingActive = await _repo.GetActiveFlashSaleByMedicine(medicineId);
+            if (existingActive != null)
+            {
+                existingActive.IsActive = false;
+                existingActive.RemovedAt = DateTime.UtcNow;
+                existingActive.RemovedByStaffId = staffId;
+            }
 
             if (startsImmediately)
             {
@@ -683,44 +776,8 @@ namespace TMPMS.Services
             var orderPriceMap = await _repo.GetOrderItemPriceMap();
             var prescriptionPriceMap = await _repo.GetPrescriptionItemPriceMap();
 
-            // Chỉ tính là "đã bán thực tế" khi đơn hàng đã thanh toán (đã nhận tiền)
-            // và không bị hủy/trả hàng. Đơn kê thuốc (RX-*) không có khái niệm thanh toán
-            // riêng trong hệ thống này nên tạm tính là đã bán ngay khi kê đơn.
-            bool CountsAsSold(string? referenceId)
-            {
-                if (string.IsNullOrEmpty(referenceId)) return false;
-                if (referenceId.StartsWith("ORDER-") && !referenceId.EndsWith("-RESTOCK"))
-                {
-                    if (int.TryParse(referenceId.AsSpan(6), out var orderId)
-                        && orderStatusMap.TryGetValue(orderId, out var info))
-                    {
-                        return info.PaymentStatus == "Paid" && info.Status != "Cancelled" && info.Status != "Returned";
-                    }
-                    return false;
-                }
-                return referenceId.StartsWith("RX-");
-            }
-
-            // Giá bán THỰC TẾ tại thời điểm bán: OrderItem.Price (đơn hàng) hoặc PrescriptionItem.UnitPrice
-            // (đơn thuốc, snapshot từ Medicine.Price lúc kê/duyệt đơn). Chỉ rơi về giá hiện tại của Medicine
-            // khi không tra được giá thực — xảy ra với dữ liệu tạo trước khi có snapshot giá đơn thuốc.
-            (decimal Price, bool IsActual) ResolveUnitPrice(string referenceId, int medId)
-            {
-                if (referenceId.StartsWith("ORDER-") && int.TryParse(referenceId.AsSpan(6), out var orderId)
-                    && orderPriceMap.TryGetValue((orderId, medId), out var orderPrice))
-                {
-                    return (orderPrice, true);
-                }
-                if (referenceId.StartsWith("RX-") && int.TryParse(referenceId.AsSpan(3), out var rxId)
-                    && prescriptionPriceMap.TryGetValue((rxId, medId), out var rxPrice) && rxPrice.HasValue)
-                {
-                    return (rxPrice.Value, true);
-                }
-                return (currentSellPrice ?? 0m, false);
-            }
-
             var txByBatch = exportTx
-                .Where(t => t.StockBatchId.HasValue && batchIds.Contains(t.StockBatchId.Value) && CountsAsSold(t.ReferenceId))
+                .Where(t => t.StockBatchId.HasValue && batchIds.Contains(t.StockBatchId.Value) && CountsAsSold(t.ReferenceId, orderStatusMap))
                 .GroupBy(t => t.StockBatchId!.Value)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
@@ -732,7 +789,7 @@ namespace TMPMS.Services
                 var isEstimated = false;
                 foreach (var t in txs)
                 {
-                    var (price, isActual) = ResolveUnitPrice(t.ReferenceId, t.MedicineId);
+                    var (price, isActual) = ResolveUnitPrice(t.ReferenceId, t.MedicineId, orderPriceMap, prescriptionPriceMap, currentSellPrice ?? 0m);
                     revenue += t.Quantity * price;
                     if (!isActual) isEstimated = true;
                 }
@@ -759,6 +816,95 @@ namespace TMPMS.Services
             })
             .OrderByDescending(p => p.EstimatedGrossProfit)
             .ToList();
+        }
+
+        // Như GetBatchProfitReport nhưng gộp lãi gộp của MỌI sản phẩm theo kỳ (ngày/tháng/năm) — cho
+        // chủ cửa hàng xem "tháng này lãi gộp bao nhiêu" trong 1 màn hình thay vì phải chọn từng sản
+        // phẩm một. Dùng chung quy tắc "đã bán"/giá bán thực tế với GetBatchProfitReport.
+        public async Task<List<ProfitPointDTO>> GetProfitByPeriod(DateTime from, DateTime to, string groupBy)
+        {
+            var exportTx = await _repo.GetExportTransactionsWithBatchInRange(from, to);
+            if (exportTx.Count == 0) return new List<ProfitPointDTO>();
+
+            var orderStatusMap = await _repo.GetOrderStatusMap();
+            var orderPriceMap = await _repo.GetOrderItemPriceMap();
+            var prescriptionPriceMap = await _repo.GetPrescriptionItemPriceMap();
+
+            var buckets = new Dictionary<string, ProfitPointDTO>();
+            foreach (var t in exportTx)
+            {
+                if (t.StockBatch?.UnitCostPrice == null) continue;
+                if (!CountsAsSold(t.ReferenceId, orderStatusMap)) continue;
+
+                var key = DateKey(t.CreatedAt, groupBy);
+                if (!buckets.TryGetValue(key, out var point))
+                {
+                    point = new ProfitPointDTO { Period = key };
+                    buckets[key] = point;
+                }
+
+                var (price, isActual) = ResolveUnitPrice(t.ReferenceId, t.MedicineId, orderPriceMap, prescriptionPriceMap, t.Medicine?.Price ?? 0m);
+                point.EstimatedRevenue += t.Quantity * price;
+                point.EstimatedCost += t.Quantity * t.StockBatch.UnitCostPrice.Value;
+                if (!isActual) point.IsEstimated = true;
+            }
+
+            foreach (var point in buckets.Values)
+            {
+                point.EstimatedGrossProfit = point.EstimatedRevenue - point.EstimatedCost;
+                point.GrossMarginPercent = point.EstimatedRevenue > 0
+                    ? Math.Round(point.EstimatedGrossProfit / point.EstimatedRevenue * 100, 1)
+                    : null;
+            }
+
+            return buckets.Values.OrderBy(p => p.Period).ToList();
+        }
+
+        private static string DateKey(DateTime d, string groupBy) => groupBy switch
+        {
+            "Month" => d.ToString("yyyy-MM"),
+            "Year" => d.ToString("yyyy"),
+            _ => d.ToString("yyyy-MM-dd")
+        };
+
+        // Chỉ tính là "đã bán thực tế" khi đơn hàng đã thanh toán (đã nhận tiền) và không bị hủy/trả
+        // hàng. Đơn kê thuốc (RX-*) không có khái niệm thanh toán riêng trong hệ thống này nên tạm tính
+        // là đã bán ngay khi kê đơn. Dùng chung cho GetBatchProfitReport và GetProfitByPeriod.
+        private static bool CountsAsSold(string? referenceId, Dictionary<int, (string? Status, string? PaymentStatus)> orderStatusMap)
+        {
+            if (string.IsNullOrEmpty(referenceId)) return false;
+            if (referenceId.StartsWith("ORDER-") && !referenceId.EndsWith("-RESTOCK"))
+            {
+                if (int.TryParse(referenceId.AsSpan(6), out var orderId)
+                    && orderStatusMap.TryGetValue(orderId, out var info))
+                {
+                    return info.PaymentStatus == "Paid" && info.Status != "Cancelled" && info.Status != "Returned";
+                }
+                return false;
+            }
+            return referenceId.StartsWith("RX-");
+        }
+
+        // Giá bán THỰC TẾ tại thời điểm bán: OrderItem.Price (đơn hàng) hoặc PrescriptionItem.UnitPrice
+        // (đơn thuốc, snapshot từ Medicine.Price lúc kê/duyệt đơn). Chỉ rơi về giá fallback (giá hiện tại
+        // của Medicine) khi không tra được giá thực — dữ liệu tạo trước khi có snapshot giá đơn thuốc.
+        private static (decimal Price, bool IsActual) ResolveUnitPrice(
+            string referenceId, int medId,
+            Dictionary<(int OrderId, int MedicineId), decimal> orderPriceMap,
+            Dictionary<(int PrescriptionId, int MedicineId), decimal?> prescriptionPriceMap,
+            decimal fallbackPrice)
+        {
+            if (referenceId.StartsWith("ORDER-") && int.TryParse(referenceId.AsSpan(6), out var orderId)
+                && orderPriceMap.TryGetValue((orderId, medId), out var orderPrice))
+            {
+                return (orderPrice, true);
+            }
+            if (referenceId.StartsWith("RX-") && int.TryParse(referenceId.AsSpan(3), out var rxId)
+                && prescriptionPriceMap.TryGetValue((rxId, medId), out var rxPrice) && rxPrice.HasValue)
+            {
+                return (rxPrice.Value, true);
+            }
+            return (fallbackPrice, false);
         }
 
         private StockBatchResponseDTO MapBatch(StockBatch b) => new StockBatchResponseDTO

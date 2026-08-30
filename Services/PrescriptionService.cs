@@ -179,6 +179,22 @@ namespace TMPMS.Services
 
             var previousStatus = entity.Status;
             entity.Status = dto.Status;
+
+            // Từ chối một đơn đã duyệt/đã xuất kho (Approved/Fulfilled) phải hoàn lại đúng số lượng đã
+            // trừ FEFO trước đó — nếu không, hàng bị trừ khỏi lô vĩnh viễn dù đơn không được thực hiện
+            // (mất tồn kho oan, không có giao dịch hoàn kho đối ứng).
+            if (dto.Status == "Rejected" && previousStatus != "Rejected"
+                && (previousStatus == "Approved" || previousStatus == "Fulfilled")
+                && entity.PrescriptionItems != null && entity.PrescriptionItems.Any())
+            {
+                var warehouse = await _context.Warehouses.FirstOrDefaultAsync();
+                var warehouseId = warehouse?.Id ?? 1;
+                foreach (var item in entity.PrescriptionItems)
+                {
+                    await _inventoryService.RestoreStockFEFO(item.MedicineId, warehouseId, item.Quantity, $"RX-{id}-RESTOCK");
+                }
+            }
+
             var updated = await _repo.Update(entity);
 
             // Duyệt qua nút "Duyệt đơn thuốc" (không đi qua Create/Finalize) cũng cần báo bệnh nhân.

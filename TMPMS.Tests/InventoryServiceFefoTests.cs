@@ -26,6 +26,12 @@ namespace TMPMS.Tests
                 .ReturnsAsync((InventoryTransaction t) => t);
             repo.Setup(r => r.RecomputeStockCaches(It.IsAny<int>(), It.IsAny<int>()))
                 .Returns(Task.CompletedTask);
+            // Mặc định không có giao dịch xuất gốc nào khớp (RestoreStockFEFO sẽ rơi về hành vi cũ:
+            // dồn vào lô hết hạn sớm nhất) — test riêng cho việc hoàn đúng lô gốc sẽ override lại setup này.
+            repo.Setup(r => r.GetExportTransactionsForReference(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>()))
+                .ReturnsAsync(new List<InventoryTransaction>());
+            repo.Setup(r => r.GetBatchByIdForUpdate(It.IsAny<int>()))
+                .ReturnsAsync((int id) => batches.FirstOrDefault(b => b.Id == id));
             return repo;
         }
 
@@ -104,6 +110,33 @@ namespace TMPMS.Tests
             await sut.RestoreStockFEFO(10, 1, 7, "ORDER-5-RESTOCK");
 
             Assert.Equal(17, batches.Single().QuantityRemaining);
+        }
+
+        [Fact]
+        public async Task RestoreStockFEFO_KnownOriginalReference_RestoresExactOriginalBatches()
+        {
+            // Lô A hết hạn xa hơn lô B nhưng đơn gốc đã xuất từ CẢ HAI lô (FEFO xuất lô B trước, rồi lô A).
+            // Hoàn kho phải trả đúng về 2 lô đó theo đúng số lượng đã xuất, KHÔNG dồn hết vào lô hết hạn
+            // sớm nhất hiện tại (khác hành vi mặc định khi không xác định được lô gốc).
+            var batches = new List<StockBatch>
+            {
+                new() { Id = 1, MedicineId = 10, WarehouseId = 1, QuantityRemaining = 40, ExpiryDate = DateTime.Today.AddDays(60) }, // Lô A
+                new() { Id = 2, MedicineId = 10, WarehouseId = 1, QuantityRemaining = 0, ExpiryDate = DateTime.Today.AddDays(10) },  // Lô B (đã hết sau khi xuất)
+            };
+            var repo = CreateRepoMock(batches);
+            repo.Setup(r => r.GetExportTransactionsForReference(10, 1, "ORDER-8"))
+                .ReturnsAsync(new List<InventoryTransaction>
+                {
+                    new() { StockBatchId = 2, MedicineId = 10, WarehouseId = 1, Quantity = 5, CreatedAt = DateTime.Now.AddMinutes(-2) },
+                    new() { StockBatchId = 1, MedicineId = 10, WarehouseId = 1, Quantity = 7, CreatedAt = DateTime.Now.AddMinutes(-1) },
+                });
+
+            var sut = new InventoryService(repo.Object);
+
+            await sut.RestoreStockFEFO(10, 1, 12, "ORDER-8-RESTOCK");
+
+            Assert.Equal(47, batches.Single(b => b.Id == 1).QuantityRemaining); // 40 + 7
+            Assert.Equal(5, batches.Single(b => b.Id == 2).QuantityRemaining);  // 0 + 5
         }
 
         [Fact]

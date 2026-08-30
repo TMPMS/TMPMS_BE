@@ -6,6 +6,11 @@ namespace TMPMS.Repositories.Interfaces
     public interface IAppointmentRepository
     {
         Task<bool> Add(Appointment appointment);
+        // Kiểm tra + thêm lịch hẹn nguyên tử trong 1 transaction Serializable — tránh race condition giữa
+        // IsAppointmentExist (đọc) và Add (ghi) khi 2 request đặt cùng bác sĩ/thời điểm chạy đồng thời,
+        // cả hai đều thấy "chưa có lịch" rồi cùng chèn (double-booking). Trả về false nếu slot đã bị
+        // chiếm (không insert), true nếu đặt thành công.
+        Task<bool> TryAddIfSlotFreeAsync(Appointment appointment);
         Task<bool> IsAppointmentExist(int staffId, DateTime appointmentDate);
         Task<User?> GetUserById(int userId);
         Task<User?> GetStaffById(int staffId);
