@@ -33,6 +33,11 @@ namespace Repositories.Interfaces
         Task<StockBatch> AddBatch(StockBatch batch);
         Task<int> GetTotalRemainingForMedicine(int medicineId);
         Task RecomputeStockCaches(int medicineId, int warehouseId);
+        // Đồng bộ Medicine.Price theo SellPrice của batchId — CHỈ áp dụng nếu batch đó đang là lô FEFO
+        // đầu hàng đợi (hết hạn sớm nhất, còn hàng) NGAY LÚC gọi. Dùng ngay sau khi nhập/cập nhật 1 lô có
+        // đặt giá bán riêng — không hồi tố: nếu 1 lô cũ tự lên làm lô đầu về sau (do lô khác bán/hủy hết),
+        // giá lưu sẵn trong lô đó sẽ không tự ghi đè Price hiện tại nữa.
+        Task SyncPriceFromNewBatchIfFrontAsync(int medicineId, int batchId);
         Task<Medicine> GetMedicineById(int id);
         Task SaveChangesAsync();
 
