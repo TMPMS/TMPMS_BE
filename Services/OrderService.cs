@@ -108,7 +108,12 @@ namespace TMPMS.Services
                     shippingVoucher.UsedCount += 1;
                 }
 
-                var finalAmount = Math.Max(0m, subtotal + serverShippingFee - productDiscount - shippingDiscount);
+                // Làm tròn về đồng nguyên ngay tại đây (VNĐ không có phần lẻ) — trước đây TotalAmount có
+                // thể lẻ do voucher % không làm tròn (vd giảm 10% của 99.999đ = 9.999,9đ). PayOS chỉ nhận
+                // số nguyên nên link thanh toán bị làm tròn riêng ở PayOSController, còn webhook lại so
+                // khớp với TotalAmount gốc chưa làm tròn — không bao giờ khớp, khiến đơn không được xác
+                // nhận "Paid" dù khách đã trả đúng số tiền đã làm tròn.
+                var finalAmount = Math.Round(Math.Max(0m, subtotal + serverShippingFee - productDiscount - shippingDiscount), 0, MidpointRounding.AwayFromZero);
 
                 // 2. Create order
                 var order = new Order
@@ -252,6 +257,30 @@ namespace TMPMS.Services
             }
         }
 
+        // Tự động hủy + hoàn kho các đơn "Pending"/"Unpaid" quá lâu (khách bỏ ngang, không qua PayOS
+        // nên không có webhook nào tự hủy) — gọi định kỳ từ StaleOrderBackgroundService. Dùng lại đúng
+        // logic hoàn kho/voucher của CancelOrderAsync để không lệch hành vi giữa hủy thủ công và tự động.
+        public async Task<int> AutoCancelStaleOrdersAsync(TimeSpan staleAfter)
+        {
+            var cutoff = DateTime.UtcNow - staleAfter;
+            var staleIds = await _repo.GetStalePendingOrderIdsAsync(cutoff);
+            var cancelledCount = 0;
+
+            foreach (var id in staleIds)
+            {
+                var order = await _repo.GetByIdAsync(id);
+                if (order == null || order.Status != "Pending" || order.PaymentStatus != "Unpaid") continue;
+
+                await RestockOrderItemsAsync(id);
+                await RollbackVoucherUsageAsync(order);
+                order.Status = "Cancelled";
+                await _repo.SaveChangesAsync();
+                cancelledCount++;
+            }
+
+            return cancelledCount;
+        }
+
         public async Task<OrderActionResult> CancelOrderAsync(int id, int currentUserId, bool canProxy)
         {
             var order = await _repo.GetByIdAsync(id);
@@ -261,6 +290,15 @@ namespace TMPMS.Services
             if (order.Status != "Pending")
             {
                 return Error(OrderErrorType.BadRequest, "Chỉ có thể hủy đơn đang ở trạng thái chờ xử lý.");
+            }
+
+            // Đơn đã thanh toán (vd PayOS xác nhận xong nhưng staff chưa kịp chuyển Status khỏi Pending)
+            // không được hủy qua đường này — hủy ở đây chỉ hoàn kho/voucher, KHÔNG có bước hoàn tiền, sẽ
+            // làm tiền khách đã trả bị "kẹt" ngoài quy trình. Phải đi qua Yêu cầu trả hàng (RequestReturnAsync)
+            // để staff duyệt và đồng bộ Payment.Status/PaymentStatus = Refunded đúng quy trình.
+            if (order.PaymentStatus == "Paid")
+            {
+                return Error(OrderErrorType.BadRequest, "Đơn đã thanh toán — vui lòng dùng chức năng Yêu cầu trả hàng để được hoàn tiền đúng quy trình.");
             }
 
             await RestockOrderItemsAsync(id);

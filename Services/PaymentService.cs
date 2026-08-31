@@ -10,11 +10,13 @@ namespace TMPMS.Services
         private readonly IPaymentRepository _repo;
         public PaymentService(IPaymentRepository repo) => _repo = repo;
 
-        public async Task<PaymentResponseDTO> CreatePayment(PaymentCreateDTO dto)
+        public async Task<PaymentResponseDTO> CreatePayment(PaymentCreateDTO dto, int currentUserId, bool canProxy)
         {
             var order = await _repo.GetOrderById(dto.OrderId);
             if (order == null)
                 throw new ArgumentException("Đơn hàng không tồn tại.");
+            if (!canProxy && order.UserId != currentUserId)
+                throw new UnauthorizedAccessException("Không có quyền tạo thanh toán cho đơn hàng này.");
 
             var allowedMethods = new[] { "Cash", "COD", "BankTransfer", "CreditCard", "MoMo", "MOMO", "ZaloPay", "ZALOPAY", "VNPay", "PayOS" };
             if (!allowedMethods.Contains(dto.Method))
@@ -24,7 +26,9 @@ namespace TMPMS.Services
             {
                 OrderId = dto.OrderId,
                 Method = dto.Method,
-                Amount = dto.Amount,
+                // Không tin số tiền client gửi — luôn ghi theo tổng tiền thực tế của đơn hàng ở server,
+                // tránh chèn bản ghi Payment với số tiền tùy ý cho đơn của người khác.
+                Amount = order.TotalAmount,
                 Status = "Pending",
                 TransactionCode = Guid.NewGuid().ToString("N").Substring(0, 12).ToUpper()
             };
@@ -33,14 +37,24 @@ namespace TMPMS.Services
             return Map(created);
         }
 
-        public async Task<PaymentResponseDTO> GetById(int id)
+        public async Task<PaymentResponseDTO> GetById(int id, int currentUserId, bool canProxy)
         {
             var entity = await _repo.GetById(id);
-            return entity == null ? null : Map(entity);
+            if (entity == null) return null;
+            if (!canProxy && entity.Order != null && entity.Order.UserId != currentUserId)
+                throw new UnauthorizedAccessException("Không có quyền xem thanh toán này.");
+            return Map(entity);
         }
 
-        public async Task<List<PaymentResponseDTO>> GetByOrder(int orderId)
+        public async Task<List<PaymentResponseDTO>> GetByOrder(int orderId, int currentUserId, bool canProxy)
         {
+            if (!canProxy)
+            {
+                var order = await _repo.GetOrderById(orderId);
+                if (order == null || order.UserId != currentUserId)
+                    throw new UnauthorizedAccessException("Không có quyền xem thanh toán của đơn hàng này.");
+            }
+
             var list = await _repo.GetByOrder(orderId);
             return list.Select(Map).ToList();
         }

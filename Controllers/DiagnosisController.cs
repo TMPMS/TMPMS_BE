@@ -59,10 +59,23 @@ namespace TMPMS.Controllers
             }
         }
 
+        // Nếu role là "User" (bệnh nhân tự đăng nhập), chỉ cho phép thao tác trên hồ sơ chẩn đoán của
+        // CHÍNH MÌNH — cùng quy ước đã dùng ở PatientController (GetDiagnosisHistory/GetPrescriptionHistory).
+        // Trước đây Create/GetById/GetByPatient không kiểm tra gì, cho phép đọc hồ sơ y tế của người khác
+        // hoặc tạo chẩn đoán khống gán cho bệnh nhân bất kỳ (IDOR).
+        private bool IsForbiddenForOtherPatient(int patientId)
+        {
+            var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+            if (roleClaim != "User") return false;
+            var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return !int.TryParse(idClaim, out var loggedInUserId) || loggedInUserId != patientId;
+        }
+
         [HttpPost]
         [Authorize]
         public async Task<ActionResult> Create([FromBody] DiagnosisCreateDTO dto)
         {
+            if (IsForbiddenForOtherPatient(dto.PatientId)) return Forbid();
             try
             {
                 var result = await _service.Create(dto);
@@ -76,11 +89,16 @@ namespace TMPMS.Controllers
         {
             var result = await _service.GetById(id);
             if (result == null) return NotFound();
+            if (IsForbiddenForOtherPatient(result.PatientId)) return Forbid();
             return Ok(result);
         }
 
         [HttpGet("patient/{patientId}")]
-        public async Task<ActionResult> GetByPatient(int patientId) => Ok(await _service.GetByPatient(patientId));
+        public async Task<ActionResult> GetByPatient(int patientId)
+        {
+            if (IsForbiddenForOtherPatient(patientId)) return Forbid();
+            return Ok(await _service.GetByPatient(patientId));
+        }
 
         [HttpGet("doctor/{doctorId}")]
         [Authorize(Roles = "Doctor,Admin")]

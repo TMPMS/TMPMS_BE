@@ -93,9 +93,14 @@ namespace TMPMS.Hubs
             var session = await _context.PharmacyChatSessions.FindAsync(sessionId);
             if (session == null || session.Status == "Closed") return;
 
-            string senderRole = "User";
-            if (await _userManager.IsInRoleAsync(user, "Pharmacy")) senderRole = "Pharmacy";
-            else if (await _userManager.IsInRoleAsync(user, "Admin")) senderRole = "Admin";
+            bool isPharmacy = await _userManager.IsInRoleAsync(user, "Pharmacy");
+            bool isAdmin = !isPharmacy && await _userManager.IsInRoleAsync(user, "Admin");
+
+            // Trước đây thiếu kiểm tra này — bất kỳ user đã đăng nhập nào cũng chèn được tin nhắn vào
+            // phiên tư vấn riêng tư của người khác (chỉ cần biết sessionId), giống check đã có ở JoinSession.
+            if (!isPharmacy && !isAdmin && session.UserId != userId) return;
+
+            string senderRole = isPharmacy ? "Pharmacy" : isAdmin ? "Admin" : "User";
 
             var msg = new PharmacyChatMessage
             {

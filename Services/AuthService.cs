@@ -345,6 +345,16 @@ namespace TMPMS.Services
             if (!result.Succeeded)
                 throw new ArgumentException(string.Join("; ", result.Errors.Select(e => e.Description)));
 
+            // Đổi mật khẩu xong phải thu hồi mọi refresh token đang hoạt động — nếu không, một phiên đăng
+            // nhập cũ (hoặc kẻ đã đánh cắp refresh token trước đó) vẫn tiếp tục lấy được access token mới
+            // mãi mãi dù mật khẩu đã đổi, khiến việc đổi mật khẩu không thực sự đăng xuất các phiên khác.
+            var activeTokens = await _authRepo.GetActiveTokensByUser(userId);
+            foreach (var token in activeTokens)
+            {
+                token.RevokedAt = DateTime.Now;
+                await _authRepo.UpdateRefreshToken(token);
+            }
+
             return true;
         }
 

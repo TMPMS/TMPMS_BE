@@ -81,11 +81,33 @@ builder.Services.AddScoped<ISmsService, ZaloZnsService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddSignalR();
 
+// Endpoint AI chatbot (/api/chat) không yêu cầu đăng nhập (khách vãng lai cũng dùng được) và mỗi lần
+// gọi tốn 1 request Gemini API thật — trước đây không có giới hạn nào, ai spam cũng được, có thể đốt
+// hết quota/phí AI. Giới hạn theo IP (hoặc theo user nếu đã đăng nhập) — không chặn hẳn vì tính năng
+// vẫn cần dùng được cho khách chưa đăng nhập.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("chat", httpContext =>
+    {
+        var key = httpContext.User?.Identity?.IsAuthenticated == true
+            ? httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "anon"
+            : httpContext.Connection.RemoteIpAddress?.ToString() ?? "anon";
+        return System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(key, _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 15,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        });
+    });
+});
+
 builder.Services.AddSingleton<TrackingSimulationService>();
 
 builder.Services.AddHostedService(provider => provider.GetRequiredService<TrackingSimulationService>());
 builder.Services.AddHostedService<AppointmentStatusBackgroundService>();
 builder.Services.AddHostedService<FlashSaleBackgroundService>();
+builder.Services.AddHostedService<StaleOrderBackgroundService>();
 
 builder.Services.AddDbContext<TMPMSDbContext>(options =>
 {
@@ -338,6 +360,7 @@ app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 using (var scope = app.Services.CreateScope())
 {

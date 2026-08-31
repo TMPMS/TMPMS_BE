@@ -273,7 +273,20 @@ namespace TMPMS.Repositories
                 dto.OldPassword,
                 dto.NewPassword);
 
-            return result.Succeeded;
+            if (!result.Succeeded) return false;
+
+            // Thu hồi mọi refresh token đang hoạt động sau khi đổi mật khẩu — cùng lý do như
+            // AuthService.ChangePassword (dùng khi đổi mật khẩu qua Profile/Admin thay vì AuthController).
+            var activeTokens = await _context.RefreshTokens
+                .Where(t => t.UserId == userId && t.RevokedAt == null && t.ExpiresAt > DateTime.Now)
+                .ToListAsync();
+            foreach (var token in activeTokens)
+            {
+                token.RevokedAt = DateTime.Now;
+            }
+            if (activeTokens.Count > 0) await _context.SaveChangesAsync();
+
+            return true;
         }
 
 

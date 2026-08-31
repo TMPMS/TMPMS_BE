@@ -50,6 +50,9 @@ namespace TMPMS.Controllers
 
             using var ms = new MemoryStream();
             await file.CopyToAsync(ms);
+            var bytes = ms.ToArray();
+            if (!TMPMS.Utils.ImageMagicBytes.LooksLikeImage(bytes))
+                return BadRequest(new { message = "Tệp không phải ảnh hợp lệ." });
             var mimeType = ext switch
             {
                 ".png" => "image/png",
@@ -57,7 +60,7 @@ namespace TMPMS.Controllers
                 _ => "image/jpeg"
             };
 
-            var keyword = await _imageSearchService.IdentifyAsync(ms.ToArray(), mimeType);
+            var keyword = await _imageSearchService.IdentifyAsync(bytes, mimeType);
             if (string.IsNullOrWhiteSpace(keyword))
             {
                 return Ok(new MedicineImageSearchResultDto

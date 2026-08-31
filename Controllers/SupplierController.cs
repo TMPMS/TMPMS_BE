@@ -18,19 +18,40 @@ namespace TMPMS.Controllers
             _auditLogService = auditLogService;
         }
 
+        // Endpoint này được dùng cả cho trang quản trị (cần đủ Email/SĐT/địa chỉ/mã số thuế để sửa) lẫn
+        // carousel "Thương hiệu" công khai trên trang chủ (Brands.jsx, không đăng nhập — chỉ cần tên +
+        // số sản phẩm). Trước đây trả nguyên DTO đầy đủ cho mọi request, lộ thông tin liên hệ/mã số thuế
+        // của toàn bộ nhà cung cấp ra công khai. Giờ chỉ Admin/Staff mới thấy đủ field.
+        private bool CanViewSupplierDetails() => User.IsInRole("Admin") || User.IsInRole("Staff");
+
+        private static SupplierDto ToPublicDto(SupplierDto s) => new SupplierDto
+        {
+            Id = s.Id,
+            CompanyName = s.CompanyName,
+            ProductCount = s.ProductCount,
+            Status = s.Status
+        };
+
         [HttpGet("~/suppliers")]
         [HttpGet("~/api/suppliers")]
         [HttpGet("api/[controller]")]
-        public async Task<IActionResult> GetAll() => Ok(await _service.GetAllAsync());
+        [AllowAnonymous]
+        public async Task<IActionResult> GetAll()
+        {
+            var list = await _service.GetAllAsync();
+            if (!CanViewSupplierDetails()) list = list.Select(ToPublicDto).ToList();
+            return Ok(list);
+        }
 
         [HttpGet("~/suppliers/{id}")]
         [HttpGet("~/api/suppliers/{id}")]
         [HttpGet("api/[controller]/{id}")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetById(int id)
         {
             var res = await _service.GetByIdAsync(id);
             if (res == null) return NotFound();
-            return Ok(res);
+            return Ok(CanViewSupplierDetails() ? res : ToPublicDto(res));
         }
 
         [HttpPost("~/Supplier")]
@@ -59,10 +80,14 @@ namespace TMPMS.Controllers
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Delete(int id)
         {
-            var ok = await _service.DeleteAsync(id);
-            if (!ok) return NotFound();
-            await this.LogAuditAsync(_auditLogService, "Supplier", "Delete", id.ToString(), $"Xóa nhà cung cấp #{id}");
-            return NoContent();
+            try
+            {
+                var ok = await _service.DeleteAsync(id);
+                if (!ok) return NotFound();
+                await this.LogAuditAsync(_auditLogService, "Supplier", "Delete", id.ToString(), $"Xóa nhà cung cấp #{id}");
+                return NoContent();
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
         }
     }
 }

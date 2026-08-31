@@ -4,6 +4,7 @@ using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
 using Services.Interfaces;
 using TMPMS.DTOs;
+using TMPMS.Utils;
 
 namespace TMPMS.Controllers
 {
@@ -94,7 +95,7 @@ namespace TMPMS.Controllers
                         {
                             case decimal dv: cell.SetCellValue((double)dv); break;
                             case int iv: cell.SetCellValue(iv); break;
-                            default: cell.SetCellValue(rowValues[c]?.ToString() ?? ""); break;
+                            default: cell.SetCellValue(ExcelCellSanitizer.SafeText(rowValues[c]?.ToString())); break;
                         }
                     }
                 }

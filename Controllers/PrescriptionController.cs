@@ -34,12 +34,20 @@ namespace TMPMS.Controllers
             var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp" };
             var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
             if (!allowed.Contains(ext)) return BadRequest(new { message = "Chỉ hỗ trợ JPG, PNG hoặc WEBP." });
+
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms);
+            var bytes = ms.ToArray();
+            // Kiểm tra nội dung file thật (magic bytes) — trước đây chỉ tin đuôi file client tự khai,
+            // cho phép đổi tên file bất kỳ (vd HTML chứa script) thành .png rồi upload.
+            if (!ImageMagicBytes.LooksLikeImage(bytes))
+                return BadRequest(new { message = "Tệp không phải ảnh hợp lệ." });
+
             var root = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
             var folder = Path.Combine(root, "uploads", "prescriptions");
             Directory.CreateDirectory(folder);
             var name = $"{Guid.NewGuid():N}{ext}";
-            await using var stream = System.IO.File.Create(Path.Combine(folder, name));
-            await file.CopyToAsync(stream);
+            await System.IO.File.WriteAllBytesAsync(Path.Combine(folder, name), bytes);
             return Ok(new { url = $"/uploads/prescriptions/{name}" });
         }
 

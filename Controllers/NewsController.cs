@@ -22,6 +22,9 @@ namespace TMPMS.Controllers
         {
             var res = await _service.GetByIdAsync(id);
             if (res == null) return NotFound();
+            // GetAllAsync đã lọc IsActive nhưng GetById thì chưa — trước đây khách vãng lai vẫn xem được
+            // bài viết đã bị Admin/Staff ẩn nếu biết/đoán được id. Admin/Staff vẫn cần xem bài đã ẩn để sửa.
+            if (!res.IsActive && !User.IsInRole("Admin") && !User.IsInRole("Staff")) return NotFound();
             return Ok(res);
         }
 

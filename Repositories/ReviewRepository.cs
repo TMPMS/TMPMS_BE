@@ -28,6 +28,11 @@ namespace TMPMS.Repositories
                 .AnyAsync(o => o.OrderItems.Any(oi => oi.MedicineId == medicineId));
         }
 
+        public async Task<bool> HasReviewedAsync(int userId, int medicineId)
+        {
+            return await _context.Reviews.AnyAsync(r => r.UserId == userId && r.MedicineId == medicineId);
+        }
+
         public async Task<Review> CreateAsync(Review review)
         {
             _context.Reviews.Add(review);

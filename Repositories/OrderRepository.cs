@@ -135,5 +135,13 @@ namespace TMPMS.Repositories
 
         public async Task<Payment?> GetLatestPaymentAsync(int orderId) =>
             await _context.Payments.Where(p => p.OrderId == orderId).OrderByDescending(p => p.Id).FirstOrDefaultAsync();
+
+        public async Task<List<int>> GetStalePendingOrderIdsAsync(System.DateTime olderThan)
+        {
+            return await _context.Orders
+                .Where(o => o.Status == "Pending" && o.PaymentStatus == "Unpaid" && o.CreatedAt < olderThan)
+                .Select(o => o.Id)
+                .ToListAsync();
+        }
     }
 }

@@ -25,5 +25,10 @@ namespace TMPMS.Services.Interfaces
         Task<OrderActionResult> CancelOrderAsync(int id, int currentUserId, bool canProxy);
         Task<OrderActionResult> RequestReturnAsync(int id, string reason, int currentUserId, bool canProxy);
         Task<OrderActionResult> UpdateStatusAsync(int id, UpdateOrderStatusRequestDto request, int? actingUserId);
+
+        // Tự động hủy + hoàn kho các đơn còn "Pending"/"Unpaid" quá `staleAfter` — dùng bởi
+        // StaleOrderBackgroundService, vì các đơn không thanh toán qua PayOS (vd COD bị bỏ quên) không có
+        // webhook nào tự hủy chúng, khiến hàng bị giữ chỗ FEFO vô thời hạn. Trả về số đơn đã hủy.
+        Task<int> AutoCancelStaleOrdersAsync(System.TimeSpan staleAfter);
     }
 }

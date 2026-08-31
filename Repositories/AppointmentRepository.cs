@@ -1,5 +1,6 @@
 using BusinessObjects;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 using TMPMS.Data;
 using TMPMS.Models;
 using TMPMS.Repositories.Interfaces;
@@ -19,6 +20,36 @@ namespace TMPMS.Repositories
         {
             await _context.Appointments.AddAsync(appointment);
             return await _context.SaveChangesAsync() > 0;
+        }
+
+        public async Task<bool> TryAddIfSlotFreeAsync(Appointment appointment)
+        {
+            await using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                if (appointment.StaffId != null)
+                {
+                    var exists = await _context.Appointments.AnyAsync(x =>
+                        x.StaffId == appointment.StaffId &&
+                        x.AppointmentDate == appointment.AppointmentDate &&
+                        (x.Status == "PendingConfirmation" || x.Status == "Confirmed"));
+                    if (exists)
+                    {
+                        await tx.RollbackAsync();
+                        return false;
+                    }
+                }
+
+                await _context.Appointments.AddAsync(appointment);
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+                return true;
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<bool> IsAppointmentExist(int staffId, DateTime appointmentDate)
