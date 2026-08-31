@@ -196,6 +196,10 @@ namespace TMPMS.Services
             });
 
             await _repo.RecomputeStockCaches(dto.MedicineId, dto.WarehouseId);
+            if (dto.SellPrice != null)
+            {
+                await _repo.SyncPriceFromNewBatchIfFrontAsync(dto.MedicineId, batch.Id);
+            }
 
             var full = await _repo.GetBatchById(batch.Id);
             return MapBatch(full);
@@ -597,6 +601,10 @@ namespace TMPMS.Services
                 await _repo.SaveChangesAsync();
             }
 
+            // PriceApplied = đã áp dụng ngay (startsImmediately) hay chưa (hẹn giờ tương lai, để
+            // SweepFlashSales tự áp dụng đúng 1 lần khi tới StartTime — xem SweepFlashSales).
+            var priceApplied = startsImmediately;
+
             // Ghi vào bảng quản lý Flash Sale (lịch sử áp dụng, để Admin theo dõi/quản lý riêng
             // thay vì chỉ suy ra từ Medicine.Discount). Nếu hẹn giờ tương lai, giá thật sự chỉ đổi
             // khi FlashSaleBackgroundService quét tới đúng StartTime.
@@ -615,7 +623,8 @@ namespace TMPMS.Services
                 DaysUntilExpiryAtApply = days,
                 AppliedAt = DateTime.UtcNow,
                 AppliedByStaffId = staffId,
-                IsActive = true
+                IsActive = true,
+                PriceApplied = priceApplied
             });
 
             return new FlashSaleCandidateDTO
@@ -756,12 +765,18 @@ namespace TMPMS.Services
                     continue;
                 }
 
-                if (medicine.Price != f.SalePrice)
+                // Chỉ ép giá sale vào Medicine.Price ĐÚNG 1 LẦN — lúc Flash Sale hẹn giờ thực sự bắt đầu
+                // (PriceApplied vẫn false vì lúc tạo chưa tới StartTime nên chưa áp dụng ngay). Không được
+                // so sánh "Price != SalePrice" rồi ép lại mỗi lần quét như trước đây — nếu không, bất cứ
+                // lúc nào Admin/Dược sĩ sửa giá tay cho sản phẩm đang có Flash Sale Active, giá sửa sẽ bị
+                // job này (chạy mỗi phút) âm thầm ghi đè trở lại giá sale trong vòng tối đa 1 phút sau.
+                if (!f.PriceApplied)
                 {
                     if (medicine.OldPrice == null || medicine.OldPrice <= 0)
                         medicine.OldPrice = medicine.Price ?? f.OriginalPrice;
                     medicine.Price = f.SalePrice;
                     medicine.Discount = f.DiscountPercent;
+                    f.PriceApplied = true;
                     changed = true;
                 }
             }

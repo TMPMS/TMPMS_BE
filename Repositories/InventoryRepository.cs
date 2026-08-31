@@ -242,40 +242,38 @@ namespace TMPMS.Repositories
             if (med != null)
             {
                 med.StockQuantity = medicineTotal;
-                await SyncPriceFromActiveBatchAsync(med);
             }
 
             await _context.SaveChangesAsync();
         }
 
-        // Đồng bộ giá bán theo lô FEFO đang bán (hết hạn sớm nhất, còn hàng) — nếu lô đó có đặt SellPrice
-        // riêng. Bỏ qua khi đang có Flash Sale Active cho sản phẩm này: Flash Sale tự quản lý Price/OldPrice
-        // riêng (xem InventoryService.ApplyFlashSale/RemoveFlashSale/SweepFlashSales) và luôn được ưu tiên
-        // cao hơn giá theo lô — nếu không, việc đồng bộ này (chạy sau MỌI thao tác ảnh hưởng lô, kể cả
-        // không liên quan tới đợt Flash Sale) có thể vô tình ghi đè mất giá đang giảm.
-        private async Task SyncPriceFromActiveBatchAsync(Medicine med)
+        // Đồng bộ Medicine.Price theo SellPrice của batchId — CHỈ áp dụng NGAY LÚC nhập/cập nhật lô đó,
+        // và chỉ khi lô đó đang thực sự là lô FEFO đầu hàng đợi (hết hạn sớm nhất, còn hàng) tại thời điểm
+        // này. KHÔNG hồi tố: các sự kiện kho khác không liên quan (xuất bán, hủy hàng, kiểm kê, job nền tự
+        // hủy đơn treo & hoàn kho...) không được gọi hàm này, để tránh 1 lô cũ tự động lên làm lô đầu về
+        // sau (do lô khác bán/hủy hết) rồi âm thầm ghi đè mất giá bán mà Admin/Dược sĩ vừa sửa tay bằng
+        // giá SellPrice đã lưu sẵn trong lô đó từ lâu (có thể đã lỗi thời). Bỏ qua khi đang có Flash Sale
+        // Active cho sản phẩm này — Flash Sale tự quản lý Price/OldPrice riêng và luôn được ưu tiên hơn.
+        public async Task SyncPriceFromNewBatchIfFrontAsync(int medicineId, int batchId)
         {
-            var hasActiveFlashSale = await _context.FlashSales.AnyAsync(f => f.MedicineId == med.Id && f.IsActive);
+            var med = await _context.Medicines.FindAsync(medicineId);
+            if (med == null) return;
+
+            var hasActiveFlashSale = await _context.FlashSales.AnyAsync(f => f.MedicineId == medicineId && f.IsActive);
             if (hasActiveFlashSale) return;
 
             var today = DateTime.Now.Date;
             var frontBatch = await _context.StockBatches
-                .Where(b => b.MedicineId == med.Id && b.Status == StockBatchStatus.Active
+                .Where(b => b.MedicineId == medicineId && b.Status == StockBatchStatus.Active
                     && b.QuantityRemaining > 0 && b.ExpiryDate.Date >= today)
                 .OrderBy(b => b.ExpiryDate)
                 .FirstOrDefaultAsync();
 
-            // Chỉ đồng bộ khi LÔ ĐẦU HÀNG ĐỢI THỰC SỰ ĐỔI so với lần đồng bộ trước (PricedFromBatchId) —
-            // nếu vẫn là lô cũ (chưa có gì thay đổi thật sự), bỏ qua để Admin/Dược sĩ tự do sửa giá tay
-            // ở giữa 2 lần chuyển lô mà không bị hàm này chạy lại (do các sự kiện kho khác không liên
-            // quan, vd một lô khác vừa bị hủy) ghi đè mất.
-            if (frontBatch?.Id == med.PricedFromBatchId) return;
+            if (frontBatch == null || frontBatch.Id != batchId || frontBatch.SellPrice == null) return;
 
-            if (frontBatch?.SellPrice != null)
-            {
-                med.Price = frontBatch.SellPrice;
-            }
-            med.PricedFromBatchId = frontBatch?.Id;
+            med.Price = frontBatch.SellPrice;
+            med.PricedFromBatchId = frontBatch.Id;
+            await _context.SaveChangesAsync();
         }
 
         public async Task<Medicine> GetMedicineById(int id) => await _context.Medicines.FindAsync(id);

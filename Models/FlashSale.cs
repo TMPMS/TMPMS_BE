@@ -37,6 +37,13 @@ namespace BusinessObjects
 
         public DateTime AppliedAt { get; set; }
 
+        // true = đã ghi SalePrice vào Medicine.Price ít nhất 1 lần (ngay lúc tạo nếu áp dụng ngay, hoặc
+        // lúc FlashSaleBackgroundService quét tới đúng StartTime nếu hẹn giờ). Dùng để SweepFlashSales chỉ
+        // ép giá đúng 1 LẦN DUY NHẤT khi Flash Sale thực sự bắt đầu — sau đó nếu Admin/Dược sĩ chủ động sửa
+        // giá tay trong lúc sale đang chạy, giá đó phải được giữ nguyên, không bị job quét mỗi phút âm thầm
+        // ép trả lại giá sale (đây từng là bug khiến sửa giá bán không "ăn" khi sản phẩm đang có Flash Sale).
+        public bool PriceApplied { get; set; }
+
         public int? AppliedByStaffId { get; set; }
 
         public bool IsActive { get; set; } = true;
