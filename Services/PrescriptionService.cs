@@ -191,7 +191,7 @@ namespace TMPMS.Services
                 var warehouseId = warehouse?.Id ?? 1;
                 foreach (var item in entity.PrescriptionItems)
                 {
-                    await _inventoryService.RestoreStockFEFO(item.MedicineId, warehouseId, item.Quantity, $"RX-{id}-RESTOCK");
+                    await _inventoryService.RestoreStockFEFO(item.MedicineId, warehouseId, item.Quantity, $"RX-{id}-RESTOCK", $"RX-{id}");
                 }
             }
 

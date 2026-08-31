@@ -44,7 +44,7 @@ namespace TMPMS.Controllers
             var items = await _context.OrderItems.Where(oi => oi.OrderId == order.Id).ToListAsync();
             foreach (var oi in items)
             {
-                await _inventoryService.RestoreStockFEFO(oi.MedicineId, warehouseId, oi.Quantity, $"ORDER-{order.Id}-RESTOCK");
+                await _inventoryService.RestoreStockFEFO(oi.MedicineId, warehouseId, oi.Quantity, $"ORDER-{order.Id}-RESTOCK", $"ORDER-{order.Id}");
             }
 
             foreach (var voucherId in new[] { order.ProductVoucherId, order.ShippingVoucherId })

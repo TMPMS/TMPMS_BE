@@ -55,6 +55,29 @@ namespace TMPMS.Tests
         }
 
         [Fact]
+        public async Task DeductStockFEFO_SnapshotsUnitCostPriceAtTimeOfExport_NotAffectedByLaterCostChange()
+        {
+            var batch = new StockBatch { Id = 1, MedicineId = 10, WarehouseId = 1, QuantityRemaining = 50, ExpiryDate = DateTime.Today.AddDays(30), UnitCostPrice = 50000m };
+            var batches = new List<StockBatch> { batch };
+            var repo = CreateRepoMock(batches);
+            var createdTransactions = new List<InventoryTransaction>();
+            repo.Setup(r => r.AddTransaction(It.IsAny<InventoryTransaction>()))
+                .ReturnsAsync((InventoryTransaction t) => { createdTransactions.Add(t); return t; });
+            var sut = new InventoryService(repo.Object);
+
+            await sut.DeductStockFEFO(10, 1, 20, "ORDER-9");
+
+            var exportTx = Assert.Single(createdTransactions);
+            Assert.Equal(50000m, exportTx.UnitCostPrice); // chốt đúng giá vốn lúc xuất
+
+            // Mô phỏng nhập thêm hàng giá khác sau đó (giá vốn bình quân của lô đổi) — giao dịch xuất
+            // đã ghi trước đó KHÔNG được đổi theo, vì UnitCostPrice là giá trị đã copy, không tham chiếu
+            // ngược vào batch.
+            batch.UnitCostPrice = 60000m;
+            Assert.Equal(50000m, exportTx.UnitCostPrice);
+        }
+
+        [Fact]
         public async Task DeductStockFEFO_SpansMultipleBatches_WhenFirstBatchNotEnough()
         {
             var batches = new List<StockBatch>

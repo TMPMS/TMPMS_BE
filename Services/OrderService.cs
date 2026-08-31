@@ -239,7 +239,7 @@ namespace TMPMS.Services
             var warehouseId = await _repo.GetDefaultWarehouseIdAsync();
             foreach (var oi in items)
             {
-                await _inventoryService.RestoreStockFEFO(oi.MedicineId, warehouseId, oi.Quantity, $"ORDER-{orderId}-RESTOCK");
+                await _inventoryService.RestoreStockFEFO(oi.MedicineId, warehouseId, oi.Quantity, $"ORDER-{orderId}-RESTOCK", $"ORDER-{orderId}");
             }
         }
 

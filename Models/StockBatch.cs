@@ -38,6 +38,13 @@ namespace BusinessObjects
 
         public decimal? UnitCostPrice { get; set; }
 
+        /// <summary>
+        /// Giá bán riêng cho lô này — nếu đặt, khi lô này là lô FEFO đang bán (hết hạn sớm nhất, còn hàng),
+        /// hệ thống tự đồng bộ Medicine.Price theo giá này (trừ khi Medicine đang có Flash Sale chạy, Flash
+        /// Sale luôn được ưu tiên). Null = không ghi đè, giữ nguyên Medicine.Price hiện tại.
+        /// </summary>
+        public decimal? SellPrice { get; set; }
+
         public DateTime ReceivedAt { get; set; }
 
         public string Status { get; set; } = StockBatchStatus.Active;

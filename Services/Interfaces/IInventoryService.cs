@@ -22,7 +22,10 @@ namespace Services.Interfaces
         // Xuất kho FEFO (hết hạn sớm nhất xuất trước) — dùng khi bán/kê đơn
         Task DeductStockFEFO(int medicineId, int warehouseId, int quantity, string referenceId);
         // Hoàn kho khi hủy đơn — cộng lại vào lô còn hạn gần nhất
-        Task RestoreStockFEFO(int medicineId, int warehouseId, int quantity, string referenceId);
+        // originalExportReferenceId: ReferenceId THẬT của giao dịch xuất kho gốc (vd "ORDER-5", "RX-12")
+        // — truyền tường minh để hoàn đúng vào lô đã xuất, thay vì dựa vào quy ước đặt tên (hậu tố
+        // "-RESTOCK") vốn dễ vỡ nếu có code khác không tuân theo convention.
+        Task RestoreStockFEFO(int medicineId, int warehouseId, int quantity, string referenceId, string? originalExportReferenceId = null);
 
         // Flash Sale cho hàng gần hết hạn
         Task<List<FlashSaleCandidateDTO>> GetFlashSaleCandidates(int daysThreshold);
@@ -39,5 +42,8 @@ namespace Services.Interfaces
         // Báo cáo lãi gộp ước tính tổng hợp theo kỳ (ngày/tháng/năm), gộp mọi sản phẩm — cho phép xem
         // lãi gộp toàn cửa hàng trong 1 màn hình thay vì phải chọn từng sản phẩm như GetBatchProfitReport.
         Task<List<ProfitPointDTO>> GetProfitByPeriod(System.DateTime from, System.DateTime to, string groupBy);
+        // Gợi ý nhập hàng dựa trên tốc độ bán trung bình lookbackDays ngày gần nhất, chiếu theo
+        // leadTimeDays ngày chờ hàng về, trừ tồn kho hiện có.
+        Task<List<ReorderSuggestionDTO>> GetReorderSuggestions(int lookbackDays, int leadTimeDays);
     }
 }
