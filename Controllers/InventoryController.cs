@@ -160,5 +160,10 @@ namespace TMPMS.Controllers
         [HttpGet("reports/profit-summary")]
         public async Task<ActionResult> GetProfitSummary([FromQuery] DateTime from, [FromQuery] DateTime to, [FromQuery] string groupBy = "Day")
             => Ok(await _service.GetProfitByPeriod(from, to, groupBy));
+
+        // Gợi ý nhập hàng dựa trên tốc độ bán gần đây — xem giải thích ở InventoryService.GetReorderSuggestions.
+        [HttpGet("reports/reorder-suggestions")]
+        public async Task<ActionResult> GetReorderSuggestions([FromQuery] int lookbackDays = 30, [FromQuery] int leadTimeDays = 30)
+            => Ok(await _service.GetReorderSuggestions(lookbackDays, leadTimeDays));
     }
 }

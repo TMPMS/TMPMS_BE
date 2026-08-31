@@ -42,6 +42,15 @@ namespace BusinessObjects
 
         public int? Discount { get; set; }
 
+        /// <summary>
+        /// Id của StockBatch đang "quyết định" Price hiện tại qua cơ chế đồng bộ tự động (khi lô đó có
+        /// SellPrice riêng) — chỉ dùng để nhận biết "lô đầu hàng đợi FEFO đã đổi hay chưa" giữa 2 lần
+        /// đồng bộ, tránh ghi đè lại Price liên tục mỗi khi có sự kiện kho không liên quan (điều đó sẽ
+        /// xoá mất giá Admin/Dược sĩ vừa sửa tay). Null = giá hiện tại không do lô nào quyết định (Admin
+        /// tự đặt, hoặc chưa có lô nào có SellPrice).
+        /// </summary>
+        public int? PricedFromBatchId { get; set; }
+
         public DateTime CreatedAt { get; set; }
 
         /// <summary>Soft-delete flag: false = ẩn khỏi cửa hàng nhưng giữ lịch sử đơn hàng</summary>

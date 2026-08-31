@@ -69,6 +69,9 @@ namespace TMPMS.DTOs
         public DateTime ExpiryDate { get; set; }
         public int Quantity { get; set; }
         public decimal? UnitCostPrice { get; set; }
+        // Giá bán riêng cho lô này — khi lô này là lô FEFO đang bán, Medicine.Price tự đồng bộ theo giá
+        // này (trừ khi đang có Flash Sale). Không truyền = không đặt giá riêng cho lô.
+        public decimal? SellPrice { get; set; }
         public int? SupplierId { get; set; }
         public string? RegistrationNumber { get; set; } // Số đăng ký (SĐK)
         public string? StorageCondition { get; set; } // Kho Thường / Kho Mát / Cold Chain (Vắc-xin)
@@ -89,6 +92,7 @@ namespace TMPMS.DTOs
         public int QuantityReceived { get; set; }
         public int QuantityRemaining { get; set; }
         public decimal? UnitCostPrice { get; set; }
+        public decimal? SellPrice { get; set; }
         public int? SupplierId { get; set; }
         public string SupplierName { get; set; }
         public DateTime ReceivedAt { get; set; }
@@ -224,5 +228,18 @@ namespace TMPMS.DTOs
         public decimal EstimatedGrossProfit { get; set; }
         public decimal? GrossMarginPercent { get; set; }
         public bool IsEstimated { get; set; }
+    }
+
+    // Gợi ý số lượng cần nhập thêm — ước tính từ tốc độ bán trung bình gần đây (lookbackDays) chiếu
+    // theo thời gian chờ hàng về (leadTimeDays), trừ đi tồn kho hiện có. Chỉ là gợi ý tham khảo, không
+    // tính đến mùa vụ/khuyến mãi sắp tới.
+    public class ReorderSuggestionDTO
+    {
+        public int MedicineId { get; set; }
+        public string MedicineName { get; set; }
+        public int CurrentStock { get; set; }
+        public decimal AvgDailySales { get; set; }
+        public int LeadTimeDays { get; set; }
+        public int SuggestedReorderQuantity { get; set; }
     }
 }

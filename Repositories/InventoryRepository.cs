@@ -239,9 +239,43 @@ namespace TMPMS.Repositories
 
             var medicineTotal = await GetTotalRemainingForMedicine(medicineId);
             var med = await _context.Medicines.FindAsync(medicineId);
-            if (med != null) med.StockQuantity = medicineTotal;
+            if (med != null)
+            {
+                med.StockQuantity = medicineTotal;
+                await SyncPriceFromActiveBatchAsync(med);
+            }
 
             await _context.SaveChangesAsync();
+        }
+
+        // Đồng bộ giá bán theo lô FEFO đang bán (hết hạn sớm nhất, còn hàng) — nếu lô đó có đặt SellPrice
+        // riêng. Bỏ qua khi đang có Flash Sale Active cho sản phẩm này: Flash Sale tự quản lý Price/OldPrice
+        // riêng (xem InventoryService.ApplyFlashSale/RemoveFlashSale/SweepFlashSales) và luôn được ưu tiên
+        // cao hơn giá theo lô — nếu không, việc đồng bộ này (chạy sau MỌI thao tác ảnh hưởng lô, kể cả
+        // không liên quan tới đợt Flash Sale) có thể vô tình ghi đè mất giá đang giảm.
+        private async Task SyncPriceFromActiveBatchAsync(Medicine med)
+        {
+            var hasActiveFlashSale = await _context.FlashSales.AnyAsync(f => f.MedicineId == med.Id && f.IsActive);
+            if (hasActiveFlashSale) return;
+
+            var today = DateTime.Now.Date;
+            var frontBatch = await _context.StockBatches
+                .Where(b => b.MedicineId == med.Id && b.Status == StockBatchStatus.Active
+                    && b.QuantityRemaining > 0 && b.ExpiryDate.Date >= today)
+                .OrderBy(b => b.ExpiryDate)
+                .FirstOrDefaultAsync();
+
+            // Chỉ đồng bộ khi LÔ ĐẦU HÀNG ĐỢI THỰC SỰ ĐỔI so với lần đồng bộ trước (PricedFromBatchId) —
+            // nếu vẫn là lô cũ (chưa có gì thay đổi thật sự), bỏ qua để Admin/Dược sĩ tự do sửa giá tay
+            // ở giữa 2 lần chuyển lô mà không bị hàm này chạy lại (do các sự kiện kho khác không liên
+            // quan, vd một lô khác vừa bị hủy) ghi đè mất.
+            if (frontBatch?.Id == med.PricedFromBatchId) return;
+
+            if (frontBatch?.SellPrice != null)
+            {
+                med.Price = frontBatch.SellPrice;
+            }
+            med.PricedFromBatchId = frontBatch?.Id;
         }
 
         public async Task<Medicine> GetMedicineById(int id) => await _context.Medicines.FindAsync(id);

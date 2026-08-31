@@ -147,6 +147,9 @@ namespace TMPMS.Services
 
                 existing.QuantityReceived += dto.Quantity;
                 existing.QuantityRemaining += dto.Quantity;
+                // Giá bán là quyết định của Dược sĩ cho đợt nhập này, không phải dữ kiện cần bình quân
+                // gia quyền như giá vốn — ghi đè trực tiếp khi có truyền lên.
+                if (dto.SellPrice != null) existing.SellPrice = dto.SellPrice;
                 batch = existing;
             }
             else
@@ -173,6 +176,7 @@ namespace TMPMS.Services
                     QuantityReceived = dto.Quantity,
                     QuantityRemaining = dto.Quantity,
                     UnitCostPrice = dto.UnitCostPrice,
+                    SellPrice = dto.SellPrice,
                     ReceivedAt = DateTime.Now,
                     Status = initialStatus,
                     Note = string.IsNullOrWhiteSpace(combinedNote) ? null : combinedNote
@@ -330,6 +334,10 @@ namespace TMPMS.Services
                         Quantity = take,
                         ReferenceId = referenceId,
                         StockBatchId = batch.Id,
+                        // Chốt giá vốn của lô NGAY LÚC xuất — nếu sau này lô được nhập thêm với giá khác
+                        // (làm StockBatch.UnitCostPrice đổi), giá vốn của lần bán này vẫn giữ nguyên đúng
+                        // thực tế, không bị tính lại khi báo cáo lãi gộp chạy sau đó.
+                        UnitCostPrice = batch.UnitCostPrice,
                         CreatedAt = DateTime.Now
                     });
                 }
@@ -388,7 +396,7 @@ namespace TMPMS.Services
             }
         }
 
-        public async Task RestoreStockFEFO(int medicineId, int warehouseId, int quantity, string referenceId)
+        public async Task RestoreStockFEFO(int medicineId, int warehouseId, int quantity, string referenceId, string? originalExportReferenceId = null)
         {
             if (quantity <= 0) return;
 
@@ -399,12 +407,14 @@ namespace TMPMS.Services
 
                 // Hoàn đúng vào (các) lô đã thực sự xuất cho giao dịch gốc, nếu còn xác định được — chính
                 // xác hơn cho lãi/lỗ theo lô so với việc luôn dồn vào lô hết hạn sớm nhất hiện tại (vốn có
-                // thể là lô khác với lô đã bán). Ta suy ra ReferenceId gốc từ quy ước đặt tên toàn hệ thống
-                // (OrderService/PayOSController/PrescriptionService luôn gọi Restore với hậu tố "-RESTOCK"
-                // của đúng ReferenceId đã dùng khi Deduct).
-                var originalReferenceId = referenceId.EndsWith("-RESTOCK", StringComparison.Ordinal)
-                    ? referenceId[..^"-RESTOCK".Length]
-                    : null;
+                // thể là lô khác với lô đã bán). Ưu tiên dùng originalExportReferenceId do caller truyền
+                // vào tường minh (caller luôn biết chính xác ReferenceId gốc vì chính họ đã gọi DeductStockFEFO
+                // với giá trị đó) — chỉ suy ra qua quy ước hậu tố "-RESTOCK" khi caller không truyền, để
+                // tương thích ngược với các chỗ gọi cũ chưa cập nhật.
+                var originalReferenceId = originalExportReferenceId
+                    ?? (referenceId.EndsWith("-RESTOCK", StringComparison.Ordinal)
+                        ? referenceId[..^"-RESTOCK".Length]
+                        : null);
 
                 if (originalReferenceId != null)
                 {
@@ -786,14 +796,20 @@ namespace TMPMS.Services
                 var txs = txByBatch.GetValueOrDefault(b.Id) ?? new List<InventoryTransaction>();
                 var qtySold = txs.Sum(t => t.Quantity);
                 var revenue = 0m;
+                var cost = 0m;
                 var isEstimated = false;
                 foreach (var t in txs)
                 {
                     var (price, isActual) = ResolveUnitPrice(t.ReferenceId, t.MedicineId, orderPriceMap, prescriptionPriceMap, currentSellPrice ?? 0m);
                     revenue += t.Quantity * price;
                     if (!isActual) isEstimated = true;
+                    // Ưu tiên giá vốn đã chốt tại thời điểm xuất (t.UnitCostPrice) — chỉ rơi về giá vốn
+                    // HIỆN TẠI của lô cho các giao dịch cũ tạo trước khi có cột snapshot này, và đánh dấu
+                    // IsEstimated để FE biết con số này không hoàn toàn chính xác (giá vốn lúc bán thật đã
+                    // mất, không thể phục hồi).
+                    if (t.UnitCostPrice == null) isEstimated = true;
+                    cost += t.Quantity * (t.UnitCostPrice ?? b.UnitCostPrice ?? 0m);
                 }
-                var cost = qtySold * b.UnitCostPrice!.Value;
                 var profit = revenue - cost;
 
                 return new BatchProfitDTO
@@ -833,7 +849,10 @@ namespace TMPMS.Services
             var buckets = new Dictionary<string, ProfitPointDTO>();
             foreach (var t in exportTx)
             {
-                if (t.StockBatch?.UnitCostPrice == null) continue;
+                // Ưu tiên giá vốn đã chốt tại thời điểm xuất (t.UnitCostPrice) — chỉ rơi về giá vốn HIỆN
+                // TẠI của lô cho các giao dịch cũ tạo trước khi có cột snapshot này.
+                var unitCost = t.UnitCostPrice ?? t.StockBatch?.UnitCostPrice;
+                if (unitCost == null) continue;
                 if (!CountsAsSold(t.ReferenceId, orderStatusMap)) continue;
 
                 var key = DateKey(t.CreatedAt, groupBy);
@@ -845,8 +864,10 @@ namespace TMPMS.Services
 
                 var (price, isActual) = ResolveUnitPrice(t.ReferenceId, t.MedicineId, orderPriceMap, prescriptionPriceMap, t.Medicine?.Price ?? 0m);
                 point.EstimatedRevenue += t.Quantity * price;
-                point.EstimatedCost += t.Quantity * t.StockBatch.UnitCostPrice.Value;
-                if (!isActual) point.IsEstimated = true;
+                point.EstimatedCost += t.Quantity * unitCost.Value;
+                // Đánh dấu ước tính khi giá bán KHÔNG chốt được (isActual=false) hoặc giá vốn không có
+                // snapshot (t.UnitCostPrice null, phải rơi về giá vốn hiện tại của lô).
+                if (!isActual || t.UnitCostPrice == null) point.IsEstimated = true;
             }
 
             foreach (var point in buckets.Values)
@@ -858,6 +879,56 @@ namespace TMPMS.Services
             }
 
             return buckets.Values.OrderBy(p => p.Period).ToList();
+        }
+
+        // Gợi ý nhập hàng: với mỗi sản phẩm có bán ra trong lookbackDays ngày gần nhất, ước tính tốc độ
+        // bán trung bình/ngày, nhân với leadTimeDays (thời gian dự kiến chờ hàng về) để ra "cần có bao
+        // nhiêu hàng cho tới khi lô mới về", trừ đi tồn kho hiện có — dương thì gợi ý nhập thêm đúng số
+        // đó. Chỉ là ước tính tham khảo (không tính mùa vụ/khuyến mãi sắp tới), sản phẩm chưa từng bán
+        // trong khoảng lookback thì không có cơ sở tính tốc độ bán nên không đưa vào gợi ý.
+        public async Task<List<ReorderSuggestionDTO>> GetReorderSuggestions(int lookbackDays, int leadTimeDays)
+        {
+            if (lookbackDays <= 0) lookbackDays = 30;
+            if (leadTimeDays <= 0) leadTimeDays = 30;
+
+            var from = DateTime.Now.AddDays(-lookbackDays);
+            var to = DateTime.Now;
+            var exportTx = await _repo.GetExportTransactionsWithBatchInRange(from, to);
+            if (exportTx.Count == 0) return new List<ReorderSuggestionDTO>();
+
+            var orderStatusMap = await _repo.GetOrderStatusMap();
+
+            var soldByMedicine = exportTx
+                .Where(t => CountsAsSold(t.ReferenceId, orderStatusMap))
+                .GroupBy(t => t.MedicineId)
+                .ToDictionary(g => g.Key, g => new { Qty = g.Sum(t => t.Quantity), Name = g.First().Medicine?.Name });
+
+            if (soldByMedicine.Count == 0) return new List<ReorderSuggestionDTO>();
+
+            var allStock = await _repo.GetAllStock();
+            var stockByMedicine = allStock.GroupBy(s => s.MedicineId).ToDictionary(g => g.Key, g => g.Sum(s => s.Quantity));
+
+            var suggestions = new List<ReorderSuggestionDTO>();
+            foreach (var pair in soldByMedicine)
+            {
+                var avgDailySales = (decimal)pair.Value.Qty / lookbackDays;
+                var currentStock = stockByMedicine.GetValueOrDefault(pair.Key);
+                var neededForLeadTime = (int)Math.Ceiling(avgDailySales * leadTimeDays);
+                var suggestedQty = neededForLeadTime - currentStock;
+                if (suggestedQty <= 0) continue;
+
+                suggestions.Add(new ReorderSuggestionDTO
+                {
+                    MedicineId = pair.Key,
+                    MedicineName = pair.Value.Name,
+                    CurrentStock = currentStock,
+                    AvgDailySales = Math.Round(avgDailySales, 2),
+                    LeadTimeDays = leadTimeDays,
+                    SuggestedReorderQuantity = suggestedQty
+                });
+            }
+
+            return suggestions.OrderByDescending(s => s.SuggestedReorderQuantity).ToList();
         }
 
         private static string DateKey(DateTime d, string groupBy) => groupBy switch
@@ -920,6 +991,7 @@ namespace TMPMS.Services
             QuantityReceived = b.QuantityReceived,
             QuantityRemaining = b.QuantityRemaining,
             UnitCostPrice = b.UnitCostPrice,
+            SellPrice = b.SellPrice,
             SupplierId = b.SupplierId,
             SupplierName = b.Supplier?.CompanyName,
             ReceivedAt = b.ReceivedAt,
