@@ -18,6 +18,7 @@ namespace TMPMS.Services
         private readonly IPrescriptionOcrService _ocrService;
         private readonly IWebHostEnvironment _environment;
         private readonly IEmailService _emailService;
+        private readonly IHerbalInteractionService _herbalInteractionService;
 
         public PrescriptionService(
             IPrescriptionRepository repo,
@@ -25,7 +26,8 @@ namespace TMPMS.Services
             IInventoryService inventoryService,
             IPrescriptionOcrService ocrService,
             IWebHostEnvironment environment,
-            IEmailService emailService)
+            IEmailService emailService,
+            IHerbalInteractionService herbalInteractionService)
         {
             _repo = repo;
             _context = context;
@@ -33,6 +35,7 @@ namespace TMPMS.Services
             _ocrService = ocrService;
             _environment = environment;
             _emailService = emailService;
+            _herbalInteractionService = herbalInteractionService;
         }
 
         // Gửi email "đã khám xong & kê đơn" tới bệnh nhân thực sự (Patient nếu người khác gửi hộ, không thì User).
@@ -403,6 +406,21 @@ namespace TMPMS.Services
                     throw new InvalidOperationException("Đơn thuốc này đã được kê thuốc trước đó.");
                 if (entity.Status != "Pending")
                     throw new InvalidOperationException("Chỉ có thể hoàn thiện đơn thuốc đang ở trạng thái Chờ duyệt.");
+
+                // Chặn cứng ở tầng service, không chỉ cảnh báo trên FE: trước đây FE hiển thị cảnh báo
+                // "Thập Bát Phản" (vd Cam Thảo Bắc x Hải Tảo) nhưng vẫn cho gọi thẳng API finalize nếu
+                // dược sĩ bỏ qua cảnh báo (hoặc gọi API trực tiếp) — đơn vẫn được duyệt + trừ kho bình
+                // thường dù chứa tổ hợp vị thuốc mức Critical. Warning/Notice vẫn cho qua (dược sĩ tự
+                // cân nhắc lâm sàng), chỉ Critical mới chặn hẳn.
+                var safety = await _herbalInteractionService.CheckSafety(new SafetyCheckRequestDTO
+                {
+                    MedicineIds = dto.Items.Select(i => i.MedicineId).ToList()
+                });
+                if (safety.MaxSeverity == "Critical")
+                {
+                    var pair = safety.Conflicts.First(c => c.Severity == "Critical");
+                    throw new InvalidOperationException($"Không thể duyệt đơn: \"{pair.HerbAName}\" và \"{pair.HerbBName}\" xung khắc mức Nghiêm trọng (Thập Bát Phản). Vui lòng thay thế trước khi hoàn thiện đơn.");
+                }
 
                 var priceByMedicineId = new Dictionary<int, decimal?>();
                 foreach (var item in dto.Items)
