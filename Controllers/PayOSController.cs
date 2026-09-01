@@ -112,13 +112,19 @@ namespace TMPMS.Controllers
             payment.Method = "PayOS";
             payment.Status = "Pending";
             payment.TransactionCode = order.Id.ToString();
+            // KHÔNG dùng thẳng order.Id làm orderCode gửi PayOS (xem ghi chú trên Payment.PayOsOrderCode) —
+            // ghép giây Unix (tăng dần, không phụ thuộc trạng thái DB local) với order.Id%100 để tránh
+            // trùng cùng giây, đồng thời vẫn giữ giá trị < 800 tỷ để không lẫn với orderCode lịch hẹn
+            // (PayOSController.Webhook dùng ngưỡng >= 800 tỷ để phân biệt 2 loại).
+            var payOsOrderCode = DateTimeOffset.UtcNow.ToUnixTimeSeconds() * 100 + (order.Id % 100);
+            payment.PayOsOrderCode = payOsOrderCode;
             await _context.SaveChangesAsync();
 
             try
             {
                 var request = new CreatePaymentLinkRequest
                 {
-                    OrderCode = order.Id,
+                    OrderCode = payOsOrderCode,
                     Amount = decimal.ToInt32(decimal.Round(order.TotalAmount, 0)),
                     Description = $"DON HANG {order.Id}",
                     ReturnUrl = input.ReturnUrl,
@@ -152,9 +158,12 @@ namespace TMPMS.Controllers
                     if (verified.Code == "00" && verified.Amount == intent.Amount) await FinalizeAppointmentPayment(intent, verified.Reference);
                     return Ok(new { success = true });
                 }
-                var order = await _context.Orders
-                    .Include(o => o.Payments)
-                    .FirstOrDefaultAsync(o => o.Id == verified.OrderCode);
+                // Tra theo Payment.PayOsOrderCode (orderCode thật đã gửi PayOS lúc tạo link) — KHÔNG
+                // còn giả định orderCode == Order.Id (xem ghi chú Payment.PayOsOrderCode).
+                var matchedPayment = await _context.Payments
+                    .Include(p => p.Order).ThenInclude(o => o.Payments)
+                    .FirstOrDefaultAsync(p => p.PayOsOrderCode == verified.OrderCode);
+                var order = matchedPayment?.Order;
 
                 // PayOS gửi một payload mẫu khi xác nhận webhook; vẫn cần trả 2xx.
                 if (order == null) return Ok(new { success = true });
@@ -164,8 +173,7 @@ namespace TMPMS.Controllers
                 // của lần thanh toán gốc bằng dữ liệu của lần gọi lại).
                 if (order.PaymentStatus == "Paid") return Ok(new { success = true });
 
-                var payment = order.Payments.FirstOrDefault(p => p.Method == "PayOS")
-                    ?? order.Payments.FirstOrDefault();
+                var payment = matchedPayment;
 
                 if (payment != null && verified.Code == "00" && verified.Amount == order.TotalAmount)
                 {
@@ -245,13 +253,17 @@ namespace TMPMS.Controllers
             if (currentUserId == null) return Unauthorized();
             if (!CanProxy() && order.UserId != currentUserId.Value) return Forbid();
 
+            var payment = order.Payments.FirstOrDefault(p => p.Method == "PayOS")
+                ?? order.Payments.FirstOrDefault();
+            if (payment?.PayOsOrderCode == null)
+                return BadRequest(new { error = "Đơn hàng chưa có giao dịch PayOS để kiểm tra." });
+
             try
             {
                 // Không tin dữ liệu trên return URL; luôn hỏi lại PayOS bằng API server-to-server.
-                var paymentLink = await CreateClient().PaymentRequests.GetAsync((long)orderId);
+                // Dùng đúng orderCode đã lưu lúc tạo link (KHÔNG phải orderId — xem Payment.PayOsOrderCode).
+                var paymentLink = await CreateClient().PaymentRequests.GetAsync(payment.PayOsOrderCode.Value);
                 var payOSStatus = paymentLink.Status.ToString().ToUpperInvariant();
-                var payment = order.Payments.FirstOrDefault(p => p.Method == "PayOS")
-                    ?? order.Payments.FirstOrDefault();
 
                 if (payOSStatus == "PAID")
                 {
