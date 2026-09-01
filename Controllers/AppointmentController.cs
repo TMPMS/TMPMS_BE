@@ -147,7 +147,13 @@ namespace TMPMS.Controllers
             var intent = new AppointmentPaymentIntent { UserId = userId, SlotHoldId = hold.Id, SymptomDescription = dto.SymptomDescription.Trim(), PrescriptionImageUrl = dto.PrescriptionImageUrl, Note = dto.Note, Amount = DefaultDeposit, CreatedAt = DateTime.UtcNow, ExpiresAt = hold.ExpiresAt };
             _context.AppointmentPaymentIntents.Add(intent);
             await _context.SaveChangesAsync();
-            intent.OrderCode = 800000000000L + intent.Id;
+            // KHÔNG dùng công thức phụ thuộc AppointmentPaymentIntent.Id (vd 800000000000+Id): Id chỉ
+            // duy nhất trong DB hiện tại, nhưng PayOS nhớ orderCode đã dùng ở PHÍA HỌ theo ClientId —
+            // hễ DB local bị reset/seed lại (rất hay xảy ra khi dev/test) thì Id nhỏ lặp lại y hệt
+            // orderCode một request PayOS thật đã từng nhận trước đó, khiến CreateAsync báo lỗi "Đơn
+            // thanh toán đã tồn tại" dù đây là intent hoàn toàn mới. Dùng mốc thời gian mili-giây (tăng
+            // dần, không phụ thuộc trạng thái DB) để đảm bảo orderCode luôn mới với PayOS.
+            intent.OrderCode = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             await _context.SaveChangesAsync();
             var clientId = _configuration["PayOS:ClientId"]; var apiKey = _configuration["PayOS:ApiKey"]; var checksumKey = _configuration["PayOS:ChecksumKey"];
             if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(checksumKey))
