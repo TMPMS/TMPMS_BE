@@ -607,6 +607,14 @@ namespace TMPMS.Controllers
                         {
                             if (!string.IsNullOrWhiteSpace(row.Name)) med.Name = row.Name;
                             if (row.Price > 0) med.Price = row.Price;
+                            if (decimal.TryParse(row.OldPriceStr?.Replace(".", "").Replace(",", ""), out var importedOldPrice))
+                                med.OldPrice = importedOldPrice;
+                            // Giá/giá cũ vừa đổi qua Excel thì % giảm hiển thị phải tính lại ngay theo giá mới —
+                            // trước đây import chỉ đè Price, bỏ quên cột "Giá niêm yết cũ" và để nguyên Discount
+                            // cũ, khiến nhãn giảm giá hiển thị sai lệch so với giá thực sau khi import.
+                            med.Discount = (med.Price != null && med.OldPrice != null && med.OldPrice > 0 && med.OldPrice > med.Price)
+                                ? (int)Math.Round((1 - med.Price.Value / med.OldPrice.Value) * 100)
+                                : null;
                             if (!string.IsNullOrWhiteSpace(row.Unit)) med.Unit = row.Unit;
                             if (!string.IsNullOrWhiteSpace(row.Description)) med.Description = row.Description;
                             if (row.HasImage) med.ImageUrl = imageUrl;
