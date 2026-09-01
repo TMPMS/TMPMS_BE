@@ -7,7 +7,9 @@ using Microsoft.OpenApi.Models;
 using Repositories.Interfaces;
 using Services.Interfaces;
 using System.Text;
+using System.Linq;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using TMPMS.Data;
 using TMPMS.Repositories;
 using TMPMS.Repositories.Interfaces;
@@ -207,6 +209,24 @@ builder.Services.AddControllers()
     {
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
+        // Phòng thủ theo chiều sâu: nhiều endpoint (giỏ hàng, đơn hàng...) từng vô tình trả thẳng
+        // entity EF thay vì DTO, và EF Core tự "fixup" navigation property User trên các entity liên
+        // quan (Cart/Order...) từ instance User đã được track sẵn trong cùng DbContext của request
+        // (vd do middleware xác thực load), khiến PasswordHash/SecurityStamp bị serialize lộ ra ngoài
+        // dù query gốc không hề .Include(User). Chặn cứng ở tầng serialize cho MỌI response, không
+        // phụ thuộc việc từng Controller có nhớ dùng DTO đúng cách hay không.
+        var defaultResolver = new DefaultJsonTypeInfoResolver();
+        defaultResolver.Modifiers.Add(typeInfo =>
+        {
+            if (typeInfo.Type != typeof(BusinessObjects.User)) return;
+            var hiddenFields = new[] { "PasswordHash", "SecurityStamp", "ConcurrencyStamp" };
+            for (int i = typeInfo.Properties.Count - 1; i >= 0; i--)
+            {
+                if (hiddenFields.Contains(typeInfo.Properties[i].Name, StringComparer.OrdinalIgnoreCase))
+                    typeInfo.Properties.RemoveAt(i);
+            }
+        });
+        options.JsonSerializerOptions.TypeInfoResolver = defaultResolver;
     });
 
 IConfiguration configuration = new ConfigurationBuilder()

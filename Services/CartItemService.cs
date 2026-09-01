@@ -42,7 +42,32 @@ namespace TMPMS.Services
                     MedicineId = ci.MedicineId,
                     Quantity = ci.Quantity,
                     AllowedQuantity = allowedQuantity,
-                    Medicine = ci.Medicine
+                    // DTO thu hẹp thủ công (không gán thẳng entity ci.Medicine) — entity Medicine mang theo
+                    // navigation property tới CartItem -> Cart -> User, khiến System.Text.Json serialize lồng
+                    // cả PasswordHash/SecurityStamp của user ra response JSON của API giỏ hàng.
+                    Medicine = new MedicineListItemDto
+                    {
+                        Id = ci.Medicine.Id,
+                        CategoryId = ci.Medicine.CategoryId,
+                        SupplierId = ci.Medicine.SupplierId,
+                        Name = ci.Medicine.Name,
+                        Description = ci.Medicine.Description,
+                        Price = ci.Medicine.Price,
+                        PriceStatus = ci.Medicine.Price == null ? "contact" : "available",
+                        StockQuantity = ci.Medicine.StockQuantity,
+                        ManufactureDate = ci.Medicine.ManufactureDate,
+                        ExpiryDate = ci.Medicine.ExpiryDate,
+                        RequiresPrescription = ci.Medicine.RequiresPrescription,
+                        ImageUrl = ci.Medicine.ImageUrl,
+                        Unit = ci.Medicine.Unit,
+                        Origin = ci.Medicine.Origin,
+                        Packaging = ci.Medicine.Packaging,
+                        Barcode = ci.Medicine.Barcode,
+                        OldPrice = ci.Medicine.OldPrice,
+                        Discount = ci.Medicine.Discount,
+                        IsActive = ci.Medicine.IsActive,
+                        CreatedAt = ci.Medicine.CreatedAt
+                    }
                 });
             }
             return result;
@@ -80,13 +105,21 @@ namespace TMPMS.Services
             {
                 existing.Quantity += quantity;
                 await _repo.SaveChangesAsync();
-                return new CartItemActionResult { Success = true, Item = existing, Created = false };
+                return new CartItemActionResult { Success = true, Item = ToBriefDto(existing), Created = false };
             }
 
             var newItem = new CartItem { CartId = cart.Id, MedicineId = medicineId, Quantity = quantity };
             await _repo.AddCartItemAsync(newItem);
-            return new CartItemActionResult { Success = true, Item = newItem, Created = true };
+            return new CartItemActionResult { Success = true, Item = ToBriefDto(newItem), Created = true };
         }
+
+        private static CartItemBriefDto ToBriefDto(CartItem item) => new()
+        {
+            Id = item.Id,
+            CartId = item.CartId,
+            MedicineId = item.MedicineId,
+            Quantity = item.Quantity
+        };
 
         public async Task<CartItemActionResult> UpdateItemAsync(Cart cart, CartItem item, int quantity)
         {
@@ -109,7 +142,7 @@ namespace TMPMS.Services
 
             item.Quantity = quantity;
             await _repo.SaveChangesAsync();
-            return new CartItemActionResult { Success = true, Item = item };
+            return new CartItemActionResult { Success = true, Item = ToBriefDto(item) };
         }
 
         public async Task RemoveItemAsync(CartItem item)
