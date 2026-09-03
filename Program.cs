@@ -122,7 +122,10 @@ builder.Services.AddIdentity<User, Role>(options =>
     options.Password.RequiredLength = 6;
     options.Password.RequireNonAlphanumeric = false;
     options.Password.RequireUppercase = false;
-    options.Lockout.AllowedForNewUsers = false;
+    // true (mặc định của Identity) để khóa tài khoản sau 5 lần đăng nhập sai (Lockout.MaxFailedAccessAttempts,
+    // mặc định 5 lần/5 phút) — trước đây để false khiến LockoutEnabled=false cho MỌI tài khoản mới tạo,
+    // vô hiệu hóa hoàn toàn tính năng khóa tài khoản dù AuthController đã có sẵn nhánh xử lý 423 Locked.
+    options.Lockout.AllowedForNewUsers = true;
     options.User.RequireUniqueEmail = true;
 })
 .AddEntityFrameworkStores<TMPMSDbContext>()

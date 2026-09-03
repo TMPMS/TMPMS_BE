@@ -144,6 +144,18 @@ namespace TMPMS.Controllers
             if (hold == null || hold.ExpiresAt <= DateTime.UtcNow) return Conflict(new { message = "Thời gian giữ chỗ đã hết. Vui lòng chọn lại khung giờ." });
             var activeCount = await _context.Appointments.CountAsync(a => a.UserId == userId && new[] { "PendingConfirmation", "Confirmed", "CheckedIn", "AlternativeProposed", "RescheduleRequested" }.Contains(a.Status));
             if (activeCount >= 3) return Conflict(new { message = "Bạn đã có đủ 3 lịch đang hoạt động." });
+            // Chặn tạo 2 giao dịch thanh toán song song cho CÙNG 1 hold — trước đây bấm "Thanh toán" 2
+            // lần (double-click, hoặc mạng chậm bấm lại) với cùng HoldToken tạo ra 2
+            // AppointmentPaymentIntent + 2 link PayOS độc lập cho cùng 1 slot; nếu khách lỡ trả cả 2,
+            // chỉ 1 giao dịch tạo được lịch hẹn, giao dịch còn lại rơi vào ManualReview với tiền không
+            // tự hoàn (FinalizeAppointmentPayment chỉ chặn được việc TẠO LỊCH HẸN trùng, không chặn
+            // việc tạo giao dịch/link thanh toán trùng ở bước này). PayOS SDK không cho lấy lại
+            // checkoutUrl của link đã tạo (GetAsync không trả field này) nên không thể trả lại đúng link
+            // cũ — chặn hẳn lần gọi thứ 2 với thông báo rõ ràng thay vì tạo giao dịch mới.
+            var hasPendingIntent = await _context.AppointmentPaymentIntents.AnyAsync(pi => pi.SlotHoldId == hold.Id && pi.Status != "Paid" && pi.Status != "Expired");
+            if (hasPendingIntent)
+                return Conflict(new { message = "Bạn đã có một giao dịch thanh toán đang chờ cho lịch hẹn này. Vui lòng hoàn tất thanh toán ở tab/lần trước, hoặc đợi hết hạn giữ chỗ rồi thử lại." });
+
             var intent = new AppointmentPaymentIntent { UserId = userId, SlotHoldId = hold.Id, SymptomDescription = dto.SymptomDescription.Trim(), PrescriptionImageUrl = dto.PrescriptionImageUrl, Note = dto.Note, Amount = DefaultDeposit, CreatedAt = DateTime.UtcNow, ExpiresAt = hold.ExpiresAt };
             _context.AppointmentPaymentIntents.Add(intent);
             await _context.SaveChangesAsync();

@@ -218,7 +218,12 @@ namespace TMPMS.Controllers
         private async Task FinalizeAppointmentPayment(AppointmentPaymentIntent intent, string transactionCode)
         {
             if (intent.Status == "Paid") return;
-            if (intent.ExpiresAt < DateTime.UtcNow) { intent.Status = "Expired"; intent.SlotHold.IsConsumed = true; await _context.SaveChangesAsync(); return; }
+            // Trước đây: hold hết hạn (15 phút) mà webhook/verify PayOS xác nhận tiền vào TRỄ hơn mốc đó
+            // thì hàm này chỉ set "Expired" rồi return — tiền khách đã trả bị "mất dấu" (không tạo lịch
+            // hẹn, không có cờ nào để Admin biết mà hoàn tiền). Giờ không chặn theo giờ hold nữa: nếu
+            // slot vẫn còn trống thì tạo lịch hẹn bình thường (khách đã trả tiền thật, không có lý do từ
+            // chối chỉ vì trễ giờ nội bộ); nếu slot đã bị người khác chiếm trong lúc chờ thì rơi vào
+            // nhánh "ManualReview" bên dưới để Admin/Pharmacy chủ động soát & hoàn tiền.
             await using var tx = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
             var occupied = await _context.Appointments.AnyAsync(a => a.Location == intent.SlotHold.Location && a.AppointmentDate == intent.SlotHold.AppointmentDate
                 && new[] { "PendingConfirmation", "Confirmed", "CheckedIn", "AlternativeProposed" }.Contains(a.Status));

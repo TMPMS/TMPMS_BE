@@ -18,6 +18,7 @@ namespace TMPMS.Services
         private readonly IShippingFeeService _shippingFeeService;
         private readonly ILoyaltyService _loyaltyService;
         private readonly IEmailService _emailService;
+        private readonly ICartRepository _cartRepo; // dùng lại đúng logic Rx Allowance (GetPrescribedQuantityAsync/GetPurchasedQuantityAsync) mà CartItemService đang dùng cho giỏ hàng
         private readonly TMPMS.Data.TMPMSDbContext _context; // dùng cho VoucherResolver (helper dùng chung với VouchersController)
 
         public OrderService(
@@ -26,6 +27,7 @@ namespace TMPMS.Services
             IShippingFeeService shippingFeeService,
             ILoyaltyService loyaltyService,
             IEmailService emailService,
+            ICartRepository cartRepo,
             TMPMS.Data.TMPMSDbContext context)
         {
             _repo = repo;
@@ -33,6 +35,7 @@ namespace TMPMS.Services
             _shippingFeeService = shippingFeeService;
             _loyaltyService = loyaltyService;
             _emailService = emailService;
+            _cartRepo = cartRepo;
             _context = context;
         }
 
@@ -59,6 +62,23 @@ namespace TMPMS.Services
                     if (medicine.StockQuantity < item.Quantity)
                     {
                         return Error(OrderErrorType.BadRequest, $"Sản phẩm '{medicine.Name}' hiện đã hết hàng hoặc không đủ số lượng tồn kho (Hiện còn: {medicine.StockQuantity}).");
+                    }
+                    // Chốt lại cổng Rx Allowance ngay tại điểm bán hàng thật — trước đây chỉ có
+                    // CartItemService kiểm tra lúc thêm vào giỏ, nên gọi thẳng API tạo đơn (bỏ qua giỏ
+                    // hàng) có thể mua thuốc RequiresPrescription mà không cần đơn thuốc nào cả.
+                    if (medicine.RequiresPrescription)
+                    {
+                        var prescribed = await _cartRepo.GetPrescribedQuantityAsync(request.UserId, item.MedicineId);
+                        if (prescribed <= 0)
+                        {
+                            return Error(OrderErrorType.BadRequest, $"Sản phẩm '{medicine.Name}' cần được Dược sĩ kê đơn trước khi mua.");
+                        }
+                        var purchased = await _cartRepo.GetPurchasedQuantityAsync(request.UserId, item.MedicineId);
+                        var maxAllowed = Math.Max(0, prescribed - purchased);
+                        if (item.Quantity > maxAllowed)
+                        {
+                            return Error(OrderErrorType.BadRequest, $"Mỗi khách hàng chỉ được mua đúng số lượng thuốc mà bác sĩ đã kê đơn. Thuốc '{medicine.Name}': toa cho phép {prescribed}, bạn đã mua {purchased} và chỉ còn được mua {maxAllowed}.");
+                        }
                     }
                     medicinesById[item.MedicineId] = medicine;
                     subtotal += medicine.Price.Value * item.Quantity;
@@ -363,8 +383,13 @@ namespace TMPMS.Services
                 await _loyaltyService.ReverseForReturnedOrderAsync(id);
             }
 
-            // Tích điểm loyalty khi đơn giao thành công (không cộng lại nếu đã từng Delivered trước đó).
-            if (request.Status == "Delivered" && previousStatus != "Delivered")
+            // Tích điểm loyalty khi đơn giao thành công VÀ đã thực sự thu được tiền — trước đây chỉ xét
+            // Status=="Delivered" nên đơn COD chưa thu tiền (courier giao xong, tiền chưa về, hoặc thu
+            // thất bại) vẫn được cộng điểm. Với đơn COD thật, "thu tiền" là bước riêng xảy ra SAU khi
+            // Delivered (xem PaymentService.UpdateStatus, nơi cộng điểm bù cho trường hợp đó) — ở đây chỉ
+            // cộng ngay nếu PaymentStatus đã "Paid" tại thời điểm Delivered (đơn trả trước qua PayOS, hoặc
+            // admin cập nhật đồng thời cả Status+PaymentStatus trong cùng request).
+            if (request.Status == "Delivered" && previousStatus != "Delivered" && order.PaymentStatus == "Paid")
             {
                 await _loyaltyService.AwardForOrderAsync(id);
             }

@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Services.Interfaces;
 using System.Security.Claims;
 using TMPMS.DTOs;
+using TMPMS.Services.Interfaces;
+using TMPMS.Utils;
 
 namespace TMPMS.Controllers
 {
@@ -13,7 +15,12 @@ namespace TMPMS.Controllers
     public class PaymentController : ControllerBase
     {
         private readonly IPaymentService _service;
-        public PaymentController(IPaymentService service) => _service = service;
+        private readonly IAuditLogService _auditLogService;
+        public PaymentController(IPaymentService service, IAuditLogService auditLogService)
+        {
+            _service = service;
+            _auditLogService = auditLogService;
+        }
 
         private int? GetUserId()
         {
@@ -73,6 +80,7 @@ namespace TMPMS.Controllers
             {
                 var result = await _service.UpdateStatus(id, dto);
                 if (result == null) return NotFound();
+                await this.LogAuditAsync(_auditLogService, "Payment", "UpdateStatus", id.ToString(), $"Cập nhật trạng thái thanh toán #{id} → {dto.Status} ({result.Amount:N0}đ, đơn hàng #{result.OrderId})");
                 return Ok(result);
             }
             catch (Exception ex) { return BadRequest(ex.Message); }
