@@ -1,12 +1,12 @@
-using BusinessObjects;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using TMPMS.DTOs;
 
 namespace TMPMS.Services.Interfaces
 {
     public interface ICartService
     {
-        Task<List<Cart>> GetCartsByUserIdAsync(int userId);
-        Task<Cart> CreateCartAsync(int userId);
+        Task<List<CartViewDto>> GetCartsByUserIdAsync(int userId);
+        Task<CartViewDto> CreateCartAsync(int userId);
     }
 }

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TMPMS.Data;
 
@@ -11,9 +12,11 @@ using TMPMS.Data;
 namespace TMPMS.Migrations
 {
     [DbContext(typeof(TMPMSDbContext))]
-    partial class TMPMSDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260901091713_BackfillExportCostPriceSnapshot")]
+    partial class BackfillExportCostPriceSnapshot
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -921,9 +924,6 @@ namespace TMPMS.Migrations
 
                     b.Property<DateTime?>("PaidAt")
                         .HasColumnType("datetime2");
-
-                    b.Property<long?>("PayOsOrderCode")
-                        .HasColumnType("bigint");
 
                     b.Property<string>("Status")
                         .IsRequired()

@@ -86,6 +86,13 @@ namespace TMPMS.Controllers
                 {
                     dto.UserId = GetCurrentUserId();
                     dto.PatientId = null;
+                    // Khách hàng chỉ được gửi ẢNH toa thuốc thật để Dược sĩ xem & Finalize (kèm kiểm tra
+                    // xung khắc dược liệu mức Critical) — trước đây endpoint này không chặn Items, nên
+                    // khách có thể tự POST kèm Items và Create() sẽ auto-approve + trừ kho ngay (status
+                    // "Approved" nếu Items non-empty) mà KHÔNG qua bước kiểm tra Thập Bát Phản nào, tự
+                    // cấp cho mình Rx Allowance tuỳ ý.
+                    if (dto.Items != null && dto.Items.Any())
+                        return BadRequest(new { message = "Vui lòng chỉ gửi ảnh toa thuốc để Dược sĩ xem và duyệt. Không thể tự kê thuốc." });
                 }
                 // Chặn trường hợp tài khoản nhân viên (Pharmacy/Admin/Staff) tự gửi toa cho chính họ
                 // qua widget "Gửi toa thuốc" dành cho khách hàng — CanProxy() cho phép nhân viên chọn

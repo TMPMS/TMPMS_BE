@@ -99,10 +99,24 @@ namespace TMPMS.Services
             if (user == null || !user.IsActive)
                 return null;
 
+            // Lockout đã được cấu hình (5 lần sai/5 phút, Program.cs) nhưng trước đây chưa từng có hiệu
+            // lực: CheckPasswordAsync chỉ so hash, không đếm/khóa. Tài khoản tạo trước khi sửa
+            // Lockout.AllowedForNewUsers vẫn có LockoutEnabled=false trong DB — tự bật lại ở đây để không
+            // cần migrate dữ liệu riêng.
+            if (!await _userManager.GetLockoutEnabledAsync(user))
+                await _userManager.SetLockoutEnabledAsync(user, true);
+
+            if (await _userManager.IsLockedOutAsync(user))
+                throw new InvalidOperationException("Tài khoản đã bị khóa tạm thời do đăng nhập sai quá nhiều lần. Vui lòng thử lại sau ít phút.");
+
             var validPassword = await _userManager.CheckPasswordAsync(user, dto.Password);
             if (!validPassword)
+            {
+                await _userManager.AccessFailedAsync(user);
                 return null;
+            }
 
+            await _userManager.ResetAccessFailedCountAsync(user);
             return await BuildAuthResponse(user, ipAddress, includeRefreshToken: true);
         }
 
@@ -113,12 +127,18 @@ namespace TMPMS.Services
                 throw new ArgumentException("Vui lòng nhập số điện thoại và mã OTP.");
 
             var cacheKey = $"otp_{dto.Phone}";
+            var attemptsKey = $"otp_attempts_{dto.Phone}";
+            EnsureCodeAttemptsNotExceeded(attemptsKey);
             if (!_cache.TryGetValue(cacheKey, out string? storedOtp))
                 throw new ArgumentException("Mã OTP đã hết hạn hoặc không tồn tại.");
             if (storedOtp != dto.Code)
+            {
+                RegisterFailedCodeAttempt(attemptsKey, TimeSpan.FromMinutes(3));
                 throw new ArgumentException("Mã OTP không chính xác.");
+            }
 
             _cache.Remove(cacheKey); // OTP chỉ dùng được một lần.
+            _cache.Remove(attemptsKey);
 
             var user = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == dto.Phone);
             if (user == null)
@@ -238,6 +258,7 @@ namespace TMPMS.Services
             // Store in memory cache for 3 minutes
             var cacheKey = $"otp_{phone}";
             _cache.Set(cacheKey, otp, TimeSpan.FromMinutes(3));
+            _cache.Remove($"otp_attempts_{phone}"); // mã mới -> reset bộ đếm nhập sai của mã cũ
 
             // Send actual message via SmsService (Zalo ZNS)
             var message = $"[TMPMS Clinic] Ma OTP cua ban la: {otp}. Hieu luc 3 phut.";
@@ -376,6 +397,7 @@ namespace TMPMS.Services
 
             var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
             _cache.Set($"password_reset_{normalizedEmail}", otp, TimeSpan.FromMinutes(2));
+            _cache.Remove($"password_reset_attempts_{normalizedEmail}"); // mã mới -> reset bộ đếm nhập sai của mã cũ
             var sent = await _emailService.SendEmailAsync(
                 user.Email!,
                 "Mã đặt lại mật khẩu TMPMS",
@@ -400,9 +422,14 @@ namespace TMPMS.Services
 
             var normalizedEmail = dto.Email.Trim().ToUpperInvariant();
             var cacheKey = $"password_reset_{normalizedEmail}";
+            var attemptsKey = $"password_reset_attempts_{normalizedEmail}";
+            EnsureCodeAttemptsNotExceeded(attemptsKey);
             if (!_cache.TryGetValue(cacheKey, out string? storedOtp) ||
                 string.IsNullOrWhiteSpace(dto.Code) || storedOtp != dto.Code)
+            {
+                RegisterFailedCodeAttempt(attemptsKey, TimeSpan.FromMinutes(2));
                 throw new ArgumentException("Mã xác nhận không đúng hoặc đã hết hạn.");
+            }
 
             var user = await _userManager.FindByEmailAsync(dto.Email.Trim());
             if (user == null || !user.IsActive)
@@ -414,7 +441,26 @@ namespace TMPMS.Services
                 throw new ArgumentException(string.Join("; ", result.Errors.Select(e => e.Description)));
 
             _cache.Remove(cacheKey); // OTP chỉ được sử dụng một lần.
+            _cache.Remove(attemptsKey);
             await _userManager.ResetAccessFailedCountAsync(user);
+        }
+
+        // ---------- CHỐNG BRUTE-FORCE MÃ OTP/RESET (6 CHỮ SỐ) ----------
+        // Trước đây OtpLogin/ResetPassword chỉ so sánh mã đúng/sai, không giới hạn số lần thử — mã 6 chữ
+        // số chỉ có ~1 triệu khả năng nên có thể brute-force trong vòng đời hiệu lực (2-3 phút) nếu
+        // không chặn. Đếm số lần sai theo cùng IMemoryCache đang dùng để lưu OTP, không cần bảng DB mới.
+        private const int MaxCodeAttempts = 5;
+
+        private void EnsureCodeAttemptsNotExceeded(string attemptsKey)
+        {
+            if (_cache.TryGetValue(attemptsKey, out int attempts) && attempts >= MaxCodeAttempts)
+                throw new ArgumentException("Bạn đã nhập sai mã quá nhiều lần. Vui lòng yêu cầu gửi lại mã mới.");
+        }
+
+        private void RegisterFailedCodeAttempt(string attemptsKey, TimeSpan ttl)
+        {
+            var attempts = _cache.TryGetValue(attemptsKey, out int count) ? count : 0;
+            _cache.Set(attemptsKey, attempts + 1, ttl);
         }
 
         // ---------- HELPERS ----------

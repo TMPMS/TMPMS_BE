@@ -14,25 +14,25 @@ namespace TMPMS.Services
     {
         private readonly IPrescriptionRepository _repo;
         private readonly TMPMSDbContext _context;
-        private readonly IInventoryService _inventoryService;
         private readonly IPrescriptionOcrService _ocrService;
         private readonly IWebHostEnvironment _environment;
         private readonly IEmailService _emailService;
+        private readonly IHerbalInteractionService _herbalInteractionService;
 
         public PrescriptionService(
             IPrescriptionRepository repo,
             TMPMSDbContext context,
-            IInventoryService inventoryService,
             IPrescriptionOcrService ocrService,
             IWebHostEnvironment environment,
-            IEmailService emailService)
+            IEmailService emailService,
+            IHerbalInteractionService herbalInteractionService)
         {
             _repo = repo;
             _context = context;
-            _inventoryService = inventoryService;
             _ocrService = ocrService;
             _environment = environment;
             _emailService = emailService;
+            _herbalInteractionService = herbalInteractionService;
         }
 
         // Gửi email "đã khám xong & kê đơn" tới bệnh nhân thực sự (Patient nếu người khác gửi hộ, không thì User).
@@ -119,16 +119,12 @@ namespace TMPMS.Services
                     }
                 }
 
-                // 3. Trừ kho tự động & ghi nhận giao dịch xuất kho qua InventoryService
-                var defaultWarehouse = await _context.Warehouses.FirstOrDefaultAsync();
-                int warehouseId = defaultWarehouse?.Id ?? 1;
-
-                foreach (var item in dto.Items)
-                {
-                    // Xuất kho theo FEFO: lô hết hạn sớm nhất được trừ trước
-                    await _inventoryService.DeductStockFEFO(item.MedicineId, warehouseId, item.Quantity, $"RX-{entity.Id}");
-                }
-
+                // KHÔNG trừ kho ở đây: kê đơn chỉ là CHỈ ĐỊNH của Dược sĩ, thuốc chưa được giao/bán.
+                // Kho chỉ thực sự bị trừ khi khách MUA thuốc qua OrderService.CreateOrderAsync (checkout).
+                // Trước đây trừ kho ngay tại bước này khiến kho bị trừ 2 LẦN cho cùng 1 lượt kê đơn:
+                // một lần ở đây (như đã "phát thuốc"), một lần nữa khi khách đặt online dùng đúng Rx
+                // Allowance mà đơn thuốc này cấp (CartItemService/OrderService tính "còn được mua" dựa
+                // trên PrescriptionItems trừ đi OrderItems — không hề biết phần này đã bị trừ kho trước đó).
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -180,20 +176,10 @@ namespace TMPMS.Services
             var previousStatus = entity.Status;
             entity.Status = dto.Status;
 
-            // Từ chối một đơn đã duyệt/đã xuất kho (Approved/Fulfilled) phải hoàn lại đúng số lượng đã
-            // trừ FEFO trước đó — nếu không, hàng bị trừ khỏi lô vĩnh viễn dù đơn không được thực hiện
-            // (mất tồn kho oan, không có giao dịch hoàn kho đối ứng).
-            if (dto.Status == "Rejected" && previousStatus != "Rejected"
-                && (previousStatus == "Approved" || previousStatus == "Fulfilled")
-                && entity.PrescriptionItems != null && entity.PrescriptionItems.Any())
-            {
-                var warehouse = await _context.Warehouses.FirstOrDefaultAsync();
-                var warehouseId = warehouse?.Id ?? 1;
-                foreach (var item in entity.PrescriptionItems)
-                {
-                    await _inventoryService.RestoreStockFEFO(item.MedicineId, warehouseId, item.Quantity, $"RX-{id}-RESTOCK", $"RX-{id}");
-                }
-            }
+            // Không còn bước hoàn kho khi Reject: kê đơn (Create/Finalize) không còn trừ kho ngay lúc
+            // duyệt nữa (xem ghi chú ở Create/Finalize — kê đơn chỉ là chỉ định, thuốc chưa giao), nên
+            // không có gì để hoàn lại ở đây. Giữ đoạn này sẽ thành lỗi mới: cộng ngược thêm hàng vào kho
+            // cho một thứ chưa từng bị trừ, khiến tồn kho ảo tăng lên mỗi lần Reject một đơn đã duyệt.
 
             var updated = await _repo.Update(entity);
 
@@ -404,6 +390,21 @@ namespace TMPMS.Services
                 if (entity.Status != "Pending")
                     throw new InvalidOperationException("Chỉ có thể hoàn thiện đơn thuốc đang ở trạng thái Chờ duyệt.");
 
+                // Chặn cứng ở tầng service, không chỉ cảnh báo trên FE: trước đây FE hiển thị cảnh báo
+                // "Thập Bát Phản" (vd Cam Thảo Bắc x Hải Tảo) nhưng vẫn cho gọi thẳng API finalize nếu
+                // dược sĩ bỏ qua cảnh báo (hoặc gọi API trực tiếp) — đơn vẫn được duyệt + trừ kho bình
+                // thường dù chứa tổ hợp vị thuốc mức Critical. Warning/Notice vẫn cho qua (dược sĩ tự
+                // cân nhắc lâm sàng), chỉ Critical mới chặn hẳn.
+                var safety = await _herbalInteractionService.CheckSafety(new SafetyCheckRequestDTO
+                {
+                    MedicineIds = dto.Items.Select(i => i.MedicineId).ToList()
+                });
+                if (safety.MaxSeverity == "Critical")
+                {
+                    var pair = safety.Conflicts.First(c => c.Severity == "Critical");
+                    throw new InvalidOperationException($"Không thể duyệt đơn: \"{pair.HerbAName}\" và \"{pair.HerbBName}\" xung khắc mức Nghiêm trọng (Thập Bát Phản). Vui lòng thay thế trước khi hoàn thiện đơn.");
+                }
+
                 var priceByMedicineId = new Dictionary<int, decimal?>();
                 foreach (var item in dto.Items)
                 {
@@ -431,13 +432,8 @@ namespace TMPMS.Services
                 _context.Prescriptions.Update(entity);
                 await _context.SaveChangesAsync();
 
-                var defaultWarehouse = await _context.Warehouses.FirstOrDefaultAsync();
-                int warehouseId = defaultWarehouse?.Id ?? 1;
-                foreach (var item in dto.Items)
-                {
-                    await _inventoryService.DeductStockFEFO(item.MedicineId, warehouseId, item.Quantity, $"RX-{entity.Id}");
-                }
-
+                // KHÔNG trừ kho ở đây — cùng lý do với Create(): kê đơn chỉ là chỉ định, thuốc chưa
+                // giao. Kho chỉ trừ thật khi khách mua qua OrderService.CreateOrderAsync.
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 

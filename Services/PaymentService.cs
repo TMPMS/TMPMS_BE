@@ -2,13 +2,19 @@ using BusinessObjects;
 using Repositories.Interfaces;
 using Services.Interfaces;
 using TMPMS.DTOs;
+using TMPMS.Services.Interfaces;
 
 namespace TMPMS.Services
 {
     public class PaymentService : IPaymentService
     {
         private readonly IPaymentRepository _repo;
-        public PaymentService(IPaymentRepository repo) => _repo = repo;
+        private readonly ILoyaltyService _loyaltyService;
+        public PaymentService(IPaymentRepository repo, ILoyaltyService loyaltyService)
+        {
+            _repo = repo;
+            _loyaltyService = loyaltyService;
+        }
 
         public async Task<PaymentResponseDTO> CreatePayment(PaymentCreateDTO dto, int currentUserId, bool canProxy)
         {
@@ -69,6 +75,13 @@ namespace TMPMS.Services
             if (!allowedStatuses.Contains(dto.Status))
                 throw new ArgumentException("Trạng thái thanh toán không hợp lệ.");
 
+            // Đối chiếu số tiền trước khi cho phép xác nhận "Success" — trước đây không kiểm tra gì,
+            // Admin/Kế toán có thể xác nhận một Payment có Amount thấp hơn TotalAmount thật của đơn
+            // (vd bản ghi Payment cũ/trùng còn sót lại, hoặc đơn đã đổi tổng tiền sau khi tạo Payment)
+            // mà đơn vẫn bị đánh dấu "Paid" toàn bộ dù số tiền ghi nhận chưa đủ.
+            if (dto.Status == "Success" && payment.Order != null && payment.Amount < payment.Order.TotalAmount)
+                throw new ArgumentException($"Số tiền thanh toán ({payment.Amount:N0}đ) chưa khớp với tổng tiền đơn hàng ({payment.Order.TotalAmount:N0}đ). Vui lòng đối soát lại trước khi xác nhận.");
+
             payment.Status = dto.Status;
             if (!string.IsNullOrEmpty(dto.TransactionCode))
                 payment.TransactionCode = dto.TransactionCode;
@@ -77,7 +90,16 @@ namespace TMPMS.Services
             {
                 payment.PaidAt = DateTime.Now;
                 if (payment.Order != null)
+                {
                     payment.Order.PaymentStatus = "Paid";
+                    // Đơn COD: hàng giao trước, thu tiền sau (nút "Xác nhận thu tiền" riêng biệt với
+                    // "Xác nhận đã giao"). OrderService.UpdateStatusAsync giờ chỉ cộng điểm loyalty khi
+                    // Delivered VÀ đã Paid cùng lúc — nên với COD, thời điểm thực sự "đủ điều kiện cộng
+                    // điểm" là ở ĐÂY (khi xác nhận thu tiền xong, nếu đơn đã Delivered từ trước).
+                    // AwardForOrderAsync tự chống cộng trùng nên gọi lại vô hại nếu đã cộng qua đường khác.
+                    if (payment.Order.Status == "Delivered")
+                        await _loyaltyService.AwardForOrderAsync(payment.OrderId);
+                }
             }
             else if (dto.Status == "Failed")
             {

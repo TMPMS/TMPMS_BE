@@ -102,8 +102,10 @@ namespace TMPMS.Controllers
         }
 
         // GET: api/patients/search?keyword=abc
+        // Khớp đúng bộ role của GetPatients/CreatePatient/UpdatePatient — trước đây thiếu Pharmacy khiến
+        // Dược sĩ tạo/sửa được hồ sơ bệnh nhân nhưng lại không tìm/xem chi tiết được chính hồ sơ đó.
         [HttpGet("search")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> SearchPatients(string keyword)
         {
             var result = await _patientService.SearchPatientsAsync(keyword);
@@ -113,7 +115,7 @@ namespace TMPMS.Controllers
 
         // GET: api/patients/5
         [HttpGet("{id}")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Pharmacy")]
         public async Task<IActionResult> GetPatientDetail(int id)
         {
             var patient = await _patientService.GetPatientDetailAsync(id);
