@@ -16,7 +16,11 @@ using TMPMS.Repositories.Interfaces;
 using TMPMS.Services;
 using TMPMS.Services.Interfaces;
 using TMPMS.Hubs;
-using TMPMS.Models;
+// Tự động khởi tạo appsettings.json từ template nếu chưa có (khi vừa clone từ Git về)
+if (!File.Exists("appsettings.json") && File.Exists("appsettings.example.json"))
+{
+    File.Copy("appsettings.example.json", "appsettings.json");
+}
 
 var builder = WebApplication.CreateBuilder(args);
 

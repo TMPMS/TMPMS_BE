@@ -27,17 +27,26 @@ namespace TMPMS.Repositories
             await using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             try
             {
-                if (appointment.StaffId != null)
-                {
-                    var exists = await _context.Appointments.AnyAsync(x =>
+                // Không chọn bác sĩ cụ thể (StaffId null) trước đây BỎ QUA HẲN kiểm tra trùng giờ — có
+                // thể đặt vô hạn lịch hẹn vào cùng 1 khung giờ nếu không ai chọn bác sĩ. Rơi về kiểm tra
+                // theo Location+AppointmentDate (so với các lịch cũng chưa gán bác sĩ) khi không có
+                // StaffId cụ thể để so — không gộp chung với lịch đã có bác sĩ riêng vì đó là năng lực
+                // phục vụ song song khác, không tính là trùng chỗ.
+                var exists = appointment.StaffId != null
+                    ? await _context.Appointments.AnyAsync(x =>
                         x.StaffId == appointment.StaffId &&
                         x.AppointmentDate == appointment.AppointmentDate &&
+                        (x.Status == "PendingConfirmation" || x.Status == "Confirmed"))
+                    : await _context.Appointments.AnyAsync(x =>
+                        x.StaffId == null &&
+                        x.Location == appointment.Location &&
+                        x.AppointmentDate == appointment.AppointmentDate &&
                         (x.Status == "PendingConfirmation" || x.Status == "Confirmed"));
-                    if (exists)
-                    {
-                        await tx.RollbackAsync();
-                        return false;
-                    }
+
+                if (exists)
+                {
+                    await tx.RollbackAsync();
+                    return false;
                 }
 
                 await _context.Appointments.AddAsync(appointment);
@@ -50,14 +59,6 @@ namespace TMPMS.Repositories
                 await tx.RollbackAsync();
                 throw;
             }
-        }
-
-        public async Task<bool> IsAppointmentExist(int staffId, DateTime appointmentDate)
-        {
-            return await _context.Appointments.AnyAsync(x =>
-                x.StaffId == staffId &&
-                x.AppointmentDate == appointmentDate &&
-                (x.Status == "PendingConfirmation" || x.Status == "Confirmed"));
         }
 
         public async Task<User?> GetUserById(int userId)
@@ -111,13 +112,22 @@ namespace TMPMS.Repositories
             return await _context.SaveChangesAsync() > 0;
         }
 
-        public async Task<bool> IsAppointmentExist(int? staffId, DateTime appointmentDate, int appointmentId)
+        public async Task<bool> IsAppointmentExist(int? staffId, string location, DateTime appointmentDate, int appointmentId)
         {
-            return await _context.Appointments.AnyAsync(x =>
-                x.Id != appointmentId &&
-                x.StaffId == staffId &&
-                x.AppointmentDate == appointmentDate &&
-                (x.Status == "PendingConfirmation" || x.Status == "Confirmed"));
+            // Cùng lý do với TryAddIfSlotFreeAsync: không có StaffId thì so theo Location, không bỏ
+            // qua kiểm tra hoàn toàn.
+            return staffId != null
+                ? await _context.Appointments.AnyAsync(x =>
+                    x.Id != appointmentId &&
+                    x.StaffId == staffId &&
+                    x.AppointmentDate == appointmentDate &&
+                    (x.Status == "PendingConfirmation" || x.Status == "Confirmed"))
+                : await _context.Appointments.AnyAsync(x =>
+                    x.Id != appointmentId &&
+                    x.StaffId == null &&
+                    x.Location == location &&
+                    x.AppointmentDate == appointmentDate &&
+                    (x.Status == "PendingConfirmation" || x.Status == "Confirmed"));
         }
 
         public async Task<bool> HasRecentActiveAppointment(int userId, DateTime since)

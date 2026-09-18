@@ -134,9 +134,11 @@ namespace TMPMS.Services
             if (!string.IsNullOrEmpty(dto.Reason)) appointment.Reason = dto.Reason;
             if (dto.Note != null) appointment.Note = dto.Note;
 
-            // Chống trùng lịch khi sửa: kiểm tra bác sĩ/thời gian mới có bị trùng lịch hẹn khác không
-            if (appointment.StaffId != null && await _appointmentRepository.IsAppointmentExist(appointment.StaffId, appointment.AppointmentDate, id))
-                throw new Exception("Bác sĩ đã có lịch hẹn vào thời điểm này. Vui lòng chọn thời gian khác.");
+            // Chống trùng lịch khi sửa: kiểm tra bác sĩ/thời gian mới có bị trùng lịch hẹn khác không.
+            // Không có bác sĩ cụ thể thì so theo Location — trước đây bỏ qua hẳn kiểm tra khi StaffId
+            // null, cho phép sửa 1 lịch trùng giờ với lịch chưa gán bác sĩ khác tại cùng địa điểm.
+            if (await _appointmentRepository.IsAppointmentExist(appointment.StaffId, appointment.Location, appointment.AppointmentDate, id))
+                throw new Exception("Đã có lịch hẹn khác vào thời điểm này. Vui lòng chọn thời gian khác.");
 
             return await _appointmentRepository.Update(appointment);
         }

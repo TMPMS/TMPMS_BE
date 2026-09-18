@@ -111,6 +111,7 @@ namespace TMPMS.Services
             if (user == null) return;
 
             user.LoyaltyPoints += points;
+
             _context.LoyaltyPointTransactions.Add(new LoyaltyPointTransaction
             {
                 UserId = order.UserId,
@@ -135,12 +136,8 @@ namespace TMPMS.Services
             var user = await _context.Users.FindAsync(earnTx.UserId);
             if (user == null) return;
 
-            // Trừ đủ số điểm đã cộng cho đơn này, kể cả khi khách đã tiêu bớt (đổi voucher) sang
-            // việc khác — số dư được phép âm (thành "nợ điểm"), khấu trừ dần vào lần tích điểm kế
-            // tiếp. Trước đây giới hạn ở Math.Min(earnTx.Points, user.LoyaltyPoints) nghĩa là khách
-            // tích điểm -> đổi hết lấy voucher ngay -> trả hàng sẽ không bị trừ gì cả, giữ nguyên
-            // voucher đã đổi dù đơn hàng gốc không còn hợp lệ — rò rỉ giá trị miễn phí.
             user.LoyaltyPoints -= earnTx.Points;
+
             _context.LoyaltyPointTransactions.Add(new LoyaltyPointTransaction
             {
                 UserId = earnTx.UserId,

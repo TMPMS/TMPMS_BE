@@ -23,8 +23,12 @@ namespace TMPMS.Repositories
 
         public async Task<bool> HasPurchasedAsync(int userId, int medicineId)
         {
+            // Trước đây chỉ kiểm tra CÓ tồn tại đơn hàng chứa sản phẩm, không lọc theo trạng thái —
+            // đơn mới tạo mặc định Status="Pending"/PaymentStatus="Unpaid" nên khách đặt hàng xong,
+            // CHƯA trả tiền, đã đánh giá được ngay; đơn Cancelled/Returned cũng tính là "đã mua" vĩnh
+            // viễn. Chỉ tính đã mua khi đơn thực sự đã thanh toán và không bị hủy/trả hàng.
             return await _context.Orders
-                .Where(o => o.UserId == userId)
+                .Where(o => o.UserId == userId && o.PaymentStatus == "Paid" && o.Status != "Cancelled" && o.Status != "Returned")
                 .AnyAsync(o => o.OrderItems.Any(oi => oi.MedicineId == medicineId));
         }
 

@@ -1,6 +1,8 @@
 -- ============================================================
 -- SEED ALL SQL SERVER - Categories, Suppliers, Medicines, Vouchers
 -- ============================================================
+USE TMPMS_DB;
+GO
 
 -- Clear existing data to avoid conflicts
 DELETE FROM OrderItems;

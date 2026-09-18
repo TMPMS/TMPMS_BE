@@ -131,6 +131,11 @@ namespace TMPMS.Services
             {
                 if (existing.ExpiryDate.Date != dto.ExpiryDate.Date || existing.ManufactureDate.Date != dto.ManufactureDate.Date)
                     throw new ArgumentException($"Số lô '{batchNumber}' đã tồn tại với NSX/HSD khác. Vui lòng dùng số lô khác cho đợt nhập này.");
+                // Lô cũ đã bị hủy (Disposed) coi như đã đóng sổ vĩnh viễn — cộng dồn vào đây sẽ tăng
+                // QuantityRemaining nhưng Status vẫn "Disposed" nên RecomputeStockCaches/FEFO (chỉ cộng/
+                // lấy lô Active) sẽ bỏ qua hoàn toàn, hàng "biến mất" khỏi tồn kho dù đã ghi nhận nhập.
+                if (existing.Status == StockBatchStatus.Disposed)
+                    throw new ArgumentException($"Số lô '{batchNumber}' đã bị hủy trước đó. Vui lòng dùng số lô khác cho đợt nhập này.");
 
                 // Giá vốn BÌNH QUÂN GIA QUYỀN theo số lượng còn lại hiện có + số lượng nhập mới,
                 // thay vì ghi đè — ghi đè sẽ làm sai giá vốn của số lượng đã nhập từ đợt trước
@@ -271,6 +276,12 @@ namespace TMPMS.Services
                 if (batch == null) throw new ArgumentException("Không tìm thấy lô hàng.");
                 if (dto.QuantityRemaining < 0)
                     throw new ArgumentException("Số lượng kiểm kê không hợp lệ.");
+                // Lô đã Disposed coi như đã đóng sổ vĩnh viễn — RecomputeStockCaches/FEFO chỉ cộng/lấy
+                // lô Status=="Active" nên tăng QuantityRemaining ở đây sẽ không bao giờ cộng vào tồn kho
+                // hay bán được, khiến Dược sĩ tưởng đã sửa xong nhưng số liệu thực ra không đổi gì. Phát
+                // hiện hàng thực tế trên 1 lô đã hủy thì phải nhập lại thành lô mới, không sửa số ở đây.
+                if (batch.Status == StockBatchStatus.Disposed)
+                    throw new ArgumentException("Lô hàng này đã bị hủy — không thể điều chỉnh số lượng. Nếu phát hiện hàng thực tế, vui lòng nhập lại thành lô mới.");
 
                 var diff = dto.QuantityRemaining - batch.QuantityRemaining;
                 batch.QuantityRemaining = dto.QuantityRemaining;

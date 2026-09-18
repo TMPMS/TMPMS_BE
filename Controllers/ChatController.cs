@@ -80,12 +80,22 @@ namespace TMPMS.Controllers
             {
                 try
                 {
-                    // 1. Fetch available medicines from DB for LLM context
-                    var medicines = await _context.Medicines
-                        .Select(m => new { m.Id, m.Name, m.Description })
-                        .ToListAsync();
+                    // 1. Fetch available medicines from DB for LLM context — kèm Tính vị/Công dụng từ
+                    // HerbalMedicineInfo (trước đây có trong DB nhưng chưa được đưa vào chat context).
+                    var medicines = await (
+                        from m in _context.Medicines
+                        join h in _context.HerbalMedicineInfos on m.Id equals h.MedicineId into herbs
+                        from h in herbs.DefaultIfEmpty()
+                        select new { m.Id, m.Name, m.Description, Properties = h != null ? h.Properties : null, Effects = h != null ? h.Effects : null }
+                    ).ToListAsync();
 
-                    var medicinesContext = string.Join("\n", medicines.Select(m => $"- ID: {m.Id}, Tên: {m.Name}, Mô tả: {m.Description}"));
+                    var medicinesContext = string.Join("\n", medicines.Select(m =>
+                    {
+                        var herbalInfo = (!string.IsNullOrWhiteSpace(m.Properties) || !string.IsNullOrWhiteSpace(m.Effects))
+                            ? $", Tính vị: {m.Properties}, Công dụng: {m.Effects}"
+                            : "";
+                        return $"- ID: {m.Id}, Tên: {m.Name}, Mô tả: {m.Description}{herbalInfo}";
+                    }));
 
                     // 1b. Fetch REAL available appointment slots from DB (3 ngày tới) để AI không tự bịa giờ trống.
                     var slotsContext = await BuildAvailableSlotsContextAsync();
